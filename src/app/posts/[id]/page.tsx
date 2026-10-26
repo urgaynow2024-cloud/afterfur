@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
@@ -24,7 +24,7 @@ type Reply = {
   profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null;
 };
 
-export default function PostPage() {
+function PostPageInner() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [post, setPost] = useState<Post | null>(null);
@@ -194,5 +194,12 @@ export default function PostPage() {
         </div>
       )}
     </Shell>
+}
+
+export default function PostPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm text-af-muted">Loading…</div>}>
+      <PostPageInner />
+    </Suspense>
   );
 }

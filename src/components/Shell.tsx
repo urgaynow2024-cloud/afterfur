@@ -3,6 +3,7 @@ import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 
 const NAV = [
   { href: "/", label: "Home" },
@@ -16,7 +17,7 @@ const NAV = [
   { href: "/settings", label: "Settings" },
 ];
 
-export function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) {
+function ShellInner({ children, right }: { children: ReactNode; right?: ReactNode }) {
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
 
@@ -118,9 +119,15 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
   );
 }
 
+export function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-af-bg" />}>
+      <ShellInner right={right}>{children}</ShellInner>
+    </Suspense>
+  );
+}
 export function EmptyState({ title, body, action }: { title: string; body: string; action?: { label: string; href: string } }) {
   return (
-    <div className="px-6 py-12 text-center">
       <h2 className="text-xl font-bold">{title}</h2>
       <p className="mt-2 text-[15px] text-af-muted">{body}</p>
       {action && (
