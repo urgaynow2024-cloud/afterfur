@@ -128,6 +128,7 @@ export function Shell({ children, right }: { children: ReactNode; right?: ReactN
 }
 export function EmptyState({ title, body, action }: { title: string; body: string; action?: { label: string; href: string } }) {
   return (
+    <div className="px-6 py-12 text-center">
       <h2 className="text-xl font-bold">{title}</h2>
       <p className="mt-2 text-[15px] text-af-muted">{body}</p>
       {action && (
