@@ -96,6 +96,6 @@ function PublicProfileInner() {
 
 export default function PublicProfile() {
   return (
-    <Suspense fallback={<div className='p-8 text-center text-sm text-af-muted'>Loading…</div>}><PublicProfileInner /></Suspense>
+    <Suspense fallback={<div className='p-8 text-center text-sm text-af-muted'>Loading...</div>}><PublicProfileInner /></Suspense>
   );
 }
