@@ -17,6 +17,9 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isSelf, setIsSelf] = useState(false);
+  const [following, setFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
 
   useEffect(() => {
     const run = async () => {
@@ -29,10 +32,32 @@ export default function PublicProfile() {
       const { data: ps } = await supabase.from("posts").select("*").eq("author_id", p.id).order("created_at", { ascending: false });
       const mapped = (ps ?? []).map((x: any) => ({ ...x, profiles: p }));
       setPosts(mapped);
+      const { count: fc } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", p.id);
+      const { count: fingc } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", p.id);
+      setFollowerCount(fc ?? 0);
+      setFollowingCount(fingc ?? 0);
+      if (user && user.id !== p.id) {
+        const { data: f } = await supabase.from("follows").select("*").eq("follower_id", user.id).eq("following_id", p.id).maybeSingle();
+        setFollowing(!!f);
+      }
       setLoading(false);
     };
     run();
   }, [username, user]);
+
+  async function toggleFollow() {
+    const supabase = createClient();
+    if (!supabase || !user || !profile || isSelf) return;
+    if (following) {
+      await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id);
+      setFollowing(false);
+      setFollowerCount((c) => Math.max(0, c - 1));
+    } else {
+      await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
+      setFollowing(true);
+      setFollowerCount((c) => c + 1);
+    }
+  }
 
   if (loading) return <Shell><PageHeader title="Profile" /><div className="p-8 text-center text-sm text-af-muted">Loading…</div></Shell>;
   if (error || !profile) return <Shell><PageHeader title="Profile" /><EmptyState title="User not found" body={error || "This profile may not exist."} /></Shell>;
@@ -51,7 +76,14 @@ export default function PublicProfile() {
           {profile.bio && <p className="mt-2 text-[15px]">{profile.bio}</p>}
           {profile.website && <a href={profile.website} className="mt-1 block text-af-accent hover:underline" target="_blank" rel="noreferrer">{profile.website}</a>}
           <p className="mt-2 text-sm text-af-muted">Joined {new Date(profile.created_at).toLocaleDateString()}</p>
-          {isSelf && <Link href="/profile" className="mt-3 inline-block rounded-full border border-af-border px-4 py-1.5 text-sm font-bold hover:bg-af-surface">Edit Profile</Link>}
+          <p className="mt-1 text-sm text-af-muted">{followerCount} followers · {followingCount} following</p>
+          {isSelf ? (
+            <Link href="/profile" className="mt-3 inline-block rounded-full border border-af-border px-4 py-1.5 text-sm font-bold hover:bg-af-surface">Edit Profile</Link>
+          ) : user ? (
+            <button onClick={toggleFollow} className={`mt-3 rounded-full px-4 py-1.5 text-sm font-bold ${following ? "border border-af-border hover:bg-af-surface" : "bg-af-accent text-white hover:bg-af-accent-hover"}`}>
+              {following ? "Following" : "Follow"}
+            </button>
+          ) : null}
         </div>
       </div>
       <div>
