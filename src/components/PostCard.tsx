@@ -52,12 +52,12 @@ export default function PostCard({
         <div className="mb-1 ml-12 text-xs text-af-muted">{repostedBy} reposted</div>
       )}
       <div className="flex gap-3">
-        <Link href="/profile" className="h-12 w-12 shrink-0 rounded-full bg-af-surface-2 overflow-hidden">
+        <Link href={`/profile/${username}`} className="h-12 w-12 shrink-0 rounded-full bg-af-surface-2 overflow-hidden">
           {post.profiles?.avatar_url ? <img src={post.profiles.avatar_url} alt="" className="h-full w-full object-cover" /> : null}
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-[15px]">
-            <Link href="/profile" className="font-bold hover:underline">{displayName}</Link>
+            <Link href={`/profile/${username}`} className="font-bold hover:underline">{displayName}</Link>
             <span className="text-af-muted">@{username}</span>
             <span className="text-af-muted">·</span>
             <span className="text-af-muted">{timeAgo(post.created_at)}</span>
