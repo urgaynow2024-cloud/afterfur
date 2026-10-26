@@ -195,6 +195,7 @@ function PostPageInner() {
         </div>
       )}
     </Shell>
+  );
 }
 
 export default function PostPage() {
