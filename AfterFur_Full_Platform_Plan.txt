@@ -1,0 +1,990 @@
+PROJECT STATUS UPDATE (2026-10-26)
+
+The application already exists and is being developed in `D:\Afterfur` using Kilo in VS Code. The local development site is `http://localhost:3000`.
+
+This document remains the source of truth for AfterFur's product vision and platform requirements. Follow it alongside `AfterFur_Kilo_Master_Instructions.md` and newer explicit instructions from the owner. Do not treat this project as a clean-slate build, replace the existing app with a starter template, or discard working functionality.
+
+Current immediate priority: complete the UI/UX overhaul of the existing application before returning to the known reply-system bug. See Section 43 for the current implementation status and next steps.AFTERFUR
+Full Platform & Development Plan
+18+ Social Media Built for the Furry Community
+
+1. VISION
+
+AfterFur is an 18+ social-media platform designed for the furry community, particularly artists, avatar creators, photographers, fursuiters, VRChat creators and other adult creators.
+
+The platform takes the familiar social-media experience of Twitter/X and builds a dedicated community around it.
+
+Users should be able to:
+- Make short posts
+- Share artwork
+- Upload images and videos
+- Follow creators
+- Reply to posts
+- Like posts
+- Repost content
+- Quote posts
+- Bookmark posts
+- Use hashtags
+- Discover creators
+- Send private messages
+- Build their own audience
+
+AfterFur's main goal is to provide a dedicated place for the adult furry community where creators can share their work without the platform being dominated by AI-generated content, art theft, spam or poor moderation.
+
+The platform should feel like a real social network first, rather than simply an adult-content website.
+
+2. THE MEANING BEHIND AFTERFUR
+
+The name AfterFur is inspired by the phrase "after dark".
+
+"After dark" is commonly used by creators to describe adult/NSFW content.
+
+AfterFur takes that concept and turns it into a furry-focused social platform.
+
+The platform itself should not be nothing but NSFW content.
+
+Instead, users can choose what they want to see.
+
+The platform can have a dedicated After Dark section for adult content while still functioning as a normal social network.
+
+3. CORE PRINCIPLES
+
+Creator First
+Creators should have control over their profiles, content and communities.
+
+Human Moderation
+Reports should be reviewed by real human moderators. Automated systems can assist moderators, but serious moderation decisions should not rely entirely on automation.
+
+No AI-Generated Content
+AfterFur will have a clear policy against AI-generated artwork/content.
+
+18+ Only
+AfterFur is an adult platform and must have appropriate age-gating and safety measures.
+
+User Control
+Users should control the types of content they see.
+
+Transparency
+Users should understand why moderation actions were taken and have a way to appeal serious decisions.
+
+Community
+AfterFur should be built around genuine interaction rather than engagement farming.
+
+4. BASIC USER ACCOUNTS
+
+Users should be able to:
+- Register
+- Log in
+- Log out
+- Reset passwords
+- Change usernames
+- Change display names
+- Upload profile pictures
+- Upload banners
+- Write bios
+- Add links
+- Follow users
+- Unfollow users
+- Block users
+- Mute users
+- Restrict interactions
+- Delete their account
+- Manage privacy settings
+
+Each account will have a unique username.
+
+5. USER PROFILES
+
+Profiles should include:
+- Profile picture
+- Banner
+- Display name
+- Username
+- Bio
+- Links
+- Follower count
+- Following count
+- Join date
+- Posts
+- Replies
+- Media
+- Likes
+- Bookmarks
+- Pinned post
+- Creator information
+
+Creators can optionally indicate what they create, such as digital artist, VRChat creator, fursuiter, photographer or animator.
+
+6. POSTS
+
+Users can create posts containing:
+- Text
+- Images
+- Videos
+- Multiple images
+- Multiple videos
+- GIFs
+- Hashtags
+- Mentions
+
+Posts should support:
+- Likes
+- Replies
+- Reposts
+- Quote posts
+- Bookmarks
+- Sharing
+- Deleting
+- Editing where supported
+- Reporting
+
+Posts should display their content classification.
+
+7. CONTENT CLASSIFICATION
+
+Every media post can be classified as:
+- SFW
+- Suggestive
+- Adult
+- Restricted
+
+Sensitive media can be blurred. Users can click the media to reveal it if their settings allow it.
+
+8. AFTER DARK
+
+After Dark is the dedicated adult-content section of AfterFur.
+
+It can contain permitted:
+- Adult furry artwork
+- Adult avatars
+- Adult photography
+- Adult animation
+- Other permitted adult creator content
+
+Users can choose whether After Dark content appears in their normal feeds.
+
+Possible settings:
+- Show Adult Content: ON/OFF
+- Show Suggestive Content: ON/OFF
+- Blur Sensitive Media: ON/OFF
+- Show Adult Content in Explore: ON/OFF
+
+9. HOME FEED
+
+Feed options:
+- Following: Posts from accounts the user follows
+- For You: Recommended posts and creators
+- Latest: Chronological posts
+- Media: Image/video-focused feed
+- After Dark: Adult content for users who have enabled it
+
+10. EXPLORE
+
+Explore helps users discover:
+- Trending posts
+- Trending hashtags
+- Popular creators
+- Rising creators
+- New creators
+- Popular artwork
+- Popular videos
+- Suggested creators
+- Community topics
+
+Smaller creators should have opportunities to appear in recommendations.
+
+11. HASHTAGS
+
+Examples:
+#Furry
+#FurryArt
+#Fursuit
+#VRChat
+#FurryPhotography
+#Adoptables
+#Commissions
+#AfterDark
+
+Clicking a hashtag opens a dedicated page containing Popular, Latest, Media and Creators sections.
+
+12. SEARCH
+
+Search should support:
+- Users
+- Posts
+- Hashtags
+- Media
+
+Advanced search can eventually include date, content type, SFW/Adult and creator filters.
+
+13. ENGAGEMENT
+
+Users can:
+- Like
+- Reply
+- Repost
+- Quote
+- Bookmark
+- Share
+
+14. BOOKMARKS
+
+Bookmarks are private.
+
+Future features:
+- Bookmark folders
+- Custom collections
+- Saved creators
+- Saved searches
+
+15. PRIVATE MESSAGING
+
+Users can:
+- Send text
+- Send permitted media
+- Share posts
+- Block users
+- Report conversations
+- Delete conversations
+- Control who can message them
+
+Message requests should help reduce spam.
+
+16. NOTIFICATIONS
+
+Notifications can include:
+- Likes
+- Replies
+- Reposts
+- Quote posts
+- Follows
+- Mentions
+- Messages
+- Creator updates
+- Moderation notifications
+- Prime notifications
+
+Users should have granular notification controls.
+
+17. CREATOR FEATURES
+
+Potential features:
+- Creator profiles
+- Creator verification
+- Creator categories
+- Portfolio links
+- Commission links
+- Creator analytics
+- Follower statistics
+- Post statistics
+- Tips
+- Subscriptions
+- Paid content in the future
+
+18. ANTI-AI POLICY
+
+AfterFur will prohibit AI-generated content according to its community rules.
+
+Users can report suspected AI-generated content.
+
+Automated AI detection should not automatically punish users. Instead:
+Report -> Review -> Decision -> Appeal
+
+Human moderators make the final decision.
+
+19. ANTI-ART-THEFT SYSTEM
+
+Creators should be able to report:
+- Stolen artwork
+- Reuploaded artwork
+- Impersonation
+- Stolen commissions
+- Unauthorised use of artwork
+
+Potential future features:
+- Original-post timestamps
+- Creator verification
+- Watermark tools
+- Copyright reporting
+- Repeat-offender tracking
+
+20. MODERATION
+
+Users can report:
+- Harassment
+- Hate
+- Spam
+- Scams
+- Art theft
+- AI-generated content
+- Impersonation
+- Sexual-content violations
+- Illegal content
+- Platform-rule violations
+
+21. HUMAN MODERATOR SYSTEM
+
+The moderation dashboard should include:
+- Report queue
+- Report history
+- User profiles
+- Previous warnings
+- Previous moderation actions
+- Reported content
+- Account history
+- Restrictions
+- Suspensions
+- Bans
+
+Moderator actions should be logged.
+
+22. APPEALS
+
+Users should be able to appeal moderation decisions.
+
+A moderation action should contain:
+- What rule was violated
+- What action was taken
+- When it happened
+- Whether the action expires
+- Appeal option
+
+Appeals should be reviewed by someone other than the original moderator whenever practical.
+
+23. ANTI-SPAM & ANTI-ABUSE
+
+Systems should help detect:
+- Mass account creation
+- Spam posting
+- Follow spam
+- DM spam
+- Bot activity
+- Scam links
+- Repeated harassment
+- Malicious uploads
+
+Automated systems can flag suspicious activity for human review.
+
+24. AGE & SAFETY
+
+Because AfterFur is an 18+ platform, age and safety systems must be designed from the beginning.
+
+Potential systems:
+- Age-gating
+- Age verification where legally/operationally required
+- Adult-content controls
+- Reporting
+- Blocking
+- Privacy controls
+- Anti-harassment tools
+- Account security
+- Rate limiting
+- Abuse prevention
+
+Illegal or prohibited content must never be permitted.
+
+The platform must also account for applicable laws and the policies of hosting providers, payment providers and app stores.
+
+25. AFTERFUR PRIME
+
+AfterFur Prime is the optional paid membership.
+
+Prime gives users additional perks while allowing users to visibly show that they support AfterFur.
+
+The free platform should remain usable.
+
+26. PRIME BADGE
+
+Prime members receive a visible badge showing that they support AfterFur.
+
+27. PRIME CUSTOMISATION
+
+Prime members can receive:
+- Custom username colour
+- Custom display-name colour
+- Profile accent colour
+- Custom profile theme
+- Additional profile customization
+- Special Prime badge
+- Custom badge styles in the future
+
+28. PRIME BOOSTS
+
+Prime members receive a number of free Boosts every month.
+
+Example:
+5 free boosts per month
+
+A Boost allows a creator to promote one of their posts into discovery/recommended areas for a limited period.
+
+Boosted content should be clearly labelled.
+
+Boosting should never bypass moderation.
+
+29. PRIME FEATURES
+
+Possible Prime benefits:
+- Monthly boosts
+- Custom username colour
+- Profile themes
+- Prime badge
+- More profile customization
+- More bookmark folders
+- Longer posts
+- Larger media limits
+- Longer videos
+- Advanced search
+- Enhanced notification controls
+- Profile analytics
+- Post analytics
+- Early access to features
+- More customization options
+
+30. PRIME PRICING
+
+Possible starting price:
+£4.99/month
+
+Potential yearly option:
+£49.99/year
+
+Final pricing should be decided after calculating hosting, storage, payment, moderation, development, tax and other operating costs.
+
+31. CREATOR SUBSCRIPTIONS
+
+AfterFur Prime and creator subscriptions should remain separate.
+
+AfterFur Prime supports AfterFur itself.
+
+Creator subscriptions support an individual creator.
+
+This creates two potential revenue streams.
+
+32. FUTURE CREATOR MONETISATION
+
+Possible future features:
+- Tips
+- Creator subscriptions
+- Paid posts
+- Digital products
+- Commission tools
+- Creator storefronts
+- Analytics
+- Paid profile features
+
+Payment providers and app-store rules around adult content must be researched before implementing these features.
+
+33. ADMIN DASHBOARD
+
+Administrators need a separate control panel with:
+- User management
+- Moderator management
+- Reports
+- Appeals
+- Bans
+- Suspensions
+- Content moderation
+- Hashtag management
+- Verification management
+- Platform statistics
+- System announcements
+- Prime management
+- Audit logs
+- Security monitoring
+
+34. MODERATOR PERMISSIONS
+
+Moderator
+- Basic reports and content moderation
+
+Senior Moderator
+- More serious cases and appeals
+
+Administrator
+- Platform-wide management
+
+Owner
+- Final authority over the platform
+
+Every administrative action should be recorded in an audit log.
+
+35. PRIVACY & SECURITY
+
+Systems should include:
+- Secure password hashing
+- 2FA
+- Session management
+- Login notifications
+- Rate limiting
+- Secure media uploads
+- Anti-malware scanning
+- Account recovery
+- Privacy settings
+- Data deletion tools
+- Secure API design
+- Database backups
+- Audit logging
+
+36. TECHNOLOGY
+
+The platform will need:
+
+Frontend:
+- Feed
+- Profiles
+- Posts
+- Explore
+- Search
+- Messaging
+- Settings
+
+Backend:
+- Accounts
+- Posts
+- Feeds
+- Followers
+- Likes
+- Replies
+- Notifications
+- Moderation
+- Messaging
+- Prime
+- Payments
+
+Database:
+- Users
+- Posts
+- Media references
+- Hashtags
+- Likes
+- Replies
+- Followers
+- Bookmarks
+- Messages
+- Reports
+- Moderation actions
+- Subscriptions
+
+Media storage:
+- Images
+- Videos
+- Profile pictures
+- Banners
+
+A CDN should eventually be used to deliver media efficiently.
+
+37. DEVELOPMENT PHASES
+
+Phase 1 - Brand & Planning
+- Finalise AfterFur name
+- Trademark research
+- Domain research
+- Social username research
+- Logo
+- Branding
+- Colour scheme
+- Community rules
+- Adult-content policy
+- No-AI policy
+- Privacy policy
+- Terms of service
+- Moderation policy
+- Technical architecture
+
+Phase 2 - Core MVP
+- Registration
+- Login
+- Profiles
+- Following
+- Posts
+- Images
+- Likes
+- Replies
+- Reposts
+- Bookmarks
+- Hashtags
+- Search
+- Notifications
+- Home feed
+- Explore
+- Blocking
+- Muting
+
+Phase 3 - Adult Platform
+- Age-gating
+- Content classifications
+- Sensitive-media blur
+- Adult-content preferences
+- After Dark
+- Adult-content reporting
+
+Phase 4 - Moderation
+- Report system
+- Moderator dashboard
+- User warnings
+- Suspensions
+- Bans
+- Appeals
+- Audit logs
+- Anti-spam
+- Anti-art-theft reporting
+- AI-content reporting
+
+Phase 5 - Prime
+- Prime subscription
+- Prime badge
+- Username colours
+- Profile themes
+- Boosts
+- Additional customization
+- Prime management
+
+Phase 6 - Closed Beta
+Invite a limited number of trusted 18+ furry creators.
+
+Test:
+- Posting
+- Media
+- Feed
+- Hashtags
+- Search
+- Messaging
+- Moderation
+- Reports
+- Adult-content controls
+- Prime
+- Boosts
+- Performance
+- Security
+
+Phase 7 - Public Launch
+Focus on:
+- Creator onboarding
+- Community growth
+- Moderation response
+- Server stability
+- Bug fixes
+- User feedback
+
+38. FUTURE DEVELOPMENT
+
+Once the core platform is stable, consider:
+- Mobile apps
+- Creator subscriptions
+- Tips
+- Creator analytics
+- Commission systems
+- Communities
+- Groups
+- Events
+- Livestreaming
+- Creator shops
+- Custom profile layouts
+- Advanced discovery
+- More Prime features
+- API access
+- Developer integrations
+
+39. WHAT MAKES AFTERFUR DIFFERENT?
+
+AfterFur should not simply be marketed as "Twitter but furry."
+
+The stronger message is:
+
+"AfterFur is an 18+ social platform built around the furry creator community."
+
+Key differences:
+- Built for furry creators
+- 18+ from the beginning
+- Dedicated After Dark section
+- Strong content controls
+- Human moderation
+- No AI-generated content
+- Anti-art-theft focus
+- Hashtag discovery
+- Creator-focused profiles
+- Transparent moderation
+- Appeals
+- Prime membership
+- Creator promotion through Boosts
+- Community-first development
+
+40. CORE EXPERIENCE
+
+Create
+-> Post
+-> Discover
+-> Follow
+-> Interact
+-> Build an audience
+
+The platform should be easy enough that someone can join, make their first post and understand how everything works within minutes.
+
+41. LONG-TERM GOAL
+
+The long-term goal is for AfterFur to become a major social platform for the adult furry community.
+
+A creator should be able to join AfterFur simply because they want somewhere to:
+- Share their art
+- Share their avatars
+- Share their photography
+- Meet other creators
+- Follow friends
+- Discover content
+- Build an audience
+- Participate in the community
+
+The platform does not need to become a marketplace or subscription service to be useful. Those features can exist, but the social network comes first.
+
+42. FINAL PRODUCT IDENTITY
+
+AFTERFUR
+
+Social media, after dark.
+
+An 18+ furry social platform built for creators and the community.
+
+No AI-generated content.
+Real human moderation.
+Creator-focused.
+Community-driven.
+Your content. Your audience. Your space.
+
+---
+Alignment note: Visitors may browse permitted public content without an account. Registration and sign-in are required before posting, replying, liking, reposting, quoting, bookmarking, following, messaging or customising profiles. Account actions must persist in the database. Private information and restricted content must be protected by server-side permissions.
+
+43. CURRENT IMPLEMENTATION STATUS & IMMEDIATE PRIORITIES
+(Updated 2026-10-26)
+
+This section records the current state of the existing application. It supplements the original product plan; it does not remove or replace any long-term requirements above.
+
+43.1 Existing project and working approach
+
+- Project directory: `D:\Afterfur`
+- Development environment: Windows PC, VS Code, Kilo
+- Local development URL: `http://localhost:3000`
+- The project already contains an application. Continue from the existing repository, routes, components, styles, database schema, authentication, storage and architecture.
+- Do not start over, replace the app with a starter template, wipe data, or remove planned features.
+- The TXT file is the source of truth for the platform requirements. Follow it alongside `AfterFur_Kilo_Master_Instructions.md` and the latest explicit owner instructions.
+- Make real code changes. Do not stop after an audit, plan, typecheck, or written report.
+
+43.2 Current manual verification status
+
+The owner reports that these flows have been manually checked and currently work:
+- Clicking profile avatars/names/usernames to navigate to profiles.
+- Opening a post detail page and navigating back.
+- Like, repost and bookmark interactions, including their active states.
+- The profile Media tab displaying a media gallery.
+
+Known issue:
+- Replying is still broken. The reply system must be repaired after the UI/UX overhaul, unless a change necessary for the UI directly affects its existing controls.
+
+A TypeScript check passed. Kilo reported that live end-to-end verification had not been performed by Kilo. Do not present a typecheck as proof that browser interactions work. The above working status is based on the owner's manual checks and should be re-tested after UI changes to ensure no regressions.
+
+43.3 Immediate priority: full UI/UX overhaul
+
+The next task is to redesign and polish the existing application before moving on to the reply bug. Do not repeat the same audit indefinitely and do not stop at describing the design. Implement the redesign in the actual code.
+
+Use X/Twitter as a reference for usability and familiar interaction patterns, not as a pixel-for-pixel copy. AfterFur must retain its own identity and be recognisable as a creator-first furry social platform.
+
+The UI/UX overhaul must cover the whole existing app, including all applicable routes and components:
+
+- Main application layout, column widths and page alignment.
+- Left navigation, active route states and responsive/mobile navigation.
+- Central feed and optional right sidebar.
+- Home and Explore feeds.
+- Post cards, author identity rows, media layouts and action bars.
+- Post detail pages and conversation presentation.
+- Post composer, attachment previews, validation and upload states.
+- User profiles, profile headers, profile tabs and follow controls.
+- Media-only profile gallery for photos, GIFs and videos.
+- Search fields, suggestions and results.
+- Notifications.
+- Bookmarks.
+- Messages, if already implemented.
+- Settings and account-related screens.
+- Dropdowns, popovers, dialogs, modals and confirmation flows.
+- Loading skeletons, empty states, error states and retry actions.
+- Desktop, tablet and mobile layouts.
+- Accessibility, keyboard operation and reduced-motion support.
+
+43.4 Design quality requirements
+
+Create a cohesive shared design system using the existing styling approach wherever practical. Standardise:
+- Colours and surface/background tokens.
+- Typography, font sizes, weights and line lengths.
+- Spacing, padding and gaps.
+- Page widths and column proportions.
+- Borders, radii and shadows.
+- Avatar and icon sizes.
+- Button and input variants.
+- Active, hover, focus, pressed, disabled, loading and error states.
+- Menus, dialogs, notifications and toasts.
+
+The result should look intentional and production-quality, with clear hierarchy, consistent spacing, readable content and restrained motion. Avoid random gradients, excessive glow effects, oversized cards, excessive empty space, inconsistent controls, unintended coloured bands, clipped menus, layout shifts and horizontal overflow.
+
+Use subtle, consistent transitions where useful. Respect reduced-motion preferences. Ensure icon-only controls have accessible names, keyboard focus is visible, and controls remain usable on touch screens.
+
+43.5 Preserve existing functionality and product scope
+
+The redesign must preserve the original platform requirements in this TXT document, including the longer-term adult-content controls, After Dark, creator features, anti-AI policy, anti-art-theft reporting, moderation, appeals, Prime, Boosts, security and admin tools.
+
+Do not remove planned features simply because they are not all implemented yet. Do not invent that a planned feature is already implemented. The current UI should support the platform direction and allow future features to be added without needing a full redesign again.
+
+Preserve existing working functionality, authentication, database data, routes, media storage and permissions. Prefer reusable components and incremental changes. Do not hardcode user identities, post content, counts or fake results. Do not weaken security or authorization to make UI flows appear to work.
+
+43.6 Critical data and interaction consistency
+
+Across feeds, profiles, search, notifications, bookmarks, media and post detail pages:
+- Show the correct canonical author and username. Never hide the cause of `Unknown @unknown` behind a hardcoded fallback.
+- Keep the original author's identity intact when a post is reposted or quoted.
+- Ensure user identity links navigate to the correct user's profile.
+- Ensure post links open the correct post.
+- Keep likes, reposts and bookmarks tied to the authenticated user and persistent in the database.
+- Use a consistent blue active state, such as `#3B82F6`, for active like/repost/bookmark controls, adapted to the existing theme.
+- Ensure controls do not accidentally trigger a parent post-card click handler.
+- Use semantic links for navigation and buttons for actions.
+- Keep private bookmarks private and enforce permissions server-side.
+
+43.7 Profile Media tab requirement
+
+The profile Media tab must remain a media-focused gallery, not a timeline of full post cards.
+
+- Use a responsive thumbnail grid, typically three columns on desktop.
+- Include available media types: photos, animated GIFs and videos.
+- Provide filters such as All Media, Photos, GIFs and Videos where supported.
+- Show video play indicators and preserve useful image aspect ratios.
+- Support posts with multiple attachments without duplicate thumbnails.
+- Only show media belonging to the selected profile.
+- Open a suitable media viewer or the original post when a thumbnail is selected.
+- Include proper loading, empty and error states.
+- Use real database/storage content, not mock data.
+
+43.8 Reply-system issue — next priority after UI/UX
+
+Replying is the one known broken feature in the latest owner-reported manual check. After the UI/UX overhaul is complete and regression-tested, make fixing replies the next task.
+
+The reply system must support:
+- Replying to an original post.
+- Replying directly to an existing comment/reply.
+- Correct root-post and direct-parent relationships.
+- Authenticated author attribution.
+- Persisting replies to the database.
+- Correct rendering in conversation detail and the author's Replies tab.
+- Accurate reply counts without double counting.
+- Useful loading and error states.
+- Preventing duplicate submissions.
+- Appropriate authorization and validation.
+- Correct links to the original post and each user's profile.
+- Persistence after refresh and direct navigation to the conversation.
+
+Do not merely add a visible reply button or modal. Trace and test the full UI-to-server-to-database path. The reply feature should be tested after the UI/UX redesign, including nested replies and refresh persistence.
+
+43.9 Implementation sequence
+
+Follow this order:
+
+1. Read this TXT and `AfterFur_Kilo_Master_Instructions.md`.
+2. Inspect the current app and identify the shared layout/design system that already exists. Do not redo the audit without a clear need.
+3. Implement the shared design system and application shell.
+4. Redesign navigation, feed layout, post cards and action controls.
+5. Redesign profile pages and the media gallery.
+6. Redesign search, notifications, bookmarks, composer, menus, dialogs and other existing pages.
+7. Complete responsive design, accessibility and visual polish.
+8. Run relevant type checks, linting, tests and production build as available.
+9. Run the app and perform browser checks where possible; re-test the manually verified working flows to catch regressions.
+10. Once UI/UX is complete, repair the reply system end-to-end.
+11. Verify replies and re-run relevant checks.
+12. Report what was actually changed and tested, distinguishing VERIFIED, FAILED and NOT TESTED.
+
+If browser control is unavailable, continue implementing the code. State exactly what could not be tested and give the owner a short, specific manual checklist. Do not stop the whole task just because browser verification is unavailable.
+
+43.10 Completion standard
+
+The UI/UX task is not complete just because TypeScript passes or an audit has been written. It is complete when the actual pages and shared components have been redesigned, responsive behaviour has been addressed, working interactions have been regression-tested where possible, and the remaining unverified items are clearly listed.
+
+The reply-system task is not complete until a reply can be submitted, persisted, displayed under the correct parent, and still be present after refresh.
+
+Keep AfterFur's core identity intact:
+
+AFTERFUR
+Social media, after dark.
+
+An 18+ furry social platform built for creators and the community.
+No AI-generated content.
+Real human moderation.
+Creator-focused.
+Community-driven.
+Your content. Your audience. Your space.
+
+AFTERFUR — ADDITIONAL UI/UX AND PLATFORM REQUIREMENTS
+
+Please incorporate these requirements into the existing AfterFur Full Platform Plan and Kilo Master Instructions. Preserve all existing requirements.
+
+### 1. Separate Settings from Edit Profile
+Settings and Edit Profile are different pages with different purposes.
+
+Edit Profile is for public-facing profile details such as display name, username, avatar, banner, bio, links and supported creator information.
+
+Settings is for account management, security, privacy, notifications, content preferences, accessibility, display, language, subscriptions and other platform preferences.
+
+Do not combine these pages into one form.
+
+### 2. Settings interface
+Use the supplied X Settings screenshot as a layout reference:
+- A clear settings navigation panel.
+- Search Settings field.
+- A separate content panel for the selected category.
+- Clear headings, descriptions, icons and navigation indicators.
+- Consistent spacing, borders and active selection states.
+- Responsive behaviour on mobile, where settings categories and detail pages should remain easy to navigate.
+
+Implement settings categories appropriate to AfterFur:
+- Your account.
+- Security and account access.
+- Privacy and safety.
+- Notifications.
+- Content preferences.
+- Accessibility, display and languages.
+- Monetization and creator tools.
+- Premium.
+- Moderation and safety tools, visible only to authorized roles.
+- Help and legal resources.
+
+Only expose settings that are implemented. Unimplemented options must not pretend to save changes.
+
+### 3. Blocking and muting
+Add Block and Mute actions to appropriate profile and post menus.
+
+Implement persistent relationships, authorization and clear confirmation/feedback. Apply block and mute rules consistently across supported feeds, profiles, search, replies, notifications and messages.
+
+Provide a place in Privacy and Safety settings to review and manage blocked and muted accounts, including unblock and unmute actions.
+
+### 4. Reporting
+Allow reports for supported content and accounts, including posts, replies and profiles.
+
+Provide a reporting flow with reason selection, optional details, confirmation, secure persistence, duplicate/spam protections and clear feedback.
+
+Create the necessary report-management workflow for moderators. Reports must not be publicly visible to the reported user or other ordinary users.
+
+### 5. Moderator and Admin dashboards
+Create separate protected interfaces for moderation and administration.
+
+Moderator tools should support reviewing reports, viewing relevant content and context, tracking case status, recording decisions and taking only authorized actions.
+
+Admin tools should support appropriately restricted account/role management, platform configuration, moderation oversight, audit logs and operational monitoring.
+
+Enforce role-based access control on the server for every privileged operation. Hiding a link in the UI is not sufficient. Record security-sensitive moderation and admin actions in an audit log. Do not give every moderator full administrator access.
+
+### 6. Follow the existing project and full plan
+Before implementing, check the existing database schema, role system, routes, authentication and original TXT/MD requirements. Reuse existing infrastructure where possible and create safe migrations only when necessary.
+
+Do not break existing features or hardcode sample data. Implement real functionality with proper validation, persistence, authorization, loading states, error states and tests.
+
+Keep the current priority order:
+1. Complete the existing UI/UX overhaul.
+2. Verify that working functionality has not regressed.
+3. Fix the known reply-system issue.
+4. Implement the additional blocking, reporting, moderation and admin functionality in a safe, planned phase.
+
+Update the project documents so these requirements remain part of the official AfterFur scope.

@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --af-bg: #0f1419;
+  --af-surface: #15202b;
+  --af-surface-2: #192734;
+  --af-border: #38444d;
+  --af-text: #ffffff;
+  --af-text-2: #8899a6;
+  --af-muted: #8899a6;
+  --af-accent: #1d9bf0;
+  --af-accent-hover: #1a8cd8;
+  --af-danger: #f91880;
+  --af-success: #00ba7c;
+}
+
+@theme inline {
+  --color-af-bg: var(--af-bg);
+  --color-af-surface: var(--af-surface);
+  --color-af-surface-2: var(--af-surface-2);
+  --color-af-border: var(--af-border);
+  --color-af-text: var(--af-text);
+  --color-af-text-2: var(--af-text-2);
+  --color-af-muted: var(--af-muted);
+  --color-af-accent: var(--af-accent);
+  --color-af-accent-hover: var(--af-accent-hover);
+  --color-af-danger: var(--af-danger);
+  --color-af-success: var(--af-success);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--af-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--af-border);
+  border-radius: 4px;
+}
+
+body {
+  background: var(--af-bg);
+  color: var(--af-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
