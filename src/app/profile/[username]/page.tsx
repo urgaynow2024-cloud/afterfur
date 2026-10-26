@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
@@ -9,7 +10,7 @@ import PostCard from "@/components/PostCard";
 
 type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; created_at: string };
 
-export default function PublicProfile() {
+function PublicProfileInner() {
   const { username } = useParams<{ username: string }>();
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -90,5 +91,11 @@ export default function PublicProfile() {
         {posts.length === 0 ? <EmptyState title="No posts yet" body="This user hasn't posted yet." /> : posts.map((p) => <PostCard key={p.id} post={p} />)}
       </div>
     </Shell>
+  );
+}
+
+export default function PublicProfile() {
+  return (
+    <Suspense fallback={<div className='p-8 text-center text-sm text-af-muted'>Loading…</div>}><PublicProfileInner /></Suspense>
   );
 }
