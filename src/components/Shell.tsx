@@ -2,6 +2,7 @@
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -74,7 +75,7 @@ className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-co
               ) : user ? (
                 <Link href={profile?.username ? `/${profile.username}` : "/profile"} className="flex items-center gap-3 rounded-full p-2 transition-colors hover:bg-af-surface">
                   {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    <Image src={profile.avatar_url} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
                   ) : (
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white">
                       {(profile?.display_name || profile?.username || user.email || "?").slice(0, 1).toUpperCase()}
