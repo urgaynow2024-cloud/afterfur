@@ -24,6 +24,7 @@ export default function Home() {
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const max = 300;
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
@@ -120,6 +121,7 @@ export default function Home() {
   }
 
   async function submit() {
+    if (submitting) return;
     const text = draft.trim();
     if (!text && !mediaFile) return;
     const supabase = createClient();
@@ -127,7 +129,7 @@ export default function Home() {
       setError("Sign in to post.");
       return;
     }
-    setLoading(true);
+    setSubmitting(true);
     let mediaUrls: string[] = [];
     if (mediaFile) {
       try {
@@ -146,12 +148,14 @@ export default function Home() {
     const { error } = await supabase.from("posts").insert({ author_id: user.id, content: text || "", media_urls: mediaUrls });
     if (error) {
       setError(error.message);
+      setSubmitting(false);
       setLoading(false);
       return;
     }
     setDraft("");
     setMediaFile(null);
     setMediaPreview(null);
+    setSubmitting(false);
     setLoading(false);
     load();
   }
@@ -331,10 +335,10 @@ export default function Home() {
                 </div>
                 <button
                   onClick={submit}
-                  disabled={(!draft.trim() && !mediaFile) || loading}
+                  disabled={(!draft.trim() && !mediaFile) || submitting}
                   className="rounded-xl bg-af-accent px-5 py-1.5 text-[15px] font-semibold text-white transition-all hover:bg-af-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {loading ? "Posting..." : "Post"}
+                  {submitting ? "Posting..." : "Post"}
                 </button>
               </div>
             </div>
