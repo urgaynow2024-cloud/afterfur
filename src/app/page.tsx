@@ -373,9 +373,9 @@ export default function Home() {
         <div className="p-10 text-center text-sm text-af-danger">{error}</div>
       ) : visiblePosts.length === 0 ? (
         <EmptyState
-          title={tab === "following" ? "Nothing from follows yet" : "Your feed awaits"}
-          body={tab === "following" ? "Follow creators to see their work here." : "Explore creators or sign in to start building your space."}
-          action={{ label: "Explore creators", href: "/explore" }}
+          title={tab === "following" ? (user ? "Nothing from follows yet" : "Sign in to follow creators") : "Your feed awaits"}
+          body={tab === "following" ? (user ? "Follow creators to see their work here." : "Sign in to build a personalised following feed.") : "Explore creators or sign in to start building your space."}
+          action={{ label: user ? "Explore creators" : "Sign in", href: user ? "/explore" : "/signin" }}
         />
       ) : (
         <div>
