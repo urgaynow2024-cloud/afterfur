@@ -1,15 +1,15 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 
-type Profile = { display_name: string | null; bio: string | null; location: string | null; website: string | null; avatar_url: string | null; banner_url: string | null };
+type Profile = { username: string; display_name: string | null; bio: string | null; location: string | null; website: string | null; avatar_url: string | null; banner_url: string | null };
 
 export default function Settings() {
   const { user } = useAuth();
-  const [saved, setSaved] = useState<Profile>({ display_name: "", bio: "", location: "", website: "", avatar_url: null, banner_url: null });
-  const [form, setForm] = useState<Profile>({ display_name: "", bio: "", location: "", website: "", avatar_url: null, banner_url: null });
+  const [saved, setSaved] = useState<Profile>({ username: "", display_name: "", bio: "", location: "", website: "", avatar_url: null, banner_url: null });
+  const [form, setForm] = useState<Profile>({ username: "", display_name: "", bio: "", location: "", website: "", avatar_url: null, banner_url: null });
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
@@ -22,6 +22,7 @@ export default function Settings() {
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle().then(({ data }: any) => {
       if (data) {
         const p: Profile = {
+          username: data.username || "",
           display_name: data.display_name || "",
           bio: data.bio || "",
           location: data.location || "",
@@ -64,6 +65,7 @@ export default function Settings() {
       img.src = URL.createObjectURL(file);
     });
   }
+
   async function upload(file: File, bucket: string) {
     const supabase = createClient();
     if (!supabase || !user) throw new Error("Not signed in");
@@ -83,7 +85,6 @@ export default function Settings() {
     if (!file) return;
     try {
       if (!file.type.startsWith("image/")) throw new Error("File must be an image");
-
       setAvatarPreview(URL.createObjectURL(file));
       const url = await upload(file, "avatars");
       setForm((f) => ({ ...f, avatar_url: url }));
@@ -96,7 +97,6 @@ export default function Settings() {
     if (!file) return;
     try {
       if (!file.type.startsWith("image/")) throw new Error("File must be an image");
-
       setBannerPreview(URL.createObjectURL(file));
       const url = await upload(file, "banners");
       setForm((f) => ({ ...f, banner_url: url }));
@@ -109,11 +109,17 @@ export default function Settings() {
     setError(""); setMsg("");
     const supabase = createClient();
     if (!supabase || !user) { setError("Sign in required."); return; }
+    const usernameClean = form.username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/i.test(usernameClean)) { setError("Username must be 3-20 characters (letters, numbers, underscore)."); return; }
+    if (usernameClean !== saved.username) {
+      const { data: existing } = await supabase.from("profiles").select("id").ilike("username", usernameClean).neq("id", user.id).maybeSingle();
+      if (existing) { setError("That username is already taken."); return; }
+    }
     setLoading(true);
-    const { error } = await supabase.from("profiles").update({ display_name: form.display_name, bio: form.bio, location: form.location, website: form.website, avatar_url: form.avatar_url, banner_url: form.banner_url }).eq("id", user.id);
+    const { error } = await supabase.from("profiles").update({ username: usernameClean, display_name: form.display_name, bio: form.bio, location: form.location, website: form.website, avatar_url: form.avatar_url, banner_url: form.banner_url }).eq("id", user.id);
     setLoading(false);
     if (error) setError(error.message);
-    else { setSaved(form); setMsg("Profile saved."); }
+    else { setSaved({ ...form, username: usernameClean }); setMsg("Profile saved."); }
   }
 
   function cancel() {
@@ -153,6 +159,10 @@ export default function Settings() {
               <p className="text-sm font-medium">Avatar</p>
               <p className="text-xs text-af-muted">Click to choose an image. PNG, JPG or WebP, up to 5MB.</p>
             </div>
+          </div>
+          <div>
+            <label className="block text-xs text-af-muted mb-1">Username</label>
+            <input value={form.username || ""} onChange={(e) => setForm({ ...form, username: e.target.value })} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" />
           </div>
           <div>
             <label className="block text-xs text-af-muted mb-1">Display name</label>

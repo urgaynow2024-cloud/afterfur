@@ -21,6 +21,7 @@ export default function SignUp() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -41,6 +42,7 @@ export default function SignUp() {
       setState("error");
       return;
     }
+    if (!displayName.trim()) { setError("Display name is required."); setState("error"); return; }
     if (!/^[a-z0-9_]{3,20}$/i.test(username)) {
       setError("Username must be 3-20 characters (letters, numbers, underscore).");
       setState("error");
@@ -112,7 +114,7 @@ export default function SignUp() {
         // Create profile if it doesn't exist
         try {
             const { error: profileError }: any = await withTimeout(
-              supabase.from("profiles").insert({ id: userId, username: usernameClean }) as any,
+              supabase.from("profiles").insert({ id: userId, username: usernameClean, display_name: displayName.trim() }) as any,
               SIGNUP_TIMEOUT_MS,
               "Profile creation timed out."
             );
