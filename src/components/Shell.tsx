@@ -52,7 +52,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
                 return (
                   <Link
                     key={n.href}
-                    href={n.href}
+                    href={n.href === "/profile" && profile?.username ? `/${profile.username}` : n.href}
 className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-colors hover:bg-af-surface ${
   isActive ? "bg-af-surface font-bold text-af-brand" : "font-normal text-af-text-2 hover:text-af-text"
 }`}
