@@ -1,13 +1,11 @@
-﻿import { Suspense } from "react";
+"use client";
+import { Suspense } from "react";
 import ProfileClient from "./ProfileClient";
 
-export default async function Page({ params }: { params: Promise<{ username: string }> }) {
-  const { username } = await params;
+export default function Page() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-af-bg" />}>
-      <ProfileClient username={username} />
+      <ProfileClient />
     </Suspense>
   );
 }
-
-export const dynamic = 'force-dynamic';

@@ -2,11 +2,13 @@
 import { useEffect, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { createClient } from "@/lib/supabase/client";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 
-export default function PostClient({ username, id }: { username: string; id: string }) {
+export default function PostClient() {
+  const { username, id } = useParams<{ username: string; id: string }>();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
