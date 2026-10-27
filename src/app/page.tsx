@@ -4,6 +4,7 @@ import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import PostCard from "@/components/PostCard";
+import Link from "next/link";
 
 type Post = {
   id: string;
@@ -32,6 +33,9 @@ export default function Home() {
   const [repostCounts, setRepostCounts] = useState<Record<string, number>>({});
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [spotlight, setSpotlight] = useState<any[]>([]);
+  const [spotlightLoading, setSpotlightLoading] = useState(true);
+  const [spotlightAction, setSpotlightAction] = useState<string | null>(null);
 
   async function load() {
     const supabase = createClient();
@@ -70,6 +74,47 @@ export default function Home() {
     supabase.from("reposts").select("post_id").eq("user_id", user.id).then(({ data }: any) => setRepostedIds(new Set((data ?? []).map((r: any) => r.post_id))));
     supabase.from("follows").select("following_id").eq("follower_id", user.id).then(({ data }: any) => setFollowingIds(new Set((data ?? []).map((r: any) => r.following_id))));
   }, [user]);
+
+  useEffect(() => {
+    const run = async () => {
+      const supabase = createClient();
+      if (!supabase) { setSpotlightLoading(false); return; }
+      const { data: profs } = await supabase.from('profiles').select('*').limit(50);
+      const eligible = (profs ?? []).filter((p: any) => p.id !== user?.id && !followingIds.has(p.id));
+      const previous = JSON.parse(localStorage.getItem('af_spotlight_prev') || '[]');
+      const pool = eligible.filter((p: any) => !previous.includes(p.id));
+      const source = pool.length >= 5 ? pool : eligible;
+      const hash = (value: string) => {
+        let h = 0;
+        for (let i = 0; i < value.length; i += 1) h = (h * 31 + value.charCodeAt(i)) >>> 0;
+        return h;
+      };
+      const today = new Date().toISOString().slice(0, 10);
+      const selected = source
+        .map((p: any) => ({ p, score: hash(p.id + today) }))
+         .sort((a: any, b: any) => a.score - b.score)
+        .slice(0, 5)
+         .map((x: any) => x.p);
+      setSpotlight(selected);
+      localStorage.setItem('af_spotlight_prev', JSON.stringify(selected.map((p: any) => p.id)));
+      setSpotlightLoading(false);
+    };
+    run();
+  }, [user, followingIds]);
+
+  async function toggleSpotlightFollow(targetId: string) {
+    const supabase = createClient();
+    if (!supabase || !user) { setError('Sign in to follow creators.'); return; }
+    setSpotlightAction(targetId);
+    if (followingIds.has(targetId)) {
+      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId);
+      setFollowingIds((s) => { const n = new Set(s); n.delete(targetId); return n; });
+    } else {
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetId });
+      setFollowingIds((s) => new Set(s).add(targetId));
+    }
+    setSpotlightAction(null);
+  }
 
   async function submit() {
     const text = draft.trim();
@@ -182,17 +227,35 @@ export default function Home() {
     <Shell
       right={
         <div className="space-y-4 pt-4">
-          <div className="rounded-2xl border border-af-border/70 bg-gradient-to-b from-af-surface to-transparent overflow-hidden">
-            <div className="px-5 py-4">
-              <h2 className="text-lg font-semibold tracking-tight">Community Pulse</h2>
-              <p className="mt-1 text-sm text-af-muted">No live activity to show yet. Check back as creators join.</p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-af-border/70 bg-gradient-to-b from-af-surface to-transparent overflow-hidden">
-            <div className="px-5 py-4">
-              <h2 className="text-lg font-semibold tracking-tight">Creator Spotlight</h2>
-              <p className="mt-1 text-sm text-af-muted">Discover artists and creators across the community.</p>
-            </div>
+          <div className="rounded-2xl border border-af-border bg-af-surface p-4">
+            <h2 className="text-lg font-semibold tracking-tight text-af-text">Creator Spotlight</h2>
+            {spotlightLoading ? (
+              <p className="mt-3 text-sm text-af-muted">Loading creators…</p>
+            ) : spotlight.length === 0 ? (
+              <p className="mt-3 text-sm text-af-muted">No creators to show yet.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {spotlight.map((creator) => (
+                  <div key={creator.id} className="flex items-center gap-3">
+                    <Link href={`/${creator.username}`} className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
+                      {creator.avatar_url ? <img src={creator.avatar_url} alt="" className="h-full w-full object-cover" /> : null}
+                    </Link>
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/${creator.username}`} className="block truncate text-sm font-bold hover:underline">{creator.display_name || creator.username}</Link>
+                      <p className="truncate text-xs text-af-muted">@{creator.username}</p>
+                    </div>
+                    <button
+                      onClick={() => toggleSpotlightFollow(creator.id)}
+                      disabled={spotlightAction === creator.id}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${followingIds.has(creator.id) ? "border border-af-border text-af-text hover:bg-af-surface-2" : "bg-af-brand text-white hover:bg-af-brand-hover"}`}
+                    >
+                      {spotlightAction === creator.id ? "..." : followingIds.has(creator.id) ? "Following" : "Follow"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Link href="/explore" className="mt-4 block text-sm font-medium text-af-accent hover:underline">Show more</Link>
           </div>
         </div>
       }
@@ -335,5 +398,6 @@ onLike={toggleLike}
     </Shell>
   );
 }
+
 
 
