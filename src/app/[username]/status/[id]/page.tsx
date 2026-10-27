@@ -9,3 +9,5 @@ export default async function Page({ params }: { params: Promise<{ username: str
     </Suspense>
   );
 }
+
+export const dynamic = 'force-dynamic';
