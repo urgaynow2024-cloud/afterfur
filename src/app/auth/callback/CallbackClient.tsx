@@ -35,7 +35,7 @@ export default function AuthCallback() {
               user.user_metadata?.username ||
               user.email?.split("@")[0]?.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20) ||
               `user${user.id.slice(0, 8)}`;
-            await supabase.from("profiles").insert({ id: user.id, username: username.toLowerCase() });
+            await supabase.from("profiles").upsert({ id: user.id, username: username.toLowerCase() }, { onConflict: "id" });
           }
         } catch {
           // Ignore profile creation errors in callback - user can complete profile later

@@ -135,26 +135,7 @@ export default function SignUp() {
       }
 
       if (userId && !session) {
-        // Email confirmation required
-        try {
-          const { error: profileError }: any = await withTimeout(
-            supabase.from("profiles").insert({ id: userId, username: usernameClean }) as any,
-            SIGNUP_TIMEOUT_MS,
-            "Profile creation timed out."
-          );
-          if (profileError) {
-            if (profileError.message?.toLowerCase().includes("duplicate") || profileError.code?.includes("23505")) {
-              // Profile may exist
-            } else {
-              // Auth created but profile failed - partial success case
-              setInfo("Account created. Check your email to confirm. If you don't see a profile after confirming, try signing in.");
-              setState("confirm-email");
-              return;
-            }
-          }
-        } catch (profileErr: any) {
-          console.error("Profile creation issue:", profileErr);
-        }
+        // Email confirmation required. The database trigger creates the profile after confirmation.
         setInfo("Account created. Check your email for a confirmation link.");
         setState("confirm-email");
         return;
