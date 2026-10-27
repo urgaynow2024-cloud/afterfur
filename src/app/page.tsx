@@ -64,6 +64,11 @@ export default function Home() {
     setLoading(false);
   }
 
+    useEffect(() => {
+    if (!user) return;
+    setSpotlight((prev) => prev.filter((p) => p.id !== user.id));
+  }, [user]);
+
   useEffect(() => {
     load();
     const handler = () => load();
@@ -82,11 +87,11 @@ export default function Home() {
 
   useEffect(() => {
     const run = async () => {
-      if (spotlightLoaded.current) return;
+      if (spotlight.length > 0) return;
       const supabase = createClient();
       if (!supabase) { setSpotlightLoading(false); return; }
       const { data: profs } = await supabase.from('profiles').select('*').limit(50);
-      const eligible = (profs ?? []).filter((p: { id: string }) => p.id !== user?.id && !followingIds.has(p.id));
+      const eligible = (profs ?? []).filter((p: { id: string }) => p.id !== user?.id && p.id !== user?.id && !followingIds.has(p.id));
       const previous = JSON.parse(localStorage.getItem('af_spotlight_prev') || '[]');
       const pool = eligible.filter((p: { id: string }) => !previous.includes(p.id));
       const source = pool.length >= 5 ? pool : eligible;
@@ -111,7 +116,7 @@ export default function Home() {
 
   async function toggleSpotlightFollow(targetId: string) {
     const supabase = createClient();
-    if (!supabase || !user) { setError('Sign in to follow creators.'); return; }
+    if (!supabase || !user || targetId === user.id) return;
     setSpotlightAction(targetId);
     if (followingIds.has(targetId)) {
       await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId);
