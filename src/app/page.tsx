@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -35,6 +35,7 @@ export default function Home() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [spotlight, setSpotlight] = useState<any[]>([]);
   const [spotlightLoading, setSpotlightLoading] = useState(true);
+  const spotlightLoaded = useRef(false);
   const [spotlightAction, setSpotlightAction] = useState<string | null>(null);
 
   async function load() {
@@ -77,6 +78,7 @@ export default function Home() {
 
   useEffect(() => {
     const run = async () => {
+      if (spotlightLoaded.current) return;
       const supabase = createClient();
       if (!supabase) { setSpotlightLoading(false); return; }
       const { data: profs } = await supabase.from('profiles').select('*').limit(50);
@@ -97,6 +99,7 @@ export default function Home() {
          .map((x: any) => x.p);
       setSpotlight(selected);
       localStorage.setItem('af_spotlight_prev', JSON.stringify(selected.map((p: any) => p.id)));
+      spotlightLoaded.current = true;
       setSpotlightLoading(false);
     };
     run();
