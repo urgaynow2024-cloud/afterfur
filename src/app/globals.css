@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+body { font-family: var(--font-geist-sans), system-ui, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+
 :root {
   --af-bg: #09090D;
   --af-surface: #111827;

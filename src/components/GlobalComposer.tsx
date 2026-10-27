@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
+import EmojiPicker from "@/components/EmojiPicker";
 
 export default function GlobalComposer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
@@ -70,6 +71,20 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
     setMediaPreview(null);
     onClose();
     previousFocus.current?.focus();
+  }
+
+  function insertEmoji(emoji: string) {
+    const textarea = textareaRef.current;
+    if (!textarea) { setText((t) => t + emoji); return; }
+    const start = textarea.selectionStart ?? text.length;
+    const end = textarea.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const pos = start + emoji.length;
+      textarea.setSelectionRange(pos, pos);
+    });
   }
 
   async function submit() {
@@ -144,6 +159,7 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
         </div>
         {error && <p className="mt-3 text-sm text-af-danger">{error}</p>}
         <div className="mt-4 flex items-center justify-between border-t border-af-border pt-3">
+          <EmojiPicker onPick={insertEmoji} />
           <label className="cursor-pointer rounded-full px-3 py-1.5 text-sm text-af-accent transition-colors hover:bg-af-accent/10">
             Add media
             <input

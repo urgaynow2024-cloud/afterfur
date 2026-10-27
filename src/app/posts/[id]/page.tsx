@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import EmojiPicker from "@/components/EmojiPicker";
 import PostCard from "@/components/PostCard";
 
 type Post = {
@@ -33,6 +34,20 @@ function PostPageInner() {
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  function insertReplyEmoji(emoji: string) {
+    const textarea = replyTextareaRef.current;
+    if (!textarea) { setDraft((d) => d + emoji); return; }
+    const start = textarea.selectionStart ?? draft.length;
+    const end = textarea.selectionEnd ?? draft.length;
+    const next = draft.slice(0, start) + emoji + draft.slice(end);
+    setDraft(next);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const pos = start + emoji.length;
+      textarea.setSelectionRange(pos, pos);
+    });
+  }
   const [error, setError] = useState("");
 
   async function load() {
@@ -140,13 +155,15 @@ function PostPageInner() {
                 </div>
                 <div className="flex-1">
                   <textarea
+                    ref={replyTextareaRef}
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder="Post your reply"
                     className="w-full resize-none bg-transparent text-[17px] outline-none placeholder:text-af-muted"
                     rows={3}
                   />
-                  <div className="mt-2 flex justify-end border-t border-af-border pt-2">
+                  <div className="mt-2 flex items-center justify-between border-t border-af-border pt-2">
+                    <EmojiPicker onPick={insertReplyEmoji} />
                     <button
                       onClick={submit}
                       disabled={!draft.trim() || submitting}
