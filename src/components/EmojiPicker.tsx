@@ -1,12 +1,21 @@
 ﻿"use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const EMOJIS = ["😀","😂","🥰","😍","🤔","😎","😭","😡","👍","👎","❤️","🔥","✨","🎉","👀","🙏","💯","🥹","🙂","🤝"];
 
 export default function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
   return (
-    <div className="relative">
+    <div ref={ref} className="relative">
       <button type="button" onClick={() => setOpen((v) => !v)} className="rounded-full px-3 py-1.5 text-lg text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Emoji picker">
         😊
       </button>
