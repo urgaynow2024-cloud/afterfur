@@ -40,7 +40,7 @@ export default function ProfileClient() {
     <Shell>
       <PageHeader title={profile.display_name || profile.username} subtitle={`@${profile.username}`} />
       <div className="p-4">
-        <h2 className="text-xl font-extrabold">{profile.display_name || profile.username}</h2>
+        <h1 className="text-xl font-extrabold">{profile.display_name || profile.username}</h1>
         <p className="text-af-muted">@{profile.username}</p>
         {profile.bio && <p className="mt-3 whitespace-pre-wrap text-[15px]">{profile.bio}</p>}
       </div>
