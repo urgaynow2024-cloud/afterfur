@@ -24,13 +24,15 @@ const NAV = [
 function ShellInner({ children, right }: { children: ReactNode; right?: ReactNode }) {
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
-  const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(() => user ? profileCache.get(user.id) ?? null : null);
   const [composerOpen, setComposerOpen] = useState(false);
   useEffect(() => {
     const run = async () => {
       const supabase = createClient();
       if (!supabase || !user) { setProfile(null); return; }
+      if (profileCache.has(user.id)) { setProfile(profileCache.get(user.id) ?? null); return; }
       const { data } = await supabase.from("profiles").select("username,display_name,avatar_url").eq("id", user.id).maybeSingle();
+      if (data) profileCache.set(user.id, data);
       setProfile(data);
     };
     run();
@@ -141,6 +143,8 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
     </header>
   );
 }
+
+const profileCache = new Map<string, { username?: string; display_name?: string | null; avatar_url?: string | null }>();
 
 export function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
