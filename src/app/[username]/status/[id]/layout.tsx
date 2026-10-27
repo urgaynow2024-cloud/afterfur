@@ -1,4 +1,5 @@
 ﻿import type { Metadata } from "next";
+import { connection } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -6,6 +7,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string; id: string }> }): Promise<Metadata> {
   const { username, id } = await params;
+  await connection();
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const { data: post } = await supabase.from("posts").select("id,content,media_urls,author_id").eq("id", id).maybeSingle();
   if (!post) return { title: "Post not found | AfterFur", description: "This AfterFur post is unavailable." };
