@@ -28,9 +28,12 @@ export default function PostCard({
   bookmarked,
   reposted,
   repostedBy,
+  likeCount,
+  repostCount,
   onLike,
   onBookmark,
   onRepost,
+  onShare,
   onDelete,
 }: {
   post: PostData;
@@ -38,31 +41,34 @@ export default function PostCard({
   bookmarked?: boolean;
   reposted?: boolean;
   repostedBy?: string | null;
+  likeCount?: number;
+  repostCount?: number;
   onLike?: (id: string) => void;
   onBookmark?: (id: string) => void;
   onRepost?: (id: string) => void;
+  onShare?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
   const username = post.profiles?.username || "unknown";
   const displayName = post.profiles?.display_name || username;
 
   return (
-    <article className="border-b border-af-border px-4 py-3 hover:bg-af-surface/40">
+    <article className="border-b border-af-border px-4 py-3 transition-colors hover:bg-af-surface/40">
       {repostedBy && (
         <div className="mb-1 ml-12 text-xs text-af-muted">{repostedBy} reposted</div>
       )}
       <div className="flex gap-3">
-        <Link href={`/profile/${username}`} className="h-12 w-12 shrink-0 rounded-full bg-af-surface-2 overflow-hidden">
+        <Link href={`/${username}`} className="h-12 w-12 shrink-0 rounded-full bg-af-surface-2 overflow-hidden">
           {post.profiles?.avatar_url ? <img src={post.profiles.avatar_url} alt="" className="h-full w-full object-cover" /> : null}
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-[15px]">
-            <Link href={`/profile/${username}`} className="font-bold hover:underline">{displayName}</Link>
+            <Link href={`/${username}`} className="font-bold hover:underline">{displayName}</Link>
             <span className="text-af-muted">@{username}</span>
             <span className="text-af-muted">·</span>
             <span className="text-af-muted">{timeAgo(post.created_at)}</span>
           </div>
-          <Link href={`/posts/${post.id}`} className="mt-1 block">
+          <Link href={`/${username}/status/${post.id}`} className="mt-1 block">
             <p className="whitespace-pre-wrap break-words text-[15px] leading-normal">{post.content}</p>
           </Link>
           {post.media_urls && post.media_urls.length > 0 && (
@@ -78,11 +84,12 @@ export default function PostCard({
               )}
             </div>
           )}
-          <div className="mt-3 flex gap-6 text-sm text-af-muted">
-            <Link href={`/posts/${post.id}`} className="hover:text-af-accent">Reply</Link>
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRepost?.(post.id); }} className={reposted ? "text-af-accent" : "hover:text-af-accent"}>Repost</button>
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike?.(post.id); }} className={liked ? "text-pink-500" : "hover:text-pink-500"}>Like</button>
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onBookmark?.(post.id); }} className={bookmarked ? "text-af-accent" : "hover:text-af-accent"}>Bookmark</button>
+          <div className="mt-3 flex flex-wrap gap-6 text-sm text-af-muted">
+            <Link href={`/${username}/status/${post.id}`} className="hover:text-af-accent">Reply</Link>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRepost?.(post.id); }} className={reposted ? "text-af-brand" : "text-af-muted hover:text-af-brand"}>Repost{typeof repostCount === "number" ? ` ${repostCount}` : ""}</button>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike?.(post.id); }} className={liked ? "text-af-accent" : "text-af-muted hover:text-af-accent"}>Like{typeof likeCount === "number" ? ` ${likeCount}` : ""}</button>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onBookmark?.(post.id); }} className={bookmarked ? "text-af-accent" : "text-af-muted hover:text-af-accent"}>Bookmark</button>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare?.(post.id); }} className="text-af-muted hover:text-af-accent">Share</button>
             {onDelete && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(post.id); }} className="hover:text-af-danger">Delete</button>}
           </div>
         </div>
@@ -90,3 +97,4 @@ export default function PostCard({
     </article>
   );
 }
+

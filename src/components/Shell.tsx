@@ -29,7 +29,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
             <div className="mb-4 mt-2 px-3 py-2">
               <Link href="/" className="flex items-center gap-2">
                 <div className="text-xl font-bold tracking-tight">
-                  <span className="text-af-accent">After</span>Fur
+                  <span className="text-af-brand">After</span>Fur
                 </div>
               </Link>
               <div className="mt-0.5 text-xs text-af-muted">Social media, after dark.</div>
@@ -41,9 +41,9 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
                   <Link
                     key={n.href}
                     href={n.href}
-                    className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-colors hover:bg-af-surface ${
-                      isActive ? "font-bold" : "font-normal"
-                    }`}
+className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-colors hover:bg-af-surface ${
+  isActive ? "bg-af-surface font-bold text-af-brand" : "font-normal text-af-text-2 hover:text-af-text"
+}`}
                   >
                     {n.label}
                   </Link>
@@ -101,7 +101,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
 
       <nav className="fixed bottom-0 left-0 right-0 flex justify-around border-t border-af-border bg-af-bg md:hidden">
         {NAV.slice(0, 5).map((n) => (
-          <Link key={n.href} href={n.href} className={`px-3 py-2 text-xs ${pathname === n.href ? "text-af-accent" : "text-af-muted"}`}>
+          <Link key={n.href} href={n.href} className={`px-3 py-2 text-xs transition-colors ${pathname === n.href ? "font-bold text-af-accent" : "text-af-muted hover:text-af-text"}`}>
             {n.label}
           </Link>
         ))}

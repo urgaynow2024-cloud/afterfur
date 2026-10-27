@@ -90,13 +90,13 @@ export default function Profile() {
             {profile.banner_url ? (
               <img src={profile.banner_url} alt="" className="h-48 w-full object-cover" />
             ) : (
-              <div className="h-48 w-full bg-gradient-to-br from-af-accent via-purple-500 to-pink-500" />
+              <div className="h-48 w-full bg-af-surface-2" />
             )}
             <div className="absolute -bottom-16 left-4">
               {profile.avatar_url ? (
                 <img src={profile.avatar_url} alt="" className="h-32 w-32 rounded-full border-4 border-af-bg object-cover" />
               ) : (
-                <div className="h-32 w-32 rounded-full border-4 border-af-bg bg-gradient-to-br from-af-accent to-af-accent-2" />
+                <div className="h-32 w-32 rounded-full border-4 border-af-bg bg-af-surface-2" />
               )}
             </div>
           </div>
@@ -139,13 +139,13 @@ export default function Profile() {
                 }`}
               >
                 {t}
-                {tab === t && <div className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full bg-af-accent" />}
+                {tab === t && <div className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full bg-af-brand" />}
               </button>
             ))}
           </div>
           {tab === "media"
             ? (() => {
-                const items = posts.flatMap((p) => (p.media_urls ?? []).map((u) => ({ url: u, post: p })));
+                const items = Array.from(new Map<string, { url: string; post: Post }>(posts.flatMap((p) => (p.media_urls ?? []).map((u) => [u, { url: u, post: p }]))).values());
                 const filtered = items.filter((it) => {
                   const isGif = it.url.toLowerCase().endsWith(".gif");
                   const isVideo = /\.(mp4|webm|mov)$/i.test(it.url);
@@ -162,7 +162,7 @@ export default function Profile() {
                           key={f}
                           onClick={() => setMediaFilter(f)}
                           className={`rounded-full px-3 py-1 transition-colors ${
-                            mediaFilter === f ? "bg-af-accent text-white" : "bg-af-surface-2 text-af-text hover:bg-af-surface-3"
+                            mediaFilter === f ? "bg-af-brand text-white" : "bg-af-surface-2 text-af-text hover:bg-af-surface-3"
                           }`}
                         >
                           {f}
@@ -174,7 +174,7 @@ export default function Profile() {
                     ) : (
                       <div className="grid grid-cols-3 gap-0.5">
                         {filtered.map((it, i) => (
-                          <div key={i} className="aspect-square overflow-hidden bg-af-surface-2">
+                          <Link key={it.url + i} href={`/posts/${it.post.id}`} className="aspect-square overflow-hidden bg-af-surface-2">
                             {/\.(mp4|webm|mov)$/i.test(it.url) ? (
                               <div className="relative h-full w-full">
                                 <video src={it.url} className="h-full w-full object-cover" />
@@ -183,7 +183,7 @@ export default function Profile() {
                             ) : (
                               <img src={it.url} alt="" className="h-full w-full object-cover" />
                             )}
-                          </div>
+                          </Link>
                         ))}
                       </div>
                     )}
@@ -226,3 +226,6 @@ export default function Profile() {
     </Shell>
   );
 }
+
+
+

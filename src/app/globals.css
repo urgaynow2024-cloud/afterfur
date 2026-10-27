@@ -1,15 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --af-bg: #0f1419;
-  --af-surface: #15202b;
-  --af-surface-2: #192734;
-  --af-border: #38444d;
-  --af-text: #ffffff;
-  --af-text-2: #8899a6;
-  --af-muted: #8899a6;
-  --af-accent: #1d9bf0;
-  --af-accent-hover: #1a8cd8;
+  --af-bg: #09090D;
+  --af-surface: #111827;
+  --af-surface-2: #172033;
+  --af-border: #1F2937;
+  --af-text: #F3F4F6;
+  --af-text-2: #9CA3AF;
+  --af-muted: #9CA3AF;
+  --af-accent: #3B82F6;
+  --af-accent-hover: #2563EB;
+  --af-brand: #8B5CF6;
+  --af-brand-hover: #7C3AED;
+  --af-brand-soft: #C4B5FD;
   --af-danger: #f91880;
   --af-success: #00ba7c;
 }
@@ -24,6 +27,9 @@
   --color-af-muted: var(--af-muted);
   --color-af-accent: var(--af-accent);
   --color-af-accent-hover: var(--af-accent-hover);
+  --color-af-brand: var(--af-brand);
+  --color-af-brand-hover: var(--af-brand-hover);
+  --color-af-brand-soft: var(--af-brand-soft);
   --color-af-danger: var(--af-danger);
   --color-af-success: var(--af-success);
   --font-sans: var(--font-geist-sans);

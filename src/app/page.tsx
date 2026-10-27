@@ -28,6 +28,8 @@ export default function Home() {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [repostedIds, setRepostedIds] = useState<Set<string>>(new Set());
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+  const [repostCounts, setRepostCounts] = useState<Record<string, number>>({});
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -202,21 +204,21 @@ export default function Home() {
           className={`relative flex-1 py-3 text-[15px] transition-colors hover:bg-af-surface/40 ${tab === "foryou" ? "font-semibold text-af-text" : "text-af-muted"}`}
         >
           All
-          {tab === "foryou" && <div className="absolute bottom-0 left-1/2 h-0.5 w-10 -translate-x-1/2 rounded-full bg-gradient-to-r from-af-accent to-af-highlight" />}
+          {tab === "foryou" && <div className="absolute bottom-0 left-1/2 h-0.5 w-10 -translate-x-1/2 rounded-full bg-af-brand" />}
         </button>
         <button
           onClick={() => setTab("following")}
           className={`relative flex-1 py-3 text-[15px] transition-colors hover:bg-af-surface/40 ${tab === "following" ? "font-semibold text-af-text" : "text-af-muted"}`}
         >
           Following
-          {tab === "following" && <div className="absolute bottom-0 left-1/2 h-0.5 w-16 -translate-x-1/2 rounded-full bg-gradient-to-r from-af-accent to-af-highlight" />}
+          {tab === "following" && <div className="absolute bottom-0 left-1/2 h-0.5 w-16 -translate-x-1/2 rounded-full bg-af-brand" />}
         </button>
       </div>
 
       {user && (
         <div className="border-b border-af-border/70 px-5 py-4">
           <div className="flex gap-3">
-            <div className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-br from-af-accent to-af-highlight" />
+            <div className="h-11 w-11 shrink-0 rounded-full bg-af-surface-2" />
             <div className="flex-1">
               <textarea
                 value={draft}
@@ -264,7 +266,7 @@ export default function Home() {
                 <button
                   onClick={submit}
                   disabled={(!draft.trim() && !mediaFile) || loading}
-                  className="rounded-xl bg-gradient-to-r from-af-accent to-af-highlight px-5 py-1.5 text-[15px] font-semibold text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl bg-af-accent px-5 py-1.5 text-[15px] font-semibold text-white transition-all hover:bg-af-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading ? "Posting..." : "Post"}
                 </button>
@@ -293,9 +295,15 @@ export default function Home() {
               liked={likedIds.has(p.id)}
               bookmarked={bookmarkedIds.has(p.id)}
               reposted={repostedIds.has(p.id)}
-              onLike={toggleLike}
-              onBookmark={toggleBookmark}
-              onRepost={toggleRepost}
+onLike={toggleLike}
+               onBookmark={toggleBookmark}
+               onRepost={toggleRepost}
+               onShare={(id) => {
+                 const post = posts.find((p) => p.id === id);
+                 const username = post?.profiles?.username || "profile";
+                 const url = `${window.location.origin}/${username}/status/${id}`;
+                 navigator.clipboard?.writeText(url).then(() => setError("")).catch(() => setError("Could not copy link."));
+               }}
               onDelete={user?.id === p.author_id ? deletePost : undefined}
             />
           ))}
@@ -327,4 +335,5 @@ export default function Home() {
     </Shell>
   );
 }
+
 
