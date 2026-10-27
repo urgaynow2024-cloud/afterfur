@@ -64,20 +64,20 @@ function PostPageInner() {
       return;
     }
     const authorIds = [p.author_id];
-    let profMap = new Map();
+    let profMap = new Map<string, { id: string; username: string; display_name: string | null; avatar_url: string | null }>();
     const { data: profs } = await supabase.from("profiles").select("*").in("id", authorIds);
-    profMap = new Map((profs ?? []).map((x: any) => [x.id, x]));
+    profMap = new Map((profs ?? []).map((x: { id: string; username: string; display_name: string | null; avatar_url: string | null }) => [x.id, x]));
     setPost({ ...p, profiles: profMap.get(p.author_id) || null } as Post);
 
     const { data: r } = await supabase.from("replies").select("*").eq("post_id", id).order("created_at", { ascending: true });
-    const rIds = [...new Set((r ?? []).map((x: any) => x.author_id))];
+    const rIds = [...new Set((r ?? []).map((x: { author_id: string }) => x.author_id))];
     let rProfMap = new Map();
     if (rIds.length) {
       const { data: rprofs } = await supabase.from("profiles").select("*").in("id", rIds);
-      rProfMap = new Map((rprofs ?? []).map((x: any) => [x.id, x]));
+      rProfMap = new Map((rprofs ?? []).map((x: { id: string; username: string; display_name: string | null; avatar_url: string | null }) => [x.id, x]));
     }
     setReplies(
-      ((r ?? []).map((x: any) => ({ ...x, profiles: rProfMap.get(x.author_id) || null })) as Reply[])
+      ((r ?? []).map((x: { id: string; content: string; created_at: string; author_id: string; post_id: string }) => ({ ...x, profiles: rProfMap.get(x.author_id) || null })) as Reply[])
     );
     setLoading(false);
   }
