@@ -1,8 +1,10 @@
 "use client";
 import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Suspense } from "react";
 
 const NAV = [
@@ -20,6 +22,16 @@ const NAV = [
 function ShellInner({ children, right }: { children: ReactNode; right?: ReactNode }) {
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
+  const [profile, setProfile] = useState<any>(null);
+  useEffect(() => {
+    const run = async () => {
+      const supabase = createClient();
+      if (!supabase || !user) { setProfile(null); return; }
+      const { data } = await supabase.from("profiles").select("username,display_name,avatar_url").eq("id", user.id).maybeSingle();
+      setProfile(data);
+    };
+    run();
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-af-bg">
@@ -60,14 +72,21 @@ className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-co
               {loading ? (
                 <div className="text-sm text-af-muted">Checking session…</div>
               ) : user ? (
-                <div className="flex items-center gap-3 rounded-full p-2 transition-colors hover:bg-af-surface">
-                  <div className="h-10 w-10 rounded-full bg-af-surface-2" />
+                <Link href={profile?.username ? `/${profile.username}` : "/profile"} className="flex items-center gap-3 rounded-full p-2 transition-colors hover:bg-af-surface">
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white">
+                      {(profile?.display_name || profile?.username || user.email || "?").slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-bold">{user.email?.split("@")[0]}</div>
-                    <div className="truncate text-sm text-af-muted">@{user.email?.split("@")[0]}</div>
+                    <div className="truncate text-sm font-bold">{profile?.display_name || profile?.username || user.email?.split("@")[0]}</div>
+                    <div className="truncate text-sm text-af-muted">@{profile?.username || user.email?.split("@")[0]}</div>
                   </div>
                   <button
-                    onClick={async () => {
+                    onClick={async (e) => {
+                      e.preventDefault();
                       const r = await signOut();
                       if (r.error) alert(r.error);
                     }}
@@ -75,7 +94,7 @@ className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-co
                   >
                     …
                   </button>
-                </div>
+                </Link>
               ) : (
                 <div className="space-y-2">
                   <Link href="/signin" className="block rounded-full bg-af-accent py-2 text-center text-[15px] font-bold text-white hover:bg-af-accent-hover">
