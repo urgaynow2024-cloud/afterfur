@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -87,7 +88,7 @@ export default function SignUp() {
             data: { username: usernameClean },
             emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
           },
-        }) as any,
+        }) as unknown as Promise<{ data: { user?: { id: string } | null; session?: unknown } | null; error?: { message?: string } | null }>,
         SIGNUP_TIMEOUT_MS,
         "Sign up timed out. Please check your connection and try again."
       );
@@ -127,7 +128,7 @@ export default function SignUp() {
                 return;
               }
             }
-        } catch (profileErr: any) {
+        } catch (profileErr: unknown) {
           // Don't block on profile creation timeout if auth succeeded with session
           console.error("Profile creation issue:", profileErr);
         }
@@ -146,11 +147,11 @@ export default function SignUp() {
       // Fallback
       setInfo("Check your email to confirm your account.");
       setState("confirm-email");
-    } catch (err: any) {
-      if (err?.message?.includes("timed out")) {
-        setError(err.message);
+    } catch (err: unknown) {
+      if ((err as { message?: string })?.message?.includes("timed out")) {
+        setError((err as { message?: string })?.message || "Something went wrong. Please try again.");
       } else {
-        setError(err?.message || "Something went wrong. Please try again.");
+        setError((err as { message?: string })?.message || "Something went wrong. Please try again.");
       }
       setState("error");
     }
@@ -206,7 +207,7 @@ export default function SignUp() {
             </label>
             <label className="flex items-start gap-2 text-xs text-af-muted">
               <input type="checkbox" checked={termsOk} onChange={(e) => setTermsOk(e.target.checked)} className="mt-0.5" />
-              I accept the <a href="/terms" className="text-af-accent hover:underline">Terms of Service</a> and <a href="/privacy" className="text-af-accent hover:underline">Privacy Policy</a>.
+              I accept the <Link href="/terms" className="text-af-accent hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-af-accent hover:underline">Privacy Policy</Link>.
             </label>
             {error && <p className="text-sm text-af-danger">{error}</p>}
             {info && state === "confirm-email" && (
@@ -225,7 +226,7 @@ export default function SignUp() {
             )}
           </form>
           <p className="mt-4 text-sm text-af-muted">
-            Already have an account? <a href="/signin" className="text-af-accent hover:underline">Sign in</a>
+            Already have an account? <Link href="/signin" className="text-af-accent hover:underline">Sign in</Link>
           </p>
         </div>
       </section>

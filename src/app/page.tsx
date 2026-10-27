@@ -34,7 +34,7 @@ export default function Home() {
   const [repostCounts, setRepostCounts] = useState<Record<string, number>>({});
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [spotlight, setSpotlight] = useState<any[]>([]);
+  const [spotlight, setSpotlight] = useState<{ id: string; username?: string; display_name?: string | null; avatar_url?: string | null }[]>([]);
   const [spotlightLoading, setSpotlightLoading] = useState(true);
   const spotlightLoaded = useRef(false);
   const [spotlightAction, setSpotlightAction] = useState<string | null>(null);
@@ -54,13 +54,13 @@ export default function Home() {
       setLoading(false);
       return;
     }
-    const ids = [...new Set((data ?? []).map((p: any) => p.author_id))];
+    const ids = [...new Set((data ?? []).map((p: { author_id: string }) => p.author_id))];
     let profMap = new Map();
     if (ids.length) {
       const { data: profs } = await supabase.from("profiles").select("*").in("id", ids);
-      profMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
+      profMap = new Map((profs ?? []).map((p: { id: string }) => [p.id, p]));
     }
-    setPosts(((data ?? []).map((p: any) => ({ ...p, profiles: profMap.get(p.author_id) || null })) as Post[]));
+    setPosts(((data ?? []).map((p: { author_id: string }) => ({ ...p, profiles: profMap.get(p.author_id) || null })) as Post[]));
     setLoading(false);
   }
 
@@ -74,10 +74,10 @@ export default function Home() {
   useEffect(() => {
     const supabase = createClient();
     if (!supabase || !user) return;
-    supabase.from("likes").select("post_id").eq("user_id", user.id).then(({ data }: any) => setLikedIds(new Set((data ?? []).map((r: any) => r.post_id))));
-    supabase.from("bookmarks").select("post_id").eq("user_id", user.id).then(({ data }: any) => setBookmarkedIds(new Set((data ?? []).map((r: any) => r.post_id))));
-    supabase.from("reposts").select("post_id").eq("user_id", user.id).then(({ data }: any) => setRepostedIds(new Set((data ?? []).map((r: any) => r.post_id))));
-    supabase.from("follows").select("following_id").eq("follower_id", user.id).then(({ data }: any) => setFollowingIds(new Set((data ?? []).map((r: any) => r.following_id))));
+    supabase.from("likes").select("post_id").eq("user_id", user.id).then(({ data }: { data: { post_id: string }[] | null }) => setLikedIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id))));
+    supabase.from("bookmarks").select("post_id").eq("user_id", user.id).then(({ data }: { data: { post_id: string }[] | null }) => setBookmarkedIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id))));
+    supabase.from("reposts").select("post_id").eq("user_id", user.id).then(({ data }: { data: { post_id: string }[] | null }) => setRepostedIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id))));
+    supabase.from("follows").select("following_id").eq("follower_id", user.id).then(({ data }: { data: { following_id: string }[] | null }) => setFollowingIds(new Set((data ?? []).map((r: { following_id: string }) => r.following_id))));
   }, [user]);
 
   useEffect(() => {
@@ -86,9 +86,9 @@ export default function Home() {
       const supabase = createClient();
       if (!supabase) { setSpotlightLoading(false); return; }
       const { data: profs } = await supabase.from('profiles').select('*').limit(50);
-      const eligible = (profs ?? []).filter((p: any) => p.id !== user?.id && !followingIds.has(p.id));
+      const eligible = (profs ?? []).filter((p: { id: string }) => p.id !== user?.id && !followingIds.has(p.id));
       const previous = JSON.parse(localStorage.getItem('af_spotlight_prev') || '[]');
-      const pool = eligible.filter((p: any) => !previous.includes(p.id));
+      const pool = eligible.filter((p: { id: string }) => !previous.includes(p.id));
       const source = pool.length >= 5 ? pool : eligible;
       const hash = (value: string) => {
         let h = 0;
@@ -97,12 +97,12 @@ export default function Home() {
       };
       const today = new Date().toISOString().slice(0, 10);
       const selected = source
-        .map((p: any) => ({ p, score: hash(p.id + today) }))
-         .sort((a: any, b: any) => a.score - b.score)
+        .map((p: { id: string }) => ({ p, score: hash(p.id + today) }))
+         .sort((a: { score: number }, b: { score: number }) => a.score - b.score)
         .slice(0, 5)
-         .map((x: any) => x.p);
+         .map((x: { p: { id: string; username?: string; display_name?: string | null; avatar_url?: string | null } }) => x.p);
       setSpotlight(selected);
-      localStorage.setItem('af_spotlight_prev', JSON.stringify(selected.map((p: any) => p.id)));
+      localStorage.setItem('af_spotlight_prev', JSON.stringify(selected.map((p: { id: string }) => p.id)));
       spotlightLoaded.current = true;
       setSpotlightLoading(false);
     };
