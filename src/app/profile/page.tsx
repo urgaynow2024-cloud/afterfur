@@ -19,6 +19,10 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"posts" | "replies" | "reposts" | "media">("posts");
+  const [listType, setListType] = useState<'followers' | 'following' | null>(null);
+  const [listProfiles, setListProfiles] = useState<any[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState('');
   const [mediaFilter, setMediaFilter] = useState<"all" | "photos" | "gifs" | "videos">("all");
 
   useEffect(() => {
@@ -65,6 +69,27 @@ export default function Profile() {
     };
     run();
   }, [user]);
+
+    async function openList(type: 'followers' | 'following') {
+    if (!user) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    setListType(type);
+    setListLoading(true);
+    setListError('');
+    setListProfiles([]);
+    const column = type === 'followers' ? 'follower_id' : 'following_id';
+    const filterColumn = type === 'followers' ? 'following_id' : 'follower_id';
+    const targetId = user.id;
+    const { data: rows, error } = await supabase.from('follows').select(column).eq(filterColumn, targetId);
+    if (error) { setListError(error.message); setListLoading(false); return; }
+    const ids = (rows ?? []).map((r: any) => r[column]);
+    if (ids.length === 0) { setListLoading(false); return; }
+    const { data: profs, error: pError } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids);
+    if (pError) { setListError(pError.message); setListLoading(false); return; }
+    setListProfiles(profs ?? []);
+    setListLoading(false);
+  }
 
   if (!user) {
     return (

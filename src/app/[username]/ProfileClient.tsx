@@ -24,6 +24,10 @@ export default function ProfileClient() {
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
+  const [listType, setListType] = useState<'followers' | 'following' | null>(null);
+  const [listProfiles, setListProfiles] = useState<any[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState('');
 
   useEffect(() => {
     const run = async () => {
@@ -33,8 +37,9 @@ export default function ProfileClient() {
       if (!prof) { setError("Profile not found."); setLoading(false); return; }
       setProfile(prof as Profile);
 
-      const { count: followers } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", prof.id);
-      const { count: following } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", prof.id);
+      const { count: followers, error: followersError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", prof.id);
+      const { count: following, error: followingError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", prof.id);
+      if (followersError || followingError) setError((followersError || followingError)?.message || "Could not load follow counts.");
       setCounts({ followers: followers ?? 0, following: following ?? 0 });
 
       if (user && user.id !== prof.id) {
@@ -65,17 +70,39 @@ export default function ProfileClient() {
     run();
   }, [username, user]);
 
+  async function openList(type: 'followers' | 'following') {
+    if (!profile) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    setListType(type);
+    setListLoading(true);
+    setListError('');
+    setListProfiles([]);
+    const column = type === 'followers' ? 'follower_id' : 'following_id';
+    const filterColumn = type === 'followers' ? 'following_id' : 'follower_id';
+    const { data: rows, error } = await supabase.from('follows').select(column).eq(filterColumn, profile.id);
+    if (error) { setListError(error.message); setListLoading(false); return; }
+    const ids = (rows ?? []).map((r: any) => r[column]);
+    if (ids.length === 0) { setListLoading(false); return; }
+    const { data: profs, error: pError } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids);
+    if (pError) { setListError(pError.message); setListLoading(false); return; }
+    setListProfiles(profs ?? []);
+    setListLoading(false);
+  }
+
   async function toggleFollow() {
     if (!user || !profile || user.id === profile.id) return;
     const supabase = createClient();
     if (!supabase) return;
     setFollowBusy(true);
     if (isFollowing) {
-      await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id);
+      const { error } = await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id);
+      if (error) { setError(error.message); setFollowBusy(false); return; }
       setIsFollowing(false);
       setCounts((c) => ({ ...c, followers: Math.max(0, c.followers - 1) }));
     } else {
-      await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
+      const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
+      if (error) { setError(error.message); setFollowBusy(false); return; }
       setIsFollowing(true);
       setCounts((c) => ({ ...c, followers: c.followers + 1 }));
     }
@@ -147,8 +174,8 @@ export default function ProfileClient() {
           <span>Joined {new Date(profile.created_at).toLocaleDateString()}</span>
         </div>
         <div className="mt-3 flex gap-4 text-sm">
-          <span><strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span></span>
-          <span><strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span></span>
+          <button onClick={() => openList('followers')} className="text-left"><strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span></button>
+          <button onClick={() => openList('following')} className="text-left"><strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span></button>
         </div>
       </div>
 
@@ -193,6 +220,31 @@ export default function ProfileClient() {
       ) : (
         <div>{posts.map((p) => <PostCard key={p.id} post={p} />)}</div>
       )}
+    {listType && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setListType(null)}>
+        <div className="w-full max-w-md rounded-2xl border border-af-border bg-af-surface p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold capitalize text-af-text">{listType}</h2>
+            <button onClick={() => setListType(null)} className="text-af-muted hover:text-af-text">Close</button>
+          </div>
+          {listLoading ? <p className="mt-4 text-sm text-af-muted">Loading…</p> : listError ? <p className="mt-4 text-sm text-af-danger">{listError}</p> : listProfiles.length === 0 ? <p className="mt-4 text-sm text-af-muted">No accounts found.</p> : (
+            <div className="mt-4 space-y-3">
+              {listProfiles.map((p) => (
+                <div key={p.id} className="flex items-center gap-3">
+                  <Link href={`/${p.username}`} className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
+                    {p.avatar_url ? <img src={p.avatar_url} alt="" className="h-full w-full object-cover" /> : null}
+                  </Link>
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/${p.username}`} className="block truncate text-sm font-bold hover:underline">{p.display_name || p.username}</Link>
+                    <p className="truncate text-xs text-af-muted">@{p.username}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
     </Shell>
   );
 }
