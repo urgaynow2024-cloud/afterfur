@@ -35,6 +35,12 @@ function PostPageInner() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<{ avatar_url?: string | null; display_name?: string | null } | null>(null);
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    supabase.from("profiles").select("avatar_url,display_name").eq("id", user.id).maybeSingle().then(({ data }: any) => setCurrentUserProfile(data));
+  }, [user]);
   function insertReplyEmoji(emoji: string) {
     const textarea = replyTextareaRef.current;
     if (!textarea) { setDraft((d) => d + emoji); return; }
@@ -87,6 +93,7 @@ function PostPageInner() {
   }, [id]);
 
   async function submit() {
+    if (submitting) return;
     const text = draft.trim();
     if (!text) return;
     const supabase = createClient();
@@ -151,7 +158,7 @@ function PostPageInner() {
             <div className="border-b border-af-border px-4 py-3">
               <div className="flex gap-3">
                 <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-                  <div className="h-full w-full bg-gradient-to-br from-af-accent to-af-accent-2" />
+                  {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-br from-af-accent to-af-accent-2" />}
                 </div>
                 <div className="flex-1">
                   <textarea
