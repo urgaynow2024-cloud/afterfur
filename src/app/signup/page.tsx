@@ -1,8 +1,24 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+type SignUpState = "idle" | "submitting" | "confirm-email" | "success" | "error";
+
+const SIGNUP_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timer);
+  }) as Promise<T>;
+}
+
 export default function SignUp() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -11,21 +27,150 @@ export default function SignUp() {
   const [ageOk, setAgeOk] = useState(false);
   const [termsOk, setTermsOk] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [state, setState] = useState<SignUpState>("idle");
+  const [info, setInfo] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (state === "submitting") return;
     setError("");
-    if (password !== confirm) { setError("Passwords do not match."); return; }
-    if (!/^[a-z0-9_]{3,20}$/i.test(username)) { setError("Username must be 3-20 characters (letters, numbers, underscore)."); return; }
-    if (!ageOk || !termsOk) { setError("Please confirm age eligibility and accept the terms."); return; }
+    setInfo("");
+
+    if (password !== confirm) {
+      setError("Passwords do not match.");
+      setState("error");
+      return;
+    }
+    if (!/^[a-z0-9_]{3,20}$/i.test(username)) {
+      setError("Username must be 3-20 characters (letters, numbers, underscore).");
+      setState("error");
+      return;
+    }
+    if (!ageOk || !termsOk) {
+      setError("Please confirm age eligibility and accept the terms.");
+      setState("error");
+      return;
+    }
+
     const supabase = createClient();
-    if (!supabase) { setError("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."); return; }
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
-    setLoading(false);
-    if (error) setError(error.message);
-    else window.location.href = "/signin";
+    if (!supabase) {
+      setError("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      setState("error");
+      return;
+    }
+
+    setState("submitting");
+
+    try {
+      const usernameClean = username.trim().toLowerCase();
+      const emailClean = email.trim().toLowerCase();
+
+      // Check if username already taken to give clearer errors
+      const existingProfileResult: any = await withTimeout(
+        supabase.from("profiles").select("id").ilike("username", usernameClean).maybeSingle() as any,
+        SIGNUP_TIMEOUT_MS,
+        "Request timed out. Please check your connection and try again."
+      );
+      if (existingProfileResult?.data) {
+        setError("That username is already taken.");
+        setState("error");
+        return;
+      }
+
+      const signUpResult: any = await withTimeout(
+        supabase.auth.signUp({
+          email: emailClean,
+          password,
+          options: {
+            data: { username: usernameClean },
+            emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+          },
+        }) as any,
+        SIGNUP_TIMEOUT_MS,
+        "Sign up timed out. Please check your connection and try again."
+      );
+
+      const authError = (signUpResult as any)?.error;
+      const authData: any = (signUpResult as any)?.data;
+
+      if (authError) {
+        const msg = authError.message || "Sign up failed.";
+        // If user already exists, don't claim new account creation failed
+        if (msg.toLowerCase().includes("already registered") || msg.toLowerCase().includes("user already")) {
+          setError("An account with this email may already exist. Try signing in instead.");
+        } else {
+          setError(msg);
+        }
+        setState("error");
+        return;
+      }
+
+      const userId = authData?.user?.id;
+      const session = authData?.session;
+
+      if (userId && session) {
+        // Create profile if it doesn't exist
+        try {
+            const { error: profileError }: any = await withTimeout(
+              supabase.from("profiles").insert({ id: userId, username: usernameClean }) as any,
+              SIGNUP_TIMEOUT_MS,
+              "Profile creation timed out."
+            );
+            if (profileError) {
+              // If duplicate (trigger or race), that's okay - continue
+              if (!profileError.message?.toLowerCase().includes("duplicate") && !profileError.code?.includes("23505")) {
+                // Partial success: auth account created but profile failed
+                setError("Account created but profile setup failed. You can sign in and complete your profile.");
+                setState("error");
+                return;
+              }
+            }
+        } catch (profileErr: any) {
+          // Don't block on profile creation timeout if auth succeeded with session
+          console.error("Profile creation issue:", profileErr);
+        }
+        setState("success");
+        router.push("/");
+        return;
+      }
+
+      if (userId && !session) {
+        // Email confirmation required
+        try {
+          const { error: profileError }: any = await withTimeout(
+            supabase.from("profiles").insert({ id: userId, username: usernameClean }) as any,
+            SIGNUP_TIMEOUT_MS,
+            "Profile creation timed out."
+          );
+          if (profileError) {
+            if (profileError.message?.toLowerCase().includes("duplicate") || profileError.code?.includes("23505")) {
+              // Profile may exist
+            } else {
+              // Auth created but profile failed - partial success case
+              setInfo("Account created. Check your email to confirm. If you don't see a profile after confirming, try signing in.");
+              setState("confirm-email");
+              return;
+            }
+          }
+        } catch (profileErr: any) {
+          console.error("Profile creation issue:", profileErr);
+        }
+        setInfo("Account created. Check your email for a confirmation link.");
+        setState("confirm-email");
+        return;
+      }
+
+      // Fallback
+      setInfo("Check your email to confirm your account.");
+      setState("confirm-email");
+    } catch (err: any) {
+      if (err?.message?.includes("timed out")) {
+        setError(err.message);
+      } else {
+        setError(err?.message || "Something went wrong. Please try again.");
+      }
+      setState("error");
+    }
   }
 
   return (
@@ -81,9 +226,20 @@ export default function SignUp() {
               I accept the <a href="/terms" className="text-af-accent hover:underline">Terms of Service</a> and <a href="/privacy" className="text-af-accent hover:underline">Privacy Policy</a>.
             </label>
             {error && <p className="text-sm text-af-danger">{error}</p>}
-            <button disabled={loading} className="w-full rounded-lg bg-af-accent px-4 py-2.5 text-sm font-semibold text-black hover:bg-af-accent-hover disabled:opacity-40 transition">
-              {loading ? "Creating account..." : "Create account"}
-            </button>
+            {info && state === "confirm-email" && (
+              <div className="rounded-lg border border-af-accent/40 bg-af-accent/10 p-3 text-sm text-af-text">
+                {info}
+              </div>
+            )}
+            {state === "confirm-email" ? (
+              <button type="button" onClick={() => router.push("/signin")} className="w-full rounded-lg bg-af-accent px-4 py-2.5 text-sm font-semibold text-black hover:bg-af-accent-hover transition">
+                Go to Sign In
+              </button>
+            ) : (
+              <button disabled={state === "submitting"} className="w-full rounded-lg bg-af-accent px-4 py-2.5 text-sm font-semibold text-black hover:bg-af-accent-hover disabled:opacity-40 transition">
+                {state === "submitting" ? "Creating account..." : "Create account"}
+              </button>
+            )}
           </form>
           <p className="mt-4 text-sm text-af-muted">
             Already have an account? <a href="/signin" className="text-af-accent hover:underline">Sign in</a>
