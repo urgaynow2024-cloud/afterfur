@@ -120,6 +120,15 @@ export default function Home() {
     setSpotlightAction(null);
   }
 
+  async function createNotification(recipientId: string, actorId: string, type: string, postId: string | null) {
+    if (!recipientId || recipientId === actorId) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    const { data: existing } = await supabase.from("notifications").select("id").eq("user_id", recipientId).eq("type", type).contains("payload", { actor_id: actorId, post_id: postId ?? null }).limit(1);
+    if (existing && existing.length) return;
+    await supabase.from("notifications").insert({ user_id: recipientId, type, payload: { actor_id: actorId, post_id: postId ?? null }, read: false });
+  }
+
   async function submit() {
     if (submitting) return;
     const text = draft.trim();
@@ -175,6 +184,8 @@ export default function Home() {
       });
     } else {
       await supabase.from("likes").insert({ user_id: user.id, post_id: postId });
+      const post = posts.find((p) => p.id === postId);
+      if (post?.author_id) await createNotification(post.author_id, user.id, "like", postId);
       setLikedIds((s) => new Set(s).add(postId));
     }
   }
@@ -213,6 +224,8 @@ export default function Home() {
       });
     } else {
       await supabase.from("reposts").insert({ user_id: user.id, post_id: postId });
+      const post = posts.find((p) => p.id === postId);
+      if (post?.author_id) await createNotification(post.author_id, user.id, "repost", postId);
       setRepostedIds((s) => new Set(s).add(postId));
     }
   }

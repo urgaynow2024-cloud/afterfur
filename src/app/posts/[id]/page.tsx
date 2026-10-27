@@ -82,6 +82,10 @@ function PostPageInner() {
     setSubmitting(true);
     setError("");
     const { error } = await supabase.from("replies").insert({ post_id: id, author_id: user.id, content: text });
+    if (!error && post?.author_id && post.author_id !== user.id) {
+      const { data: existing } = await supabase.from("notifications").select("id").eq("user_id", post.author_id).eq("type", "reply").contains("payload", { actor_id: user.id, post_id: id }).limit(1);
+      if (!existing || !existing.length) await supabase.from("notifications").insert({ user_id: post.author_id, type: "reply", payload: { actor_id: user.id, post_id: id }, read: false });
+    }
     if (error) {
       setError(error.message);
       setSubmitting(false);
