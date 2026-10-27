@@ -22,7 +22,7 @@ const NAV = [
 function ShellInner({ children, right }: { children: ReactNode; right?: ReactNode }) {
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(null);
   useEffect(() => {
     const run = async () => {
       const supabase = createClient();
