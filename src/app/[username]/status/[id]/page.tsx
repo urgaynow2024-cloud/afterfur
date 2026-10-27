@@ -1,10 +1,11 @@
 ﻿import { Suspense } from "react";
 import PostClient from "./PostClient";
 
-export default function Page({ params }: { params: { username: string; id: string } }) {
+export default async function Page({ params }: { params: Promise<{ username: string; id: string }> }) {
+  const { username, id } = await params;
   return (
     <Suspense fallback={<div className="min-h-screen bg-af-bg" />}>
-      <PostClient username={params.username} id={params.id} />
+      <PostClient username={username} id={id} />
     </Suspense>
   );
 }

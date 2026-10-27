@@ -1,10 +1,11 @@
 ﻿import { Suspense } from "react";
 import ProfileClient from "./ProfileClient";
 
-export default function Page({ params }: { params: { username: string } }) {
+export default async function Page({ params }: { params: Promise<{ username: string }> }) {
+  const { username } = await params;
   return (
     <Suspense fallback={<div className="min-h-screen bg-af-bg" />}>
-      <ProfileClient username={params.username} />
+      <ProfileClient username={username} />
     </Suspense>
   );
 }
