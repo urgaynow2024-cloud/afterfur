@@ -1,5 +1,6 @@
 "use client";
 import { useAuth } from "@/components/AuthProvider";
+import GlobalComposer from "@/components/GlobalComposer";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
@@ -24,6 +25,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
   const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
   useEffect(() => {
     const run = async () => {
       const supabase = createClient();
@@ -63,12 +65,12 @@ className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-co
                 );
               })}
             </nav>
-            <Link
-              href="/"
+            <button
+              onClick={() => setComposerOpen(true)}
               className="mt-4 mx-3 rounded-full bg-af-accent py-2.5 text-center text-[15px] font-bold text-white transition-colors hover:bg-af-accent-hover"
             >
               Post
-            </Link>
+            </button>
             <div className="mt-auto mb-3 px-3">
               {loading ? (
                 <div className="text-sm text-af-muted">Checking session…</div>
@@ -118,6 +120,7 @@ className={`flex items-center rounded-full px-4 py-2.5 text-[19px] transition-co
           </aside>
         ) : null}
       </div>
+      <GlobalComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
 
       <nav className="fixed bottom-0 left-0 right-0 flex justify-around border-t border-af-border bg-af-bg md:hidden">
         {NAV.slice(0, 5).map((n) => (

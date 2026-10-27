@@ -66,6 +66,9 @@ export default function Home() {
 
   useEffect(() => {
     load();
+    const handler = () => load();
+    window.addEventListener("afterfur:post-created", handler);
+    return () => window.removeEventListener("afterfur:post-created", handler);
   }, []);
 
   useEffect(() => {
