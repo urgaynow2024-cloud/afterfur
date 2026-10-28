@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
+import { canFollow } from "@/lib/follow";
 import { useParams } from "next/navigation";
 import PostCard from "@/components/PostCard";
 import Link from "next/link";
@@ -91,7 +92,7 @@ export default function ProfileClient() {
   }
 
   async function toggleFollow() {
-    if (!user || !profile || user.id === profile.id) return;
+    if (!user || !profile || !canFollow(user.id, profile.id)) return;
     const supabase = createClient();
     if (!supabase) return;
     setFollowBusy(true);

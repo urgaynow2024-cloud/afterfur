@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-body { font-family: var(--font-geist-sans), system-ui, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
-
 :root {
   --af-bg: #09090D;
   --af-surface: #111827;
@@ -64,7 +62,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 body {
   background: var(--af-bg);
   color: var(--af-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }

@@ -58,9 +58,9 @@ export default function PostCard({
         <div className="mb-1 ml-12 text-xs text-af-muted">{repostedBy} reposted</div>
       )}
       <div className="flex gap-3">
-        <Link href={`/${username}`} className="h-12 w-12 shrink-0 rounded-full bg-af-surface-2 overflow-hidden">
-          {post.profiles?.avatar_url ? <img src={post.profiles.avatar_url} alt="" className="h-full w-full object-cover" /> : null}
-        </Link>
+          <Link href={`/${username}`} className="h-12 w-12 shrink-0 rounded-full bg-af-surface-2 overflow-hidden">
+            {post.profiles?.avatar_url ? <img src={post.profiles.avatar_url} alt={`${displayName}'s avatar`} className="h-full w-full object-cover" loading="lazy" /> : <div className="h-full w-full bg-gradient-to-br from-af-accent to-af-accent-2" />}
+          </Link>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-[15px]">
             <Link href={`/${username}`} className="font-bold hover:underline">{displayName}</Link>

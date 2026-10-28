@@ -1,29 +1,53 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
-import Link from "next/link";
 import EmojiPicker from "@/components/EmojiPicker";
+import { submitAndPublishPost } from "@/lib/feed";
+
+type CreatedPost = {
+  id: string;
+  content: string;
+  classification: string;
+  created_at: string;
+  author_id: string;
+  media_urls: string[] | null;
+};
+type ComposerProfile = { username: string; display_name: string | null; avatar_url: string | null };
 
 export default function GlobalComposer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<ComposerProfile | null>(null);
   const [text, setText] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const submittingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const draftKey = user ? `afterfur:draft:${user.id}` : null;
+
+  const requestClose = useCallback(() => {
+    if ((text.trim() || mediaFile) && !window.confirm("Discard this post?")) return;
+    if (draftKey && (text.trim() || mediaFile)) {
+      try { localStorage.setItem(draftKey, JSON.stringify({ text })); } catch {}
+    }
+    setText("");
+    setMediaFile(null);
+    setMediaPreview(null);
+    setError("");
+    onClose();
+    previousFocus.current?.focus();
+  }, [text, mediaFile, draftKey, onClose]);
 
   useEffect(() => {
     if (!open) return;
     previousFocus.current = document.activeElement as HTMLElement | null;
     const supabase = createClient();
     if (supabase && user) {
-      supabase.from("profiles").select("username,display_name,avatar_url").eq("id", user.id).maybeSingle().then(({ data }: any) => setProfile(data));
+      supabase.from("profiles").select("username,display_name,avatar_url").eq("id", user.id).maybeSingle().then(({ data }: { data: ComposerProfile | null }) => setProfile(data));
     }
     if (draftKey) {
       try {
@@ -48,20 +72,7 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, text, mediaFile]);
-
-  function requestClose() {
-    if ((text.trim() || mediaFile) && !window.confirm("Discard this post?")) return;
-    if (draftKey && (text.trim() || mediaFile)) {
-      try { localStorage.setItem(draftKey, JSON.stringify({ text })); } catch {}
-    }
-    setText("");
-    setMediaFile(null);
-    setMediaPreview(null);
-    setError("");
-    onClose();
-    previousFocus.current?.focus();
-  }
+  }, [open, requestClose]);
 
   function saveDraft() {
     if (!draftKey) return;
@@ -88,9 +99,10 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
   }
 
   async function submit() {
-    if (submitting || (!text.trim() && !mediaFile)) return;
+    if (submittingRef.current || (!text.trim() && !mediaFile)) return;
     const supabase = createClient();
     if (!supabase || !user) { setError("Sign in to post."); return; }
+    submittingRef.current = true;
     setSubmitting(true);
     setError("");
     let mediaUrls: string[] = [];
@@ -102,15 +114,27 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
         if (upErr) throw upErr;
         const { data } = supabase.storage.from("media").getPublicUrl(path);
         mediaUrls = [data.publicUrl];
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Could not upload media.");
+        submittingRef.current = false;
         setSubmitting(false);
         return;
       }
     }
-    const { error } = await supabase.from("posts").insert({ author_id: user.id, content: text.trim(), media_urls: mediaUrls });
-    if (error) {
-      setError(error.message);
+    const result = await submitAndPublishPost<CreatedPost>(
+      () => supabase.from("posts").insert({ author_id: user.id, content: text.trim(), media_urls: mediaUrls }).select("*").single(),
+      (post) => window.dispatchEvent(new CustomEvent("afterfur:post-created", { detail: {
+        ...post,
+        profiles: profile ? {
+          username: profile.username || "unknown",
+          display_name: profile.display_name || null,
+          avatar_url: profile.avatar_url || null,
+        } : null,
+      } })),
+    );
+    if (result.error) {
+      setError(result.error);
+      submittingRef.current = false;
       setSubmitting(false);
       return;
     }
@@ -118,9 +142,9 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
     setText("");
     setMediaFile(null);
     setMediaPreview(null);
+    submittingRef.current = false;
     setSubmitting(false);
     onClose();
-    window.dispatchEvent(new CustomEvent("afterfur:post-created"));
     previousFocus.current?.focus();
   }
 

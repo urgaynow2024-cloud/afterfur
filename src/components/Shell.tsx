@@ -24,7 +24,7 @@ const NAV = [
 function ShellInner({ children, right }: { children: ReactNode; right?: ReactNode }) {
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
-  const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(() => user ? profileCache.get(user.id) ?? null : null);
+  const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(() => (user && profileCache.has(user.id)) ? profileCache.get(user.id) ?? null : null);
   const [composerOpen, setComposerOpen] = useState(false);
   useEffect(() => {
     const run = async () => {

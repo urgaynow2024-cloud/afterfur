@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
+import { canFollow } from "@/lib/follow";
+import { addPostToFeed, submitAndPublishPost } from "@/lib/feed";
 import PostCard from "@/components/PostCard";
 import Link from "next/link";
 
@@ -18,6 +20,7 @@ type Post = {
 
 export default function Home() {
   const { user } = useAuth();
+  const submittingRef = useRef(false);
   const [tab, setTab] = useState<"foryou" | "following">("foryou");
   const [draft, setDraft] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -38,16 +41,27 @@ export default function Home() {
   const [spotlightLoading, setSpotlightLoading] = useState(true);
   const spotlightLoaded = useRef(false);
   const [spotlightAction, setSpotlightAction] = useState<string | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<{ avatar_url?: string | null; display_name?: string | null; username?: string | null } | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    supabase
+      .from("profiles")
+      .select("avatar_url,display_name,username")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }: { data: { avatar_url?: string | null; display_name?: string | null; username?: string | null } | null }) => setCurrentUserProfile(data));
+  }, [user]);
 
   async function load() {
+    await Promise.resolve();
     const supabase = createClient();
     if (!supabase) {
       setError("Supabase not configured.");
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError("");
     const { data, error } = await supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(40);
     if (error) {
       setError(error.message);
@@ -60,18 +74,16 @@ export default function Home() {
       const { data: profs } = await supabase.from("profiles").select("*").in("id", ids);
       profMap = new Map((profs ?? []).map((p: { id: string }) => [p.id, p]));
     }
-    setPosts(((data ?? []).map((p: { author_id: string }) => ({ ...p, profiles: profMap.get(p.author_id) || null })) as Post[]));
-    setLoading(false);
+        setPosts(((data ?? []).map((p: { author_id: string }) => ({ ...p, profiles: profMap.get(p.author_id) || null })) as Post[]));
+        setLoading(false);
   }
-
-    useEffect(() => {
-    if (!user) return;
-    setSpotlight((prev) => prev.filter((p) => p.id !== user.id));
-  }, [user]);
 
   useEffect(() => {
     load();
-    const handler = () => load();
+    const handler = (event: Event) => {
+      const post = (event as CustomEvent<Post>).detail;
+      if (post?.id) setPosts((current) => addPostToFeed(current, post));
+    };
     window.addEventListener("afterfur:post-created", handler);
     return () => window.removeEventListener("afterfur:post-created", handler);
   }, []);
@@ -87,14 +99,18 @@ export default function Home() {
 
   useEffect(() => {
     const run = async () => {
-      if (spotlight.length > 0) return;
       const supabase = createClient();
       if (!supabase) { setSpotlightLoading(false); return; }
       const { data: profs } = await supabase.from('profiles').select('*').limit(50);
-      const eligible = (profs ?? []).filter((p: { id: string }) => p.id !== user?.id && p.id !== user?.id && !followingIds.has(p.id));
+      const eligible = (profs ?? []).filter((p: { id: string }) => p.id !== user?.id && !followingIds.has(p.id));
       const previous = JSON.parse(localStorage.getItem('af_spotlight_prev') || '[]');
       const pool = eligible.filter((p: { id: string }) => !previous.includes(p.id));
       const source = pool.length >= 5 ? pool : eligible;
+      if (source.length === 0) {
+        setSpotlight([]);
+        setSpotlightLoading(false);
+        return;
+      }
       const hash = (value: string) => {
         let h = 0;
         for (let i = 0; i < value.length; i += 1) h = (h * 31 + value.charCodeAt(i)) >>> 0;
@@ -103,9 +119,9 @@ export default function Home() {
       const today = new Date().toISOString().slice(0, 10);
       const selected = source
         .map((p: { id: string }) => ({ p, score: hash(p.id + today) }))
-         .sort((a: { score: number }, b: { score: number }) => a.score - b.score)
+        .sort((a: { score: number }, b: { score: number }) => a.score - b.score)
         .slice(0, 5)
-         .map((x: { p: { id: string; username?: string; display_name?: string | null; avatar_url?: string | null } }) => x.p);
+        .map((x: { p: { id: string; username?: string; display_name?: string | null; avatar_url?: string | null } }) => x.p);
       setSpotlight(selected);
       localStorage.setItem('af_spotlight_prev', JSON.stringify(selected.map((p: { id: string }) => p.id)));
       spotlightLoaded.current = true;
@@ -116,7 +132,7 @@ export default function Home() {
 
   async function toggleSpotlightFollow(targetId: string) {
     const supabase = createClient();
-    if (!supabase || !user || targetId === user.id) return;
+    if (!supabase || !user || !canFollow(user.id, targetId)) return;
     setSpotlightAction(targetId);
     if (followingIds.has(targetId)) {
       await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId);
@@ -138,7 +154,7 @@ export default function Home() {
   }
 
   async function submit() {
-    if (submitting) return;
+    if (submittingRef.current) return;
     const text = draft.trim();
     if (!text && !mediaFile) return;
     const supabase = createClient();
@@ -146,6 +162,7 @@ export default function Home() {
       setError("Sign in to post.");
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     let mediaUrls: string[] = [];
     if (mediaFile) {
@@ -156,25 +173,35 @@ export default function Home() {
         if (upErr) throw upErr;
         const { data } = supabase.storage.from("media").getPublicUrl(path);
         mediaUrls = [data.publicUrl];
-      } catch (e: any) {
-        setError(e.message);
-        setLoading(false);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Could not upload media.");
+        submittingRef.current = false;
+        setSubmitting(false);
         return;
       }
     }
-    const { error } = await supabase.from("posts").insert({ author_id: user.id, content: text || "", media_urls: mediaUrls });
-    if (error) {
-      setError(error.message);
+    const result = await submitAndPublishPost(
+      () => supabase.from("posts").insert({ author_id: user.id, content: text || "", media_urls: mediaUrls }).select("*").single(),
+      (post: Post) => setPosts((current) => addPostToFeed(current, {
+        ...post,
+        profiles: currentUserProfile ? {
+          username: currentUserProfile.username || "unknown",
+          display_name: currentUserProfile.display_name || null,
+          avatar_url: currentUserProfile.avatar_url || null,
+        } : null,
+      })),
+    );
+    if (result.error) {
+      setError(result.error);
+      submittingRef.current = false;
       setSubmitting(false);
-      setLoading(false);
       return;
     }
     setDraft("");
     setMediaFile(null);
     setMediaPreview(null);
+    submittingRef.current = false;
     setSubmitting(false);
-    setLoading(false);
-    load();
   }
 
   async function toggleLike(postId: string) {
@@ -309,7 +336,13 @@ export default function Home() {
       {user && (
         <div className="border-b border-af-border/70 px-5 py-4">
           <div className="flex gap-3">
-            <div className="h-11 w-11 shrink-0 rounded-full bg-af-surface-2" />
+            {currentUserProfile?.avatar_url ? (
+              <img src={currentUserProfile.avatar_url} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white">
+                {(currentUserProfile?.display_name || user.email || "?").slice(0, 1).toUpperCase()}
+              </div>
+            )}
             <div className="flex-1">
               <textarea
                 value={draft}
@@ -380,23 +413,25 @@ export default function Home() {
       ) : (
         <div>
           {visiblePosts.map((p: Post) => (
-            <PostCard
-              key={p.id}
-              post={p}
-              liked={likedIds.has(p.id)}
-              bookmarked={bookmarkedIds.has(p.id)}
-              reposted={repostedIds.has(p.id)}
-onLike={toggleLike}
-               onBookmark={toggleBookmark}
-               onRepost={toggleRepost}
-               onShare={(id) => {
-                 const post = posts.find((p) => p.id === id);
-                 const username = post?.profiles?.username || "profile";
-                 const url = `${window.location.origin}/${username}/status/${id}`;
-                 navigator.clipboard?.writeText(url).then(() => setError("")).catch(() => setError("Could not copy link."));
-               }}
-              onDelete={user?.id === p.author_id ? deletePost : undefined}
-            />
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  liked={likedIds.has(p.id)}
+                  bookmarked={bookmarkedIds.has(p.id)}
+                  reposted={repostedIds.has(p.id)}
+                  likeCount={likeCounts[p.id] ?? 0}
+                  repostCount={repostCounts[p.id] ?? 0}
+                  onLike={toggleLike}
+                  onBookmark={toggleBookmark}
+                  onRepost={toggleRepost}
+                  onShare={(id) => {
+                    const post = posts.find((p) => p.id === id);
+                    const username = post?.profiles?.username || "profile";
+                    const url = `${window.location.origin}/${username}/status/${id}`;
+                    navigator.clipboard?.writeText(url).then(() => setError("")).catch(() => setError("Could not copy link."));
+                  }}
+                  onDelete={user?.id === p.author_id ? deletePost : undefined}
+                />
           ))}
         </div>
       )}

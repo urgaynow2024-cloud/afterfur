@@ -27,6 +27,7 @@ export default function EmojiPicker({ onPick }: { onPick: (emoji: string) => voi
               type="button"
               onClick={() => { onPick(emoji); setOpen(false); }}
               className="rounded-lg p-1 text-xl hover:bg-af-surface-2"
+              style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif' }}
             >
               {emoji}
             </button>

@@ -23,8 +23,51 @@ type Reply = {
   created_at: string;
   author_id: string;
   post_id: string;
+  parent_reply_id?: string | null;
   profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null;
 };
+
+function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, setDraft, submitting, onSubmit, insertReplyEmoji, replyTextareaRef, currentUserProfile, currentUser }: { reply: Reply; replies: Reply[]; depth: number; replyingTo: string | null; setReplyingTo: (id: string | null) => void; draft: string; setDraft: (v: string) => void; submitting: boolean; onSubmit: () => void; insertReplyEmoji: (emoji: string) => void; replyTextareaRef: React.RefObject<HTMLTextAreaElement | null>; currentUserProfile?: { avatar_url?: string | null; display_name?: string | null } | null; currentUser?: { email?: string } | null }) {
+  const children = replies.filter((r) => r.parent_reply_id === reply.id);
+  return (
+    <article className={`border-b border-af-border px-4 py-3 transition-colors hover:bg-af-surface/40 ${depth > 0 ? "ml-8 border-l border-af-border pl-4" : ""}`}>
+      <div className="flex gap-3">
+        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
+          {reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(reply.profiles?.display_name || reply.profiles?.username || "?").slice(0, 1).toUpperCase()}</div>}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 text-[15px]">
+            <span className="truncate font-bold text-af-text">{reply.profiles?.display_name || reply.profiles?.username || "Unknown"}</span>
+            <span className="truncate text-af-muted">@{reply.profiles?.username || "unknown"}</span>
+            <span className="text-af-muted">·</span>
+            <span className="text-af-muted">{new Date(reply.created_at).toLocaleString()}</span>
+          </div>
+          <p className="mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal text-af-text">{reply.content}</p>
+          <button onClick={() => setReplyingTo(reply.id)} className="mt-2 text-xs font-medium text-af-accent hover:underline">Reply</button>
+              {replyingTo === reply.id && (
+                <div className="mt-3 flex gap-3">
+                  <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
+                    {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-xs font-bold text-white">{(currentUserProfile?.display_name || currentUser?.email || "?").slice(0, 1).toUpperCase()}</div>}
+                  </div>
+                  <div className="flex-1">
+                <textarea ref={replyTextareaRef} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Post your reply" className="w-full resize-none bg-transparent text-[15px] outline-none placeholder:text-af-muted" rows={2} />
+                <div className="mt-2 flex items-center justify-between border-t border-af-border pt-2">
+                  <EmojiPicker onPick={insertReplyEmoji} />
+                  <button onClick={onSubmit} disabled={!draft.trim() || submitting} className="rounded-full bg-af-accent px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-af-accent-hover disabled:cursor-not-allowed disabled:opacity-50">
+                    {submitting ? "Replying..." : "Reply"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {depth < 4 && children.map((child) => (
+            <ReplyThread key={child.id} reply={child} replies={replies} depth={depth + 1} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={onSubmit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={currentUser} />
+          ))}
+        </div>
+      </div>
+    </article>
+  );
+}
 
 function PostPageInner() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +75,7 @@ function PostPageInner() {
   const [post, setPost] = useState<Post | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [draft, setDraft] = useState("");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -83,7 +127,7 @@ function PostPageInner() {
       rProfMap = new Map((rprofs ?? []).map((x: { id: string; username: string; display_name: string | null; avatar_url: string | null }) => [x.id, x]));
     }
     setReplies(
-      ((r ?? []).map((x: { id: string; content: string; created_at: string; author_id: string; post_id: string }) => ({ ...x, profiles: rProfMap.get(x.author_id) || null })) as Reply[])
+      ((r ?? []).map((x: { id: string; content: string; created_at: string; author_id: string; post_id: string; parent_reply_id?: string | null }) => ({ ...x, parent_reply_id: x.parent_reply_id ?? null, profiles: rProfMap.get(x.author_id) || null })) as Reply[])
     );
     setLoading(false);
   }
@@ -103,7 +147,7 @@ function PostPageInner() {
     }
     setSubmitting(true);
     setError("");
-    const { error } = await supabase.from("replies").insert({ post_id: id, author_id: user.id, content: text });
+    const { error } = await supabase.from("replies").insert({ post_id: id, author_id: user.id, content: text, parent_reply_id: replyingTo });
     if (!error && post?.author_id && post.author_id !== user.id) {
       const { data: existing } = await supabase.from("notifications").select("id").eq("user_id", post.author_id).eq("type", "reply").contains("payload", { actor_id: user.id, post_id: id }).limit(1);
       if (!existing || !existing.length) await supabase.from("notifications").insert({ user_id: post.author_id, type: "reply", payload: { actor_id: user.id, post_id: id }, read: false });
@@ -114,8 +158,9 @@ function PostPageInner() {
       return;
     }
     setDraft("");
+    setReplyingTo(null);
     setSubmitting(false);
-    load();
+    await load();
   }
 
   return (
@@ -127,15 +172,17 @@ function PostPageInner() {
         <EmptyState title="Post not found" body="This post may have been removed or is unavailable." />
       ) : (
         <div>
-          <article className="border-b border-af-border px-4 py-3">
-            <div className="flex gap-3">
-              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-                {post.profiles?.avatar_url ? (
-                  <img src={post.profiles.avatar_url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full bg-gradient-to-br from-af-accent to-af-accent-2" />
-                )}
-              </div>
+            <article className="border-b border-af-border px-4 py-3">
+              <div className="flex gap-3">
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
+                  {post.profiles?.avatar_url ? (
+                    <img src={post.profiles.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">
+                      {(post.profiles?.display_name || post.profiles?.username || "?").slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1 text-[15px]">
                   <span className="truncate font-bold text-af-text">{post.profiles?.display_name || post.profiles?.username || "Unknown"}</span>
@@ -158,7 +205,7 @@ function PostPageInner() {
             <div className="border-b border-af-border px-4 py-3">
               <div className="flex gap-3">
                 <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-                  {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-br from-af-accent to-af-accent-2" />}
+                  {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(currentUserProfile?.display_name || user.email || "?").slice(0, 1).toUpperCase()}</div>}
                 </div>
                 <div className="flex-1">
                   <textarea
@@ -196,27 +243,8 @@ function PostPageInner() {
             <EmptyState title="No replies yet" body="Be the first to reply." />
           ) : (
             <div>
-              {replies.map((r) => (
-                <article key={r.id} className="border-b border-af-border px-4 py-3 transition-colors hover:bg-af-surface/40">
-                  <div className="flex gap-3">
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-                      {r.profiles?.avatar_url ? (
-                        <img src={r.profiles.avatar_url} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-af-accent to-af-accent-2" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1 text-[15px]">
-                        <span className="truncate font-bold text-af-text">{r.profiles?.display_name || r.profiles?.username || "Unknown"}</span>
-                        <span className="truncate text-af-muted">@{r.profiles?.username || "unknown"}</span>
-                        <span className="text-af-muted">·</span>
-                        <span className="text-af-muted">{new Date(r.created_at).toLocaleString()}</span>
-                      </div>
-                      <p className="mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal text-af-text">{r.content}</p>
-                    </div>
-                  </div>
-                </article>
+              {replies.filter((r) => !r.parent_reply_id).map((r) => (
+                <ReplyThread key={r.id} reply={r} replies={replies} depth={0} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={submit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={user} />
               ))}
             </div>
           )}

@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignIn() {
@@ -7,6 +9,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -18,7 +21,7 @@ export default function SignIn() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) setError(error.message);
-    else window.location.href = "/";
+    else router.push("/");
   }
 
   return (
@@ -64,7 +67,7 @@ export default function SignIn() {
               </div>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <a href="/forgot-password" className="text-af-accent hover:underline">Forgot password?</a>
+              <Link href="/forgot-password" className="text-af-accent hover:underline">Forgot password?</Link>
             </div>
             {error && <p className="text-sm text-af-danger">{error}</p>}
             <button disabled={loading} className="w-full rounded-lg bg-af-accent px-4 py-2.5 text-sm font-semibold text-black hover:bg-af-accent-hover disabled:opacity-40 transition">
