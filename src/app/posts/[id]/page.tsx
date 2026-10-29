@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Suspense } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -75,6 +75,7 @@ function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, 
 function PostPageInner() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const router = useRouter();
   const interactions = usePostInteractions();
   const [post, setPost] = useState<Post | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
@@ -104,6 +105,11 @@ function PostPageInner() {
     });
   }
   const [error, setError] = useState("");
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState("");
+  const editSubmittingRef = useRef(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -141,6 +147,42 @@ function PostPageInner() {
     );
     setLoading(false);
   }, [id]);
+
+  async function deletePost(postId: string) {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    const { error: deleteError } = await supabase.from("posts").delete().eq("id", postId).eq("author_id", user.id);
+    if (deleteError) { setError(deleteError.message); return; }
+    router.push(post?.profiles?.username ? `/${post.profiles.username}` : "/");
+  }
+
+  function startEdit(postId: string) {
+    if (!post || post.author_id !== user?.id) return;
+    setEditingPost(post);
+    setEditDraft(post.content);
+    setEditError("");
+  }
+
+  async function saveEdit(event: React.FormEvent) {
+    event.preventDefault();
+    const content = editDraft.trim();
+    const supabase = createClient();
+    if (!editingPost || !user || !supabase || !content || content.length > 300 || editSubmittingRef.current) return;
+    editSubmittingRef.current = true;
+    setEditSubmitting(true); setEditError("");
+    const { data, error: updateError } = await supabase.from("posts").update({ content, edited_at: new Date().toISOString() }).eq("id", editingPost.id).eq("author_id", user.id).select("*").single();
+    if (updateError || !data) {
+      setEditError(updateError?.message ?? "The post was not updated. Your changes are still here.");
+      editSubmittingRef.current = false;
+      setEditSubmitting(false);
+      return;
+    }
+    setPost({ ...editingPost, ...(data as Post) });
+    setEditingPost(null);
+    setEditDraft("");
+    editSubmittingRef.current = false;
+    setEditSubmitting(false);
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
@@ -199,7 +241,20 @@ function PostPageInner() {
         <EmptyState title="Post not found" body="This post may have been removed or is unavailable." />
       ) : (
         <div>
-          <PostCard post={post} />
+          <PostCard post={post} onEdit={user?.id === post.author_id ? startEdit : undefined} onDelete={user?.id === post.author_id ? deletePost : undefined} />
+          {editingPost && (
+            <div className="border-b border-af-border px-4 py-4 sm:px-5">
+              <form onSubmit={saveEdit} className="space-y-3">
+                <h3 className="text-sm font-semibold text-af-text">Edit post</h3>
+                {editError && <p role="alert" className="rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">{editError}</p>}
+                <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} maxLength={300} rows={4} className="af-field min-h-24 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
+                <div className="flex items-center justify-between"><span className="text-xs text-af-muted">{editDraft.length}/300</span><div className="flex gap-2">
+                  <button type="button" onClick={() => { setEditingPost(null); setEditDraft(""); }} disabled={editSubmitting} className="af-action-secondary">Cancel</button>
+                  <button type="submit" disabled={editSubmitting || !editDraft.trim() || editDraft.length > 300} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{editSubmitting ? "Saving…" : "Save changes"}</button>
+                </div></div>
+              </form>
+            </div>
+          )}
           {user ? (
             <div className="border-b border-af-border px-4 py-4 sm:px-5">
               <div className="flex gap-3">
