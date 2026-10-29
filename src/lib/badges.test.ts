@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canManageStaffBadge, changeStaffBadge, eligibleAccountAnniversaryBadges, eligiblePawPassBadgeIds, knownBadges, mergeBadgeAwards, PAWPASS_BADGES, STAFF_BADGE_IDS } from "@/lib/badges";
+import { canManageStaffBadge, changeStaffBadge, eligibleAccountAnniversaryBadges, eligiblePawPassBadgeIds, knownBadges, mergeBadgeAwards, PAWPASS_BADGES, STAFF_BADGE_IDS, TRUST_BADGES } from "@/lib/badges";
 
 describe("staff badge authorization rules", () => {
   const admin = { afterfur_staff_admin: true };
@@ -62,5 +62,14 @@ describe("account anniversary milestone eligibility", () => {
     expect(eligibleAccountAnniversaryBadges("2020-06-15T12:00:00Z", "2021-06-15T12:00:00Z")).toEqual(["milestone_account_year_1"]);
     expect(eligibleAccountAnniversaryBadges("2000-01-01T00:00:00Z", "2026-10-29T00:00:00Z")).toHaveLength(26);
     expect(eligibleAccountAnniversaryBadges("not-a-date", "2026-01-01T00:00:00Z")).toEqual([]);
+  });
+});
+
+describe("trust badge registration", () => {
+  it("registers After Dark, Age Verified and Approved without auto-award logic", () => {
+    expect(TRUST_BADGES.map((b) => b.id)).toEqual(["access_after_dark", "access_age_verified", "access_approved"]);
+    expect(TRUST_BADGES.every((b) => b.category === "trust")).toBe(true);
+    expect(knownBadges(["access_after_dark"]).map((b) => b.id)).toEqual(["access_after_dark"]);
+    expect(knownBadges(["access_age_verified", "unknown_access"]).map((b) => b.id)).toEqual(["access_age_verified"]);
   });
 });

@@ -7,6 +7,7 @@ const categoryClass = {
   staff: "border-af-brand/50 bg-af-brand/15 text-af-brand-soft",
   membership: "border-amber-300/40 bg-amber-300/10 text-amber-200",
   milestone: "border-af-border-strong bg-af-surface-2 text-af-text-2",
+  trust: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300",
 } as const;
 
 export function BadgeList({ userId, className = "" }: { userId: string | null | undefined; className?: string }) {

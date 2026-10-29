@@ -304,7 +304,13 @@ export default function Home() {
                 {spotlight.map((creator) => (
                   <div key={creator.id} className="flex items-center gap-3 border-t border-af-border/70 py-3 first:border-0">
                     <Link href={`/${encodeURIComponent(creator.username || "")}`} aria-label={`View ${creator.display_name || creator.username}'s profile`} className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">
-                      {creator.avatar_url ? <img src={creator.avatar_url} alt="" className="h-full w-full object-cover" /> : null}
+                      {creator.avatar_url ? (
+                        <img src={creator.avatar_url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center font-semibold text-af-brand-soft">
+                          {(creator.display_name || creator.username || "?").slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
                     </Link>
                     <div className="min-w-0 flex-1">
                       <Link href={`/${encodeURIComponent(creator.username || "")}`} className="block truncate text-sm font-semibold text-af-text hover:underline">{creator.display_name || creator.username}</Link>

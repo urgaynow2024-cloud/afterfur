@@ -232,6 +232,18 @@ export default function Settings() {
           <h2 id="pawpass-heading" className="text-base font-semibold">PawPass membership</h2>
           <p className="mt-1 text-sm leading-relaxed text-af-muted">Membership status is read from a verified provider entitlement. AfterFur Prime is not enabled unless billing configures an active entitlement.</p>
           {membershipState.loading ? <p role="status" className="mt-3 text-sm text-af-muted">Checking membership…</p> : membershipState.error ? <p role="status" className="mt-3 text-sm text-af-muted">Verified membership status is not available: {membershipState.error}</p> : !membershipState.entitlement ? <p role="status" className="mt-3 text-sm text-af-muted">No verified PawPass membership is connected to this account.</p> : membershipState.entitlement.active ? <p role="status" className="mt-3 text-sm text-af-text-2">PawPass entitlement active through {membershipState.entitlement.currentPeriodEnd ? new Date(membershipState.entitlement.currentPeriodEnd).toLocaleDateString() : "the current period"}.</p> : <p role="status" className="mt-3 text-sm text-af-muted">Membership is {membershipState.entitlement.status}. Earned anniversary badges remain on your profile.</p>}
+          <div className="mt-4 rounded-lg border border-af-border bg-af-surface-2 p-4">
+            <h3 className="text-sm font-semibold text-af-text">PawPass benefits (planned)</h3>
+            <ul className="mt-2 space-y-1 text-xs text-af-muted">
+              <li>Profile customisation and display-name colours</li>
+              <li>Extra bookmark folders</li>
+              <li>Advanced search filters</li>
+              <li>Analytics dashboard</li>
+              <li>Monthly boosts</li>
+              <li>Anniversary badges retained after expiry</li>
+            </ul>
+            <p className="mt-3 text-xs text-af-muted">Payment processing is not yet configured. No charges are made. Upgrade options will appear here when billing is enabled.</p>
+          </div>
         </section>
       </section>
     </Shell>

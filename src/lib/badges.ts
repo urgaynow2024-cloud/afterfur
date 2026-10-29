@@ -1,4 +1,4 @@
-export type BadgeCategory = "staff" | "membership" | "milestone";
+export type BadgeCategory = "staff" | "membership" | "milestone" | "trust";
 export type BadgeDefinition = { id: string; label: string; category: BadgeCategory; order: number; mark: string };
 
 export const STAFF_BADGE_IDS = ["staff_founder", "staff_moderator", "staff_developer", "staff_tester"] as const;
@@ -32,7 +32,16 @@ export const MILESTONE_BADGES: BadgeDefinition[] = [
     mark: "✧",
   })),
 ];
-export const BADGE_REGISTRY: BadgeDefinition[] = [...STAFF_BADGES, ...PAWPASS_BADGES, ...PAWPASS_YEAR_BADGES, ...MILESTONE_BADGES];
+export const TRUST_BADGES: BadgeDefinition[] = [
+  // Trust/access badges. These are NOT auto-awarded here: After Dark must reflect a real
+  // access entitlement, Age Verified must follow a genuine verification process, and
+  // Approved has no defined meaning or award source yet. They are registered so the UI can
+  // display them once entitlement logic is implemented (see Task D / Task E).
+  { id: "access_after_dark", label: "After Dark", category: "trust", order: 600, mark: "🌙" },
+  { id: "access_age_verified", label: "Age Verified", category: "trust", order: 610, mark: "🔞" },
+  { id: "access_approved", label: "Approved", category: "trust", order: 620, mark: "✅" },
+];
+export const BADGE_REGISTRY: BadgeDefinition[] = [...STAFF_BADGES, ...PAWPASS_BADGES, ...PAWPASS_YEAR_BADGES, ...MILESTONE_BADGES, ...TRUST_BADGES];
 const badgeById = new Map(BADGE_REGISTRY.map((badge) => [badge.id, badge]));
 
 function utcAnniversary(start: Date, months: number): Date {
