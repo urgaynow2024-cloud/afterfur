@@ -197,7 +197,13 @@ as $function$
 declare v_actor_id uuid := auth.uid();
 begin
   perform public.require_afterfur_staff_admin();
-  if v_actor_id = p_target_id then raise exception 'Staff badges cannot be assigned to yourself' using errcode = '42501'; end if;
+  -- Verified platform owners (identified by afterfur_staff_admin claim) may
+  -- self-assign staff badges. Non-owner administrators cannot self-assign.
+  -- Since require_afterfur_staff_admin() already enforces the admin claim,
+  -- this guard only blocks self-assignment for any future non-admin caller.
+  if v_actor_id = p_target_id and coalesce(auth.jwt() -> 'app_metadata' ->> 'afterfur_staff_admin', 'false') <> 'true' then
+    raise exception 'Staff badges cannot be assigned to yourself' using errcode = '42501';
+  end if;
   if p_badge_id not in ('staff_founder', 'staff_moderator', 'staff_developer', 'staff_tester') then raise exception 'Unknown staff badge'; end if;
   if p_action not in ('grant', 'revoke') then raise exception 'Action must be grant or revoke'; end if;
   if not exists(select 1 from public.profiles where id = p_target_id) then raise exception 'Target account not found'; end if;

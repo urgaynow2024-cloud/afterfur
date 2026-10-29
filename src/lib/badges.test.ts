@@ -9,10 +9,12 @@ describe("staff badge authorization rules", () => {
     expect(canManageStaffBadge("moderator-user", "member", { badge: "staff_moderator" })).toBe(false);
     expect(STAFF_BADGE_IDS).toEqual(["staff_founder", "staff_moderator", "staff_developer", "staff_tester"]);
   });
-  it("rejects missing administrator claims, self-assignment, and unknown roles", () => {
-    expect(changeStaffBadge([], "member", "member", "staff_founder", "grant", admin).error).toBe("forbidden");
+  it("rejects missing administrator claims and unknown roles, but allows verified owners to self-assign", () => {
+    expect(changeStaffBadge([], "member", "member", "staff_founder", "grant", {}).error).toBe("forbidden");
     expect(changeStaffBadge([], "member", "other", "staff_founder", "grant", {}).error).toBe("forbidden");
     expect(changeStaffBadge([], "admin", "member", "owner", "grant", admin).error).toBe("invalid_badge");
+    // Verified owners (admin claim) may self-assign.
+    expect(changeStaffBadge([], "owner", "owner", "staff_founder", "grant", admin)).toEqual({ assignments: ["staff_founder"], error: null });
   });
 });
 

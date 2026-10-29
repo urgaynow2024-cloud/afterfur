@@ -166,7 +166,7 @@ export default function StaffBadgesPage() {
             </section>
           )}
           {!targets.length && !loading && (
-            <p className="mt-4 text-sm text-af-muted">Search for a member to manage badges. A user cannot be assigned badges by their own account. Staff badges do not grant administrator access.</p>
+            <p className="mt-4 text-sm text-af-muted">Search for a member to manage badges. Verified owners may manage their own account. Staff badges do not grant administrator access.</p>
           )}
         </section>
       )}

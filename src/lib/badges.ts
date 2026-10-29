@@ -100,7 +100,10 @@ export function eligibleAccountAnniversaryBadges(accountCreatedAt: string, evalu
 }
 
 export function canManageStaffBadge(actorId: string | null, targetId: string, appMetadata: Record<string, unknown> | null | undefined): boolean {
-  return Boolean(actorId && actorId !== targetId && appMetadata?.afterfur_staff_admin === true);
+  // Verified platform owners (afterfur_staff_admin claim, set only via the secure
+  // service-role bootstrap) may manage badges for any account including their own.
+  // Ordinary users and non-owner staff cannot self-promote.
+  return Boolean(actorId && appMetadata?.afterfur_staff_admin === true);
 }
 
 export function changeStaffBadge(
