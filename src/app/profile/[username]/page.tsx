@@ -85,7 +85,7 @@ function PublicProfileInner() {
           <p className="mt-2 text-sm text-af-muted">Joined {new Date(profile.created_at).toLocaleDateString()}</p>
           <p className="mt-1 text-sm text-af-muted">{followerCount} followers · {followingCount} following</p>
           {isSelf ? (
-            <Link href="/settings" className="mt-3 inline-block rounded-full border border-af-border px-4 py-1.5 text-sm font-bold hover:bg-af-surface">Edit Profile</Link>
+            <Link href="/edit-profile" className="mt-3 inline-block rounded-full border border-af-border px-4 py-1.5 text-sm font-bold hover:bg-af-surface">Edit Profile</Link>
           ) : user ? (
             <button onClick={toggleFollow} className={`mt-3 rounded-full px-4 py-1.5 text-sm font-bold ${following ? "border border-af-border hover:bg-af-surface" : "bg-af-accent text-white hover:bg-af-accent-hover"}`}>
               {following ? "Following" : "Follow"}

@@ -244,7 +244,7 @@ export default function ProfileClient() {
             <BadgeList userId={profile.id} className="mt-2" />
           </div>
           {isOwn ? (
-            <Link href="/settings" className="af-action-secondary">
+            <Link href="/edit-profile" className="af-action-secondary">
               Edit profile
             </Link>
           ) : (

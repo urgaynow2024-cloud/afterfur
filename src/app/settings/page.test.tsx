@@ -74,3 +74,53 @@ describe("staff badge RPC authorization", () => {
     expect(error?.message).toContain("Staff badges cannot be assigned to yourself");
   });
 });
+
+describe("settings no longer embeds the profile editor", () => {
+  it("does not render the avatar upload form", () => {
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
+      user: { id: "u1", app_metadata: {} },
+    });
+    render(<Settings />);
+    expect(screen.queryByLabelText(/Choose profile avatar image/i)).toBeNull();
+    expect(screen.queryByLabelText(/Choose profile banner image/i)).toBeNull();
+  });
+
+  it("does not render username, display name or bio inputs", () => {
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
+      user: { id: "u1", app_metadata: {} },
+    });
+    render(<Settings />);
+    expect(screen.queryByLabelText(/^Username$/i)).toBeNull();
+    expect(screen.queryByLabelText(/^Display name$/i)).toBeNull();
+    expect(screen.queryByLabelText(/^Bio$/i)).toBeNull();
+  });
+
+  it("does not render the profile Save button", () => {
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
+      user: { id: "u1", app_metadata: {} },
+    });
+    render(<Settings />);
+    const saveButtons = screen.queryAllByRole("button", { name: /^Save$/i });
+    expect(saveButtons.length).toBe(0);
+  });
+
+  it("renders an Edit profile link pointing to /edit-profile", () => {
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
+      user: { id: "u1", app_metadata: {} },
+    });
+    render(<Settings />);
+    const link = screen.getByRole("link", { name: /Edit profile/i });
+    expect(link.getAttribute("href")).toBe("/edit-profile");
+  });
+
+  it("renders policy and support links", () => {
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
+      user: { id: "u1", app_metadata: {} },
+    });
+    render(<Settings />);
+    expect(screen.getAllByRole("link", { name: /Terms of Service/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /Privacy Policy/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /All policies/i }).length).toBeGreaterThan(0);
+  });
+});
+

@@ -84,7 +84,7 @@ export default function Profile() {
       {loading ? (
         <div className="p-8 text-center text-sm text-af-muted">Loading…</div>
       ) : !profile ? (
-        <EmptyState title="Complete your profile" body="Add your details to help the community find you." action={{ label: "Edit profile", href: "/settings" }} />
+        <EmptyState title="Complete your profile" body="Add your details to help the community find you." action={{ label: "Edit profile", href: "/edit-profile" }} />
       ) : (
         <div>
           <div className="relative">
@@ -108,7 +108,7 @@ export default function Profile() {
                 <p className="text-sm text-af-muted">@{profile.username}</p>
                 <BadgeList userId={profile.id} className="mt-2" />
               </div>
-              <Link href="/settings" className="af-action-secondary">
+              <Link href="/edit-profile" className="af-action-secondary">
                 Edit profile
               </Link>
             </div>
