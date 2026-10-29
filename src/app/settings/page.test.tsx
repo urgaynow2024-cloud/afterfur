@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import Settings from "@/app/settings/page";
-import { Shell } from "@/components/Shell";
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase/client", () => ({
@@ -28,7 +27,7 @@ afterEach(() => { cleanup(); rpc.mockReset(); vi.resetAllMocks(); });
 
 describe("settings staff badge link visibility", () => {
   it("shows Manage staff badges when user has afterfur_staff_admin", async () => {
-    (useAuth as any).mockReturnValue({
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
       user: { id: "u1", app_metadata: { afterfur_staff_admin: true } },
     });
     render(<Settings />);
@@ -36,7 +35,7 @@ describe("settings staff badge link visibility", () => {
   });
 
   it("hides Manage staff badges for ordinary users", async () => {
-    (useAuth as any).mockReturnValue({
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
       user: { id: "u2", app_metadata: {} },
     });
     render(<Settings />);
@@ -44,7 +43,7 @@ describe("settings staff badge link visibility", () => {
   });
 
   it("hides Manage staff badges when not signed in", async () => {
-    (useAuth as any).mockReturnValue({ user: null });
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({ user: null });
     render(<Settings />);
     expect(screen.queryByText("Manage staff badges")).toBeNull();
   });
