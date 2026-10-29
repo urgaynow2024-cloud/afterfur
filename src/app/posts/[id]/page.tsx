@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import EmojiPicker from "@/components/EmojiPicker";
 import PostCard from "@/components/PostCard";
+import { BadgeList } from "@/components/BadgeList";
+import { usePostInteractions } from "@/components/PostInteractionProvider";
 
 type Post = {
   id: string;
@@ -30,7 +32,7 @@ type Reply = {
 function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, setDraft, submitting, onSubmit, insertReplyEmoji, replyTextareaRef, currentUserProfile, currentUser }: { reply: Reply; replies: Reply[]; depth: number; replyingTo: string | null; setReplyingTo: (id: string | null) => void; draft: string; setDraft: (v: string) => void; submitting: boolean; onSubmit: () => void; insertReplyEmoji: (emoji: string) => void; replyTextareaRef: React.RefObject<HTMLTextAreaElement | null>; currentUserProfile?: { avatar_url?: string | null; display_name?: string | null } | null; currentUser?: { email?: string } | null }) {
   const children = replies.filter((r) => r.parent_reply_id === reply.id);
   return (
-    <article className={`border-b border-af-border px-4 py-3 transition-colors hover:bg-af-surface/40 ${depth > 0 ? "ml-8 border-l border-af-border pl-4" : ""}`}>
+    <article className={`border-b border-af-border px-4 py-4 transition-colors hover:bg-af-surface/40 sm:px-5 ${depth > 0 ? "ml-4 border-l border-af-border pl-4 sm:ml-8" : ""}`}>
       <div className="flex gap-3">
         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
           {reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(reply.profiles?.display_name || reply.profiles?.username || "?").slice(0, 1).toUpperCase()}</div>}
@@ -39,6 +41,7 @@ function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, 
           <div className="flex items-center gap-1 text-[15px]">
             <span className="truncate font-bold text-af-text">{reply.profiles?.display_name || reply.profiles?.username || "Unknown"}</span>
             <span className="truncate text-af-muted">@{reply.profiles?.username || "unknown"}</span>
+            <BadgeList userId={reply.author_id} />
             <span className="text-af-muted">·</span>
             <span className="text-af-muted">{new Date(reply.created_at).toLocaleString()}</span>
           </div>
@@ -72,18 +75,20 @@ function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, 
 function PostPageInner() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const interactions = usePostInteractions();
   const [post, setPost] = useState<Post | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [draft, setDraft] = useState("");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<{ avatar_url?: string | null; display_name?: string | null } | null>(null);
   useEffect(() => {
     const supabase = createClient();
     if (!supabase || !user) return;
-    supabase.from("profiles").select("avatar_url,display_name").eq("id", user.id).maybeSingle().then(({ data }: any) => setCurrentUserProfile(data));
+    supabase.from("profiles").select("avatar_url,display_name").eq("id", user.id).maybeSingle().then((result: { data: { avatar_url: string | null; display_name: string | null } | null }) => setCurrentUserProfile(result.data));
   }, [user]);
   function insertReplyEmoji(emoji: string) {
     const textarea = replyTextareaRef.current;
@@ -100,7 +105,8 @@ function PostPageInner() {
   }
   const [error, setError] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
+    setError("");
     const supabase = createClient();
     if (!supabase) {
       setError("Supabase not configured.");
@@ -108,36 +114,41 @@ function PostPageInner() {
       return;
     }
     const { data: p, error: pe } = await supabase.from("posts").select("*").eq("id", id).single();
-    if (pe) {
-      setError(pe.message);
+    if (pe || !p.created_at) {
+      setError(pe?.message ?? "This post has incomplete data.");
       setLoading(false);
       return;
     }
     const authorIds = [p.author_id];
     let profMap = new Map<string, { id: string; username: string; display_name: string | null; avatar_url: string | null }>();
-    const { data: profs } = await supabase.from("profiles").select("*").in("id", authorIds);
+    const { data: profs, error: profileError } = await supabase.from("profiles").select("*").in("id", authorIds);
+    if (profileError) { setError(profileError.message); setLoading(false); return; }
     profMap = new Map((profs ?? []).map((x: { id: string; username: string; display_name: string | null; avatar_url: string | null }) => [x.id, x]));
     setPost({ ...p, profiles: profMap.get(p.author_id) || null } as Post);
 
-    const { data: r } = await supabase.from("replies").select("*").eq("post_id", id).order("created_at", { ascending: true });
-    const rIds = [...new Set((r ?? []).map((x: { author_id: string }) => x.author_id))];
+    const { data: r, error: replyError } = await supabase.from("replies").select("*").eq("post_id", id).order("created_at", { ascending: true }).limit(500);
+    if (replyError) { setError(replyError.message); setLoading(false); return; }
+    const validReplies = (r ?? []).filter((reply) => reply.author_id && reply.post_id && reply.created_at);
+    const rIds = [...new Set(validReplies.flatMap((reply) => reply.author_id ? [reply.author_id] : []))];
     let rProfMap = new Map();
     if (rIds.length) {
-      const { data: rprofs } = await supabase.from("profiles").select("*").in("id", rIds);
+      const { data: rprofs, error: replyProfilesError } = await supabase.from("profiles").select("*").in("id", rIds);
+      if (replyProfilesError) { setError(replyProfilesError.message); setLoading(false); return; }
       rProfMap = new Map((rprofs ?? []).map((x: { id: string; username: string; display_name: string | null; avatar_url: string | null }) => [x.id, x]));
     }
     setReplies(
-      ((r ?? []).map((x: { id: string; content: string; created_at: string; author_id: string; post_id: string; parent_reply_id?: string | null }) => ({ ...x, parent_reply_id: x.parent_reply_id ?? null, profiles: rProfMap.get(x.author_id) || null })) as Reply[])
+      (validReplies.map((x) => ({ ...x, author_id: x.author_id!, post_id: x.post_id!, created_at: x.created_at!, parent_reply_id: x.parent_reply_id ?? null, profiles: rProfMap.get(x.author_id!) || null })) as Reply[])
     );
     setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
   }, [id]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
   async function submit() {
-    if (submitting) return;
+    if (submitting || submittingRef.current) return;
     const text = draft.trim();
     if (!text) return;
     const supabase = createClient();
@@ -145,64 +156,52 @@ function PostPageInner() {
       setError("Sign in to reply.");
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     setError("");
-    const { error } = await supabase.from("replies").insert({ post_id: id, author_id: user.id, content: text, parent_reply_id: replyingTo });
-    if (!error && post?.author_id && post.author_id !== user.id) {
-      const { data: existing } = await supabase.from("notifications").select("id").eq("user_id", post.author_id).eq("type", "reply").contains("payload", { actor_id: user.id, post_id: id }).limit(1);
-      if (!existing || !existing.length) await supabase.from("notifications").insert({ user_id: post.author_id, type: "reply", payload: { actor_id: user.id, post_id: id }, read: false });
-    }
-    if (error) {
-      setError(error.message);
+    let inserted = false;
+    try {
+      const { error: insertError } = await supabase.from("replies").insert({ post_id: id, author_id: user.id, content: text, parent_reply_id: replyingTo });
+      if (insertError) { setError(insertError.message); return; }
+      inserted = true;
+      setDraft("");
+      setReplyingTo(null);
+      if (post?.author_id && post.author_id !== user.id) {
+        try {
+          const { error: notificationError } = await supabase.rpc("create_post_notification", { p_recipient_id: post.author_id, p_post_id: id, p_type: "reply" });
+          if (notificationError) console.error("Could not create reply notification:", notificationError.message);
+        } catch (notificationError) {
+          console.error("Could not create reply notification:", notificationError);
+        }
+      }
+      interactions?.requestReplyCount(id, true);
+      try {
+        await load();
+      } catch {
+        setError("Reply was published, but the thread could not be refreshed. Try again.");
+      }
+    } catch {
+      setError(inserted ? "Reply was published, but the thread could not be refreshed." : "Could not publish the reply. Your draft is still here.");
+    } finally {
+      submittingRef.current = false;
       setSubmitting(false);
-      return;
     }
-    setDraft("");
-    setReplyingTo(null);
-    setSubmitting(false);
-    await load();
   }
 
   return (
     <Shell>
-      <PageHeader title="Post" />
+      <PageHeader title="Post" subtitle="Conversation" />
       {loading ? (
         <div className="p-8 text-center text-sm text-af-muted">Loading…</div>
+      ) : error && !post ? (
+        <div role="alert" className="m-4 rounded-lg border border-af-danger/40 bg-af-danger/10 p-4 text-sm text-af-danger">{error}<button type="button" onClick={() => { void load(); }} className="ml-3 underline">Retry</button></div>
       ) : !post ? (
         <EmptyState title="Post not found" body="This post may have been removed or is unavailable." />
       ) : (
         <div>
-            <article className="border-b border-af-border px-4 py-3">
-              <div className="flex gap-3">
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-                  {post.profiles?.avatar_url ? (
-                    <img src={post.profiles.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">
-                      {(post.profiles?.display_name || post.profiles?.username || "?").slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1 text-[15px]">
-                  <span className="truncate font-bold text-af-text">{post.profiles?.display_name || post.profiles?.username || "Unknown"}</span>
-                  <span className="truncate text-af-muted">@{post.profiles?.username || "unknown"}</span>
-                </div>
-                <p className="mt-2 whitespace-pre-wrap break-words text-[17px] leading-normal text-af-text">{post.content}</p>
-                {post.media_urls && post.media_urls.length > 0 && (
-                  <div className="mt-3 overflow-hidden rounded-2xl border border-af-border">
-                    {post.media_urls.map((u) => (
-                      <img key={u} src={u} alt="" className="max-h-[510px] w-full object-cover" />
-                    ))}
-                  </div>
-                )}
-                <p className="mt-3 text-[15px] text-af-muted">{new Date(post.created_at).toLocaleString()}</p>
-              </div>
-            </div>
-          </article>
-
+          <PostCard post={post} />
           {user ? (
-            <div className="border-b border-af-border px-4 py-3">
+            <div className="border-b border-af-border px-4 py-4 sm:px-5">
               <div className="flex gap-3">
                 <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
                   {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(currentUserProfile?.display_name || user.email || "?").slice(0, 1).toUpperCase()}</div>}
@@ -213,15 +212,16 @@ function PostPageInner() {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder="Post your reply"
-                    className="w-full resize-none bg-transparent text-[17px] outline-none placeholder:text-af-muted"
+                    aria-label="Write a reply"
+                    className="min-h-24 w-full resize-y bg-transparent py-1 text-[15px] leading-6 text-af-text outline-none placeholder:text-af-muted"
                     rows={3}
                   />
-                  <div className="mt-2 flex items-center justify-between border-t border-af-border pt-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-af-border pt-3">
                     <EmojiPicker onPick={insertReplyEmoji} />
                     <button
                       onClick={submit}
                       disabled={!draft.trim() || submitting}
-                      className="rounded-full bg-af-accent px-5 py-1.5 text-[15px] font-bold text-white transition-colors hover:bg-af-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {submitting ? "Replying..." : "Reply"}
                     </button>
@@ -237,7 +237,7 @@ function PostPageInner() {
             </div>
           )}
 
-          {error && <div className="border-b border-af-border px-4 py-3 text-sm text-af-danger">{error}</div>}
+          {error && <div role="alert" className="border-b border-af-border px-4 py-3 text-sm text-af-danger">{error}<button type="button" onClick={() => { void load(); }} className="ml-3 underline">Retry</button></div>}
 
           {replies.length === 0 ? (
             <EmptyState title="No replies yet" body="Be the first to reply." />

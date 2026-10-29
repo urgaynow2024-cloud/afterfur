@@ -7,14 +7,16 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
+import { BadgeList } from "@/components/BadgeList";
 
 type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; created_at: string };
+type PublicPost = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 
 function PublicProfileInner() {
   const { username } = useParams<{ username: string }>();
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<PublicPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isSelf, setIsSelf] = useState(false);
@@ -31,7 +33,10 @@ function PublicProfileInner() {
       setProfile(p as Profile);
       setIsSelf(user?.id === p.id);
       const { data: ps } = await supabase.from("posts").select("*").eq("author_id", p.id).order("created_at", { ascending: false });
-      const mapped = (ps ?? []).map((x: any) => ({ ...x, profiles: p }));
+      const mapped = ((ps ?? []) as Omit<PublicPost, "profiles">[]).map((post) => ({
+        ...post,
+        profiles: p as NonNullable<PublicPost["profiles"]>,
+      }));
       setPosts(mapped);
       const { count: fc } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", p.id);
       const { count: fingc } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", p.id);
@@ -74,6 +79,7 @@ function PublicProfileInner() {
           </div>
           <h2 className="mt-2 text-xl font-bold">{profile.display_name || profile.username}</h2>
           <p className="text-af-muted">@{profile.username}</p>
+          <BadgeList userId={profile.id} className="mt-2" />
           {profile.bio && <p className="mt-2 text-[15px]">{profile.bio}</p>}
           {profile.website && <a href={profile.website} className="mt-1 block text-af-accent hover:underline" target="_blank" rel="noreferrer">{profile.website}</a>}
           <p className="mt-2 text-sm text-af-muted">Joined {new Date(profile.created_at).toLocaleDateString()}</p>

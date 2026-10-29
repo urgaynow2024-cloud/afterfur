@@ -36,23 +36,27 @@ export default function ResetPassword() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="text-xl font-semibold">Set new password</h1>
+    <main className="flex min-h-screen items-center justify-center bg-af-bg p-4 sm:p-8">
+      <section className="w-full max-w-md rounded-xl border border-af-border bg-af-surface p-5 sm:p-8">
+      <h1 className="text-xl font-semibold tracking-tight">Set new password</h1>
       {done ? (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-af-muted">{msg}</p>
-          <button onClick={() => router.push("/signin")} className="rounded-full bg-af-accent px-4 py-2 text-sm font-semibold text-black">Go to sign in</button>
+          <button onClick={() => router.push("/signin")} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white hover:bg-af-brand-hover">Go to sign in</button>
         </div>
       ) : (
         <form onSubmit={submit} className="mt-4 space-y-3">
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="New password" disabled={loading} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" />
-          <input value={confirm} onChange={(e) => setConfirm(e.target.value)} type="password" placeholder="Confirm password" disabled={loading} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" />
-          {error && <p className="text-sm text-af-danger">{error}</p>}
-          <button disabled={loading} className="w-full rounded-full bg-af-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-40">
+          <label htmlFor="new-password" className="block text-xs font-medium text-af-text-2">New password</label>
+          <input id="new-password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} type="password" minLength={8} required disabled={loading} className="af-field w-full px-3 text-sm" />
+          <label htmlFor="confirm-password" className="block text-xs font-medium text-af-text-2">Confirm password</label>
+          <input id="confirm-password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} type="password" required disabled={loading} className="af-field w-full px-3 text-sm" />
+          {error && <p role="alert" className="text-sm text-af-danger">{error}</p>}
+          <button disabled={loading} className="min-h-11 w-full rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50">
             {loading ? "Updating..." : "Update password"}
           </button>
         </form>
       )}
+      </section>
     </main>
   );
 }

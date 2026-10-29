@@ -49,17 +49,18 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
     if (supabase && user) {
       supabase.from("profiles").select("username,display_name,avatar_url").eq("id", user.id).maybeSingle().then(({ data }: { data: ComposerProfile | null }) => setProfile(data));
     }
-    if (draftKey) {
+    const draftTimer = window.setTimeout(() => {
+      if (!draftKey) return;
       try {
         const saved = localStorage.getItem(draftKey);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setText(parsed.text || "");
-          // media cannot be restored from localStorage
-        }
+        if (saved) setText((JSON.parse(saved) as { text?: string }).text || "");
       } catch {}
-    }
-    setTimeout(() => textareaRef.current?.focus(), 0);
+    }, 0);
+    const focusTimer = window.setTimeout(() => textareaRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(draftTimer);
+      window.clearTimeout(focusTimer);
+    };
   }, [open, user, draftKey]);
 
   useEffect(() => {
@@ -151,11 +152,14 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
-      <div className="mt-12 w-full max-w-xl rounded-2xl border border-af-border bg-af-surface p-4 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="composer-title">
+      <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-xl overflow-y-auto rounded-xl border border-af-border bg-af-surface p-4 shadow-2xl sm:p-5">
         <div className="flex items-center justify-between">
-          <button onClick={requestClose} className="rounded-full p-2 text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Close composer">✕</button>
-          <button onClick={saveDraft} className="rounded-full px-3 py-1.5 text-sm font-medium text-af-accent hover:bg-af-accent/10">Drafts</button>
+          <h2 id="composer-title" className="text-sm font-semibold text-af-text">Create a post</h2>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={saveDraft} className="min-h-10 rounded-md px-3 text-sm font-medium text-af-brand-soft hover:bg-af-surface-2">Save draft</button>
+            <button type="button" onClick={requestClose} className="flex h-10 w-10 items-center justify-center rounded-md text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Close composer">×</button>
+          </div>
         </div>
         <div className="mt-4 flex gap-3">
           {profile?.avatar_url ? (
@@ -172,24 +176,25 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
               onChange={(e) => setText(e.target.value)}
               maxLength={300}
               placeholder="What's happening?"
-              className="min-h-32 w-full resize-none bg-transparent text-[17px] outline-none placeholder:text-af-muted"
+              className="min-h-32 w-full resize-y bg-transparent py-1 text-[16px] leading-6 text-af-text outline-none placeholder:text-af-muted"
             />
             {mediaPreview && (
               <div className="mt-3 overflow-hidden rounded-2xl border border-af-border">
-                <img src={mediaPreview} alt="" className="max-h-80 w-full object-cover" />
+                {mediaFile?.type.startsWith("video/") ? <video src={mediaPreview} controls playsInline className="max-h-72 w-full bg-black object-contain" /> : <img src={mediaPreview} alt="Selected post media preview" className="max-h-72 w-full object-contain" />}
               </div>
             )}
           </div>
         </div>
         {error && <p className="mt-3 text-sm text-af-danger">{error}</p>}
-        <div className="mt-4 flex items-center justify-between border-t border-af-border pt-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-af-border pt-3">
           <EmojiPicker onPick={insertEmoji} />
-          <label className="cursor-pointer rounded-full px-3 py-1.5 text-sm text-af-accent transition-colors hover:bg-af-accent/10">
+          <label className="inline-flex min-h-10 cursor-pointer items-center rounded-md px-3 text-sm font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2 focus-within:ring-2 focus-within:ring-af-focus">
             Add media
             <input
               type="file"
               accept="image/*,video/*"
-              className="hidden"
+              className="sr-only"
+              aria-label="Attach image or video"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) {
@@ -200,14 +205,15 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
             />
           </label>
           {mediaFile && (
-            <button onClick={() => { setMediaFile(null); setMediaPreview(null); }} className="rounded-full px-3 py-1.5 text-sm text-af-muted hover:text-af-danger">
+            <button type="button" onClick={() => { setMediaFile(null); setMediaPreview(null); }} className="min-h-10 rounded-md px-3 text-sm text-af-muted hover:bg-af-surface-2 hover:text-af-danger">
               Remove
             </button>
           )}
           <button
+            type="button"
             onClick={submit}
             disabled={(!text.trim() && !mediaFile) || submitting}
-            className="rounded-full bg-af-accent px-5 py-1.5 text-sm font-bold text-white transition-colors hover:bg-af-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Posting..." : "Post"}
           </button>

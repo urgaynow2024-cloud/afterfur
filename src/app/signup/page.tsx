@@ -5,15 +5,18 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type SignUpState = "idle" | "submitting" | "confirm-email" | "success" | "error";
+type UsernameLookup = { data: { id: string } | null; error: { message: string } | null };
+type SignUpResponse = { data: { user: { id: string } | null; session: object | null }; error: { message: string } | null };
+type ProfileInsertResponse = { error: { message: string; code?: string } | null };
 
 const SIGNUP_TIMEOUT_MS = 15000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(message)), ms);
   });
-  return Promise.race([promise, timeoutPromise]).finally(() => {
+  return Promise.race([Promise.resolve(promise), timeoutPromise]).finally(() => {
     clearTimeout(timer);
   }) as Promise<T>;
 }
@@ -69,8 +72,8 @@ export default function SignUp() {
       const emailClean = email.trim().toLowerCase();
 
       // Check if username already taken to give clearer errors
-      const existingProfileResult: any = await withTimeout(
-        supabase.from("profiles").select("id").ilike("username", usernameClean).maybeSingle() as any,
+      const existingProfileResult = await withTimeout(
+        Promise.resolve(supabase.from("profiles").select("id").ilike("username", usernameClean).maybeSingle()) as PromiseLike<UsernameLookup>,
         SIGNUP_TIMEOUT_MS,
         "Request timed out. Please check your connection and try again."
       );
@@ -80,21 +83,21 @@ export default function SignUp() {
         return;
       }
 
-      const signUpResult: any = await withTimeout(
-        supabase.auth.signUp({
+      const signUpResult = await withTimeout(
+        Promise.resolve(supabase.auth.signUp({
           email: emailClean,
           password,
           options: {
             data: { username: usernameClean },
             emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
           },
-        }) as unknown as Promise<{ data: { user?: { id: string } | null; session?: unknown } | null; error?: { message?: string } | null }>,
+        })) as PromiseLike<SignUpResponse>,
         SIGNUP_TIMEOUT_MS,
         "Sign up timed out. Please check your connection and try again."
       );
 
-      const authError = (signUpResult as any)?.error;
-      const authData: any = (signUpResult as any)?.data;
+      const authError = signUpResult.error;
+      const authData = signUpResult.data;
 
       if (authError) {
         const msg = authError.message || "Sign up failed.";
@@ -114,8 +117,8 @@ export default function SignUp() {
       if (userId && session) {
         // Create profile if it doesn't exist
         try {
-            const { error: profileError }: any = await withTimeout(
-              supabase.from("profiles").insert({ id: userId, username: usernameClean, display_name: displayName.trim() }) as any,
+            const { error: profileError } = await withTimeout(
+              Promise.resolve(supabase.from("profiles").insert({ id: userId, username: usernameClean, display_name: displayName.trim() })) as PromiseLike<ProfileInsertResponse>,
               SIGNUP_TIMEOUT_MS,
               "Profile creation timed out."
             );
@@ -158,11 +161,11 @@ export default function SignUp() {
   }
 
   return (
-    <div className="min-h-screen grid md:grid-cols-2">
-      <section className="hidden md:flex flex-col justify-between bg-gradient-to-br from-af-surface to-af-bg p-10 border-r border-af-border">
+    <div className="min-h-screen bg-af-bg md:grid md:grid-cols-[minmax(0,1fr)_minmax(420px,560px)]">
+      <section className="hidden flex-col justify-between border-r border-af-border bg-af-surface p-10 md:flex xl:p-16">
         <div>
           <div className="text-2xl font-bold tracking-tight">
-            <span className="text-af-accent">After</span>Fur
+            <span className="text-af-brand">After</span>Fur
           </div>
           <p className="mt-1 text-sm text-af-muted">Social media, after dark.</p>
         </div>
@@ -175,52 +178,56 @@ export default function SignUp() {
         <div className="text-xs text-af-muted">© AfterFur</div>
       </section>
 
-      <section className="flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-2xl border border-af-border bg-af-surface p-8 shadow-xl">
-          <h2 className="text-2xl font-semibold">Create your account</h2>
+      <section className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center p-4 sm:p-8 md:min-h-screen">
+        <div className="w-full max-w-md rounded-xl border border-af-border bg-af-surface p-5 sm:p-8">
+          <h2 className="text-xl font-semibold tracking-tight">Create your account</h2>
           <p className="mt-1 text-sm text-af-muted">You must be 18 or older to join AfterFur.</p>
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div>
-              <label className="block text-xs font-medium text-af-muted mb-1">Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required className="w-full rounded-lg border border-af-border bg-af-surface-2 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-af-accent" />
+              <label htmlFor="signup-email" className="mb-1 block text-xs font-medium text-af-text-2">Email</label>
+              <input id="signup-email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required className="af-field w-full px-3 text-sm" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-af-muted mb-1">Username</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)} required className="w-full rounded-lg border border-af-border bg-af-surface-2 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-af-accent" />
+              <label htmlFor="signup-username" className="mb-1 block text-xs font-medium text-af-text-2">Username</label>
+              <input id="signup-username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required className="af-field w-full px-3 text-sm" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-af-muted mb-1">Password</label>
+              <label htmlFor="signup-display-name" className="mb-1 block text-xs font-medium text-af-text-2">Display name</label>
+              <input id="signup-display-name" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required maxLength={60} className="af-field w-full px-3 text-sm" />
+            </div>
+            <div>
+              <label htmlFor="signup-password" className="mb-1 block text-xs font-medium text-af-text-2">Password</label>
               <div className="relative">
-                <input value={password} onChange={(e) => setPassword(e.target.value)} type={showPw ? "text" : "password"} required className="w-full rounded-lg border border-af-border bg-af-surface-2 px-3 py-2.5 text-sm pr-16 focus:outline-none focus:ring-2 focus:ring-af-accent" />
-                <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-af-muted hover:text-af-text">
+                <input id="signup-password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} type={showPw ? "text" : "password"} required className="af-field w-full px-3 pr-16 text-sm" />
+                <button type="button" aria-label={showPw ? "Hide password" : "Show password"} onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 min-h-9 -translate-y-1/2 rounded px-2 text-xs text-af-muted hover:bg-af-surface-2 hover:text-af-text">
                   {showPw ? "Hide" : "Show"}
                 </button>
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-af-muted mb-1">Confirm password</label>
-              <input value={confirm} onChange={(e) => setConfirm(e.target.value)} type="password" required className="w-full rounded-lg border border-af-border bg-af-surface-2 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-af-accent" />
+              <label htmlFor="signup-confirm" className="mb-1 block text-xs font-medium text-af-text-2">Confirm password</label>
+              <input id="signup-confirm" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} type="password" required className="af-field w-full px-3 text-sm" />
             </div>
-            <label className="flex items-start gap-2 text-xs text-af-muted">
-              <input type="checkbox" checked={ageOk} onChange={(e) => setAgeOk(e.target.checked)} className="mt-0.5" />
+            <label className="flex min-h-10 items-start gap-3 text-sm leading-relaxed text-af-text-2">
+              <input type="checkbox" checked={ageOk} onChange={(e) => setAgeOk(e.target.checked)} className="mt-1 h-4 w-4 accent-af-brand" />
               I confirm I am 18 years of age or older.
             </label>
-            <label className="flex items-start gap-2 text-xs text-af-muted">
-              <input type="checkbox" checked={termsOk} onChange={(e) => setTermsOk(e.target.checked)} className="mt-0.5" />
+            <label className="flex min-h-10 items-start gap-3 text-sm leading-relaxed text-af-text-2">
+              <input type="checkbox" checked={termsOk} onChange={(e) => setTermsOk(e.target.checked)} className="mt-1 h-4 w-4 accent-af-brand" />
               I accept the <Link href="/terms" className="text-af-accent hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-af-accent hover:underline">Privacy Policy</Link>.
             </label>
-            {error && <p className="text-sm text-af-danger">{error}</p>}
+            {error && <p role="alert" className="rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">{error}</p>}
             {info && state === "confirm-email" && (
-              <div className="rounded-lg border border-af-accent/40 bg-af-accent/10 p-3 text-sm text-af-text">
+              <div role="status" className="rounded-md border border-af-border-strong bg-af-surface-2 p-3 text-sm leading-relaxed text-af-text">
                 {info}
               </div>
             )}
             {state === "confirm-email" ? (
-              <button type="button" onClick={() => router.push("/signin")} className="w-full rounded-lg bg-af-accent px-4 py-2.5 text-sm font-semibold text-black hover:bg-af-accent-hover transition">
+              <button type="button" onClick={() => router.push("/signin")} className="min-h-11 w-full rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover">
                 Go to Sign In
               </button>
             ) : (
-              <button disabled={state === "submitting"} className="w-full rounded-lg bg-af-accent px-4 py-2.5 text-sm font-semibold text-black hover:bg-af-accent-hover disabled:opacity-40 transition">
+              <button disabled={state === "submitting"} className="min-h-11 w-full rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50">
                 {state === "submitting" ? "Creating account..." : "Create account"}
               </button>
             )}

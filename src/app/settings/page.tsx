@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
+import { loadMyPawPassEntitlement, type PawPassEntitlement } from "@/lib/pawpass";
 
 type Profile = { username: string; display_name: string | null; bio: string | null; location: string | null; website: string | null; avatar_url: string | null; banner_url: string | null };
 
@@ -15,12 +17,23 @@ export default function Settings() {
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [membershipState, setMembershipState] = useState<{ loading: boolean; error: string; entitlement: PawPassEntitlement | null }>({ loading: true, error: "", entitlement: null });
 
   useEffect(() => {
-    const supabase = createClient();
-    if (!supabase || !user) return;
-    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle().then(({ data }: any) => {
-      if (data) {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const loadProfile = async () => {
+        setProfileLoading(true);
+        const supabase = createClient();
+        if (!supabase || !user) { setProfileLoading(false); return; }
+        const { data, error: loadError } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+        if (cancelled) return;
+        if (loadError || !data) {
+          setError(loadError?.message ?? "Could not load your profile settings.");
+          setProfileLoading(false);
+          return;
+        }
         const p: Profile = {
           username: data.username || "",
           display_name: data.display_name || "",
@@ -32,8 +45,25 @@ export default function Settings() {
         };
         setSaved(p);
         setForm(p);
-      }
-    });
+        setProfileLoading(false);
+      };
+      void loadProfile();
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (!user) { setMembershipState({ loading: false, error: "", entitlement: null }); return; }
+      const supabase = createClient();
+      if (!supabase) { setMembershipState({ loading: false, error: "PawPass status is unavailable.", entitlement: null }); return; }
+      void loadMyPawPassEntitlement(supabase).then((result) => {
+        if (cancelled) return;
+        setMembershipState({ loading: false, error: result.error ?? "", entitlement: result.entitlement });
+      });
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [user]);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
@@ -89,7 +119,7 @@ export default function Settings() {
       const url = await upload(file, "avatars");
       setForm((f) => ({ ...f, avatar_url: url }));
       setMsg("");
-    } catch (err: any) { setError(err.message); setAvatarPreview(null); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Could not upload avatar."); setAvatarPreview(null); }
   }
 
   async function onBannerChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -101,7 +131,7 @@ export default function Settings() {
       const url = await upload(file, "banners");
       setForm((f) => ({ ...f, banner_url: url }));
       setMsg("");
-    } catch (err: any) { setError(err.message); setBannerPreview(null); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Could not upload banner."); setBannerPreview(null); }
   }
 
   async function save(e: React.FormEvent) {
@@ -109,10 +139,18 @@ export default function Settings() {
     setError(""); setMsg("");
     const supabase = createClient();
     if (!supabase || !user) { setError("Sign in required."); return; }
+    if (profileLoading) { setError("Wait for your profile settings to finish loading."); return; }
     const usernameClean = form.username.trim().toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/i.test(usernameClean)) { setError("Username must be 3-20 characters (letters, numbers, underscore)."); return; }
+    if ((form.display_name || "").trim().length > 50) { setError("Display name must be 50 characters or fewer."); return; }
+    if ((form.bio || "").length > 160) { setError("Bio must be 160 characters or fewer."); return; }
+    if (form.website?.trim()) {
+      try { const website = new URL(form.website.trim()); if (website.protocol !== "https:" && website.protocol !== "http:") throw new Error(); }
+      catch { setError("Enter a valid website URL beginning with http:// or https://."); return; }
+    }
     if (usernameClean !== saved.username) {
-      const { data: existing } = await supabase.from("profiles").select("id").ilike("username", usernameClean).neq("id", user.id).maybeSingle();
+      const { data: existing, error: usernameError } = await supabase.from("profiles").select("id").ilike("username", usernameClean).neq("id", user.id).maybeSingle();
+      if (usernameError) { setError(usernameError.message); return; }
       if (existing) { setError("That username is already taken."); return; }
     }
     setLoading(true);
@@ -135,25 +173,27 @@ export default function Settings() {
   return (
     <Shell>
       <PageHeader title="Settings" />
-      <section className="p-4 max-w-2xl">
-        <h2 className="text-lg font-semibold">Profile</h2>
-        <p className="text-sm text-af-muted">Manage how your profile appears to others.</p>
-        <form onSubmit={save} className="mt-6 space-y-6">
-          <div className="rounded-xl border border-af-border bg-af-surface p-4">
-            <label className="block cursor-pointer">
+      {user.app_metadata?.afterfur_staff_admin === true && <div className="px-4 pt-4 sm:px-6"><Link href="/staff/badges" className="af-action-secondary">Manage staff badges</Link></div>}
+      <section className="max-w-2xl p-4 sm:p-6">
+        <h2 className="text-base font-semibold">Profile</h2>
+        <p className="mt-1 text-sm leading-relaxed text-af-muted">Manage how your profile appears to others.</p>
+        {profileLoading && <p role="status" className="mt-4 text-sm text-af-muted">Loading your profile settings…</p>}
+        <form onSubmit={save} className="mt-5 space-y-5" aria-busy={profileLoading}>
+          <div className="rounded-lg border border-af-border bg-af-surface p-3 sm:p-4">
+            <label className="block cursor-pointer rounded-lg focus-within:ring-2 focus-within:ring-af-focus">
               <div className="h-32 rounded-lg bg-af-surface-2 overflow-hidden flex items-center justify-center">
-                {(bannerPreview || form.banner_url) ? <img src={bannerPreview || form.banner_url!} alt="" className="h-full w-full object-cover" /> : <span className="text-sm text-af-muted">Choose banner image</span>}
+                {(bannerPreview || form.banner_url) ? <img src={bannerPreview || form.banner_url!} alt="Profile banner preview" className="h-full w-full object-cover" /> : <span className="text-sm text-af-muted">Choose banner image</span>}
               </div>
-              <input type="file" accept="image/*" onChange={onBannerChange} className="hidden" />
+              <input type="file" accept="image/*" disabled={profileLoading || loading} onChange={onBannerChange} className="sr-only" aria-label="Choose profile banner image" />
             </label>
             <p className="mt-2 text-xs text-af-muted">PNG, JPG or WebP, up to 5MB.</p>
           </div>
           <div className="flex items-center gap-4">
-            <label className="cursor-pointer">
+            <label className="cursor-pointer rounded-full focus-within:ring-2 focus-within:ring-af-focus">
               <div className="h-16 w-16 rounded-full bg-af-surface-2 overflow-hidden flex items-center justify-center">
-                {(avatarPreview || form.avatar_url) ? <img src={avatarPreview || form.avatar_url!} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-af-muted">+</span>}
+                {(avatarPreview || form.avatar_url) ? <img src={avatarPreview || form.avatar_url!} alt="Profile avatar preview" className="h-full w-full object-cover" /> : <span aria-hidden="true" className="text-xs text-af-muted">+</span>}
               </div>
-              <input type="file" accept="image/*" onChange={onAvatarChange} className="hidden" />
+              <input type="file" accept="image/*" disabled={profileLoading || loading} onChange={onAvatarChange} className="sr-only" aria-label="Choose profile avatar image" />
             </label>
             <div>
               <p className="text-sm font-medium">Avatar</p>
@@ -161,33 +201,38 @@ export default function Settings() {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-af-muted mb-1">Username</label>
-            <input value={form.username || ""} onChange={(e) => setForm({ ...form, username: e.target.value })} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" />
+            <label htmlFor="settings-username" className="mb-1 block text-xs font-medium text-af-text-2">Username</label>
+            <input id="settings-username" autoComplete="username" disabled={profileLoading || loading} value={form.username || ""} onChange={(e) => setForm({ ...form, username: e.target.value })} className="af-field w-full px-3 text-sm disabled:opacity-50" />
           </div>
           <div>
-            <label className="block text-xs text-af-muted mb-1">Display name</label>
-            <input value={form.display_name || ""} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" />
+            <label htmlFor="settings-display-name" className="mb-1 block text-xs font-medium text-af-text-2">Display name</label>
+            <input id="settings-display-name" autoComplete="name" maxLength={50} disabled={profileLoading || loading} value={form.display_name || ""} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="af-field w-full px-3 text-sm disabled:opacity-50" />
           </div>
           <div>
-            <label className="block text-xs text-af-muted mb-1">Bio</label>
-            <textarea value={form.bio || ""} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" rows={4} maxLength={160} />
+            <label htmlFor="settings-bio" className="mb-1 block text-xs font-medium text-af-text-2">Bio</label>
+            <textarea id="settings-bio" disabled={profileLoading || loading} value={form.bio || ""} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="af-field min-h-28 w-full resize-y px-3 py-2 text-sm leading-relaxed disabled:opacity-50" rows={4} maxLength={160} />
             <div className="text-xs text-af-muted text-right">{(form.bio || "").length}/160</div>
           </div>
           <div>
-            <label className="block text-xs text-af-muted mb-1">Location</label>
-            <input value={form.location || ""} onChange={(e) => setForm({ ...form, location: e.target.value })} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" />
+            <label htmlFor="settings-location" className="mb-1 block text-xs font-medium text-af-text-2">Location</label>
+            <input id="settings-location" disabled={profileLoading || loading} value={form.location || ""} onChange={(e) => setForm({ ...form, location: e.target.value })} className="af-field w-full px-3 text-sm disabled:opacity-50" />
           </div>
           <div>
-            <label className="block text-xs text-af-muted mb-1">Website</label>
-            <input value={form.website || ""} onChange={(e) => setForm({ ...form, website: e.target.value })} className="w-full rounded-lg border border-af-border bg-af-surface px-3 py-2 text-sm" />
+            <label htmlFor="settings-website" className="mb-1 block text-xs font-medium text-af-text-2">Website</label>
+            <input id="settings-website" type="url" inputMode="url" disabled={profileLoading || loading} value={form.website || ""} onChange={(e) => setForm({ ...form, website: e.target.value })} className="af-field w-full px-3 text-sm disabled:opacity-50" />
           </div>
-          {error && <p className="text-sm text-af-danger">{error}</p>}
-          {msg && <p className="text-sm text-af-muted">{msg}</p>}
+          {error && <p role="alert" className="rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">{error}</p>}
+          {msg && <p role="status" className="rounded-md border border-af-border bg-af-surface-2 p-3 text-sm text-af-text-2">{msg}</p>}
           <div className="flex gap-3">
-            <button disabled={loading || !dirty} className="rounded-full bg-af-accent px-4 py-1.5 text-sm font-semibold text-black disabled:opacity-40">{loading ? "Saving..." : "Save"}</button>
-            <button type="button" onClick={cancel} disabled={loading} className="rounded-full border border-af-border px-4 py-1.5 text-sm font-semibold hover:bg-af-surface-2">Cancel</button>
+            <button disabled={profileLoading || loading || !dirty} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-40">{loading ? "Saving..." : "Save"}</button>
+            <button type="button" onClick={cancel} disabled={loading} className="af-action-secondary disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
           </div>
         </form>
+        <section aria-labelledby="pawpass-heading" className="mt-8 border-t border-af-border pt-5">
+          <h2 id="pawpass-heading" className="text-base font-semibold">PawPass membership</h2>
+          <p className="mt-1 text-sm leading-relaxed text-af-muted">Membership status is read from a verified provider entitlement. AfterFur Prime is not enabled unless billing configures an active entitlement.</p>
+          {membershipState.loading ? <p role="status" className="mt-3 text-sm text-af-muted">Checking membership…</p> : membershipState.error ? <p role="status" className="mt-3 text-sm text-af-muted">Verified membership status is not available: {membershipState.error}</p> : !membershipState.entitlement ? <p role="status" className="mt-3 text-sm text-af-muted">No verified PawPass membership is connected to this account.</p> : membershipState.entitlement.active ? <p role="status" className="mt-3 text-sm text-af-text-2">PawPass entitlement active through {membershipState.entitlement.currentPeriodEnd ? new Date(membershipState.entitlement.currentPeriodEnd).toLocaleDateString() : "the current period"}.</p> : <p role="status" className="mt-3 text-sm text-af-muted">Membership is {membershipState.entitlement.status}. Earned anniversary badges remain on your profile.</p>}
+        </section>
       </section>
     </Shell>
   );

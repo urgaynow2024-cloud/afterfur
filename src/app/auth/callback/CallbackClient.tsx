@@ -12,7 +12,7 @@ export default function AuthCallback() {
   useEffect(() => {
     const supabase = createClient();
     if (!supabase) {
-      setStatus("Supabase not configured.");
+      queueMicrotask(() => setStatus("Supabase not configured."));
       return;
     }
 

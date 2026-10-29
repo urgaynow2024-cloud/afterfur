@@ -1,12 +1,15 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
   --af-bg: #09090D;
   --af-surface: #111827;
   --af-surface-2: #172033;
+  --af-surface-raised: #1B2537;
   --af-border: #1F2937;
+  --af-border-strong: #334155;
   --af-text: #F3F4F6;
-  --af-text-2: #9CA3AF;
+  --af-text-2: #D1D5DB;
   --af-muted: #9CA3AF;
   --af-accent: #3B82F6;
   --af-accent-hover: #2563EB;
@@ -15,13 +18,22 @@
   --af-brand-soft: #C4B5FD;
   --af-danger: #f91880;
   --af-success: #00ba7c;
+  --af-focus: #C4B5FD;
+  --af-content-width: 800px;
+  --af-navigation-width: 240px;
+  --af-sidebar-width: 300px;
+  --af-shell-width: 1440px;
+  --af-radius-control: 0.625rem;
+  --af-radius-panel: 0.875rem;
 }
 
 @theme inline {
   --color-af-bg: var(--af-bg);
   --color-af-surface: var(--af-surface);
   --color-af-surface-2: var(--af-surface-2);
+  --color-af-surface-raised: var(--af-surface-raised);
   --color-af-border: var(--af-border);
+  --color-af-border-strong: var(--af-border-strong);
   --color-af-text: var(--af-text);
   --color-af-text-2: var(--af-text-2);
   --color-af-muted: var(--af-muted);
@@ -32,11 +44,15 @@
   --color-af-brand-soft: var(--af-brand-soft);
   --color-af-danger: var(--af-danger);
   --color-af-success: var(--af-success);
+  --color-af-focus: var(--af-focus);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-* {
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: var(--af-border) transparent;
 }
@@ -54,16 +70,196 @@
   border-radius: 4px;
 }
 
-a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--af-accent);
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--af-focus);
   outline-offset: 2px;
 }
 
+::selection {
+  color: var(--af-text);
+  background: color-mix(in srgb, var(--af-brand) 45%, transparent);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.af-field {
+  min-height: 2.75rem;
+  border: 1px solid var(--af-border-strong);
+  border-radius: var(--af-radius-control);
+  background: var(--af-surface);
+  color: var(--af-text);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.af-field::placeholder {
+  color: var(--af-muted);
+}
+
+.af-field:hover {
+  border-color: #475569;
+}
+
+.af-field:focus-visible {
+  border-color: var(--af-focus);
+}
+
+.af-action-secondary {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--af-border-strong);
+  border-radius: var(--af-radius-control);
+  padding-inline: 0.875rem;
+  color: var(--af-text-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.af-action-secondary:hover {
+  border-color: #64748B;
+  background: var(--af-surface-2);
+  color: var(--af-text);
+}
+
 body {
+  min-width: 320px;
   background: var(--af-bg);
   color: var(--af-text);
   font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes af-like-activate {
+  0% { transform: scale(0.88); }
+  65% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+.af-reaction-art.is-activating {
+  animation: af-like-activate 260ms ease-out;
+}
+
+.af-post-action {
+  position: relative;
+  display: inline-flex;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 0.375rem;
+  padding: 0 0.4rem;
+  color: var(--af-text-2);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.af-post-action:hover,
+.af-post-action.is-active {
+  background-color: color-mix(in srgb, var(--af-brand) 12%, transparent);
+  color: var(--af-brand-soft);
+}
+
+.af-post-action:focus-visible {
+  outline: 2px solid var(--af-brand);
+  outline-offset: 2px;
+}
+
+.af-post-action:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.af-post-action[data-tooltip]::after {
+  position: absolute;
+  z-index: 50;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  width: max-content;
+  max-width: 12rem;
+  transform: translate(-50%, 0.15rem);
+  border: 1px solid var(--af-border-strong);
+  border-radius: 0.375rem;
+  background: var(--af-surface-raised);
+  padding: 0.3rem 0.5rem;
+  color: var(--af-text);
+  content: attr(data-tooltip);
+  font-size: 0.7rem;
+  line-height: 1rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.af-post-action[data-tooltip]:hover::after,
+.af-post-action[data-tooltip]:focus-visible::after {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+.af-badge[data-tooltip] { position: relative; }
+.af-badge[data-tooltip]::after {
+  position: absolute;
+  z-index: 60;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  width: max-content;
+  max-width: 12rem;
+  transform: translate(-50%, 0.15rem);
+  border: 1px solid var(--af-border-strong);
+  border-radius: 0.375rem;
+  background: var(--af-surface-raised);
+  padding: 0.3rem 0.5rem;
+  color: var(--af-text);
+  content: attr(data-tooltip);
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.af-badge[data-tooltip]:hover::after,
+.af-badge[data-tooltip]:focus-visible::after {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+.af-reaction-art {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  object-fit: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .af-reaction-art.is-activating { animation: none; }
+  .af-post-action,
+  .af-post-action[data-tooltip]::after,
+  .af-badge[data-tooltip]::after { transition: none; }
 }

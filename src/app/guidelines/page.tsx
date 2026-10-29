@@ -1,1 +1,5 @@
-export default function Page(){return <main className='p-6 max-w-xl mx-auto'><h1 className='text-xl font-semibold'>guidelines</h1><p className='mt-2 text-sm text-af-muted'>Placeholder page. Functionality pending backend integration.</p></main>;}
+import PolicyPlaceholder from "@/components/PolicyPlaceholder";
+
+export default function Guidelines() {
+  return <PolicyPlaceholder title="Community Guidelines" />;
+}
