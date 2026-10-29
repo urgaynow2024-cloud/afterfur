@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import { usePostInteractions } from "@/components/PostInteractionProvider";
 import { optimisticLikeCount, reconcileLikeCount } from "@/lib/likes";
 import { BadgeList } from "@/components/BadgeList";
@@ -48,6 +49,9 @@ export default function PostCard({
   const [activating, setActivating] = useState(false);
   const [countOptimism, setCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
   const [repostCountOptimism, setRepostCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared" | "cancelled" | "error">("idle");
+  const shareTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (shareTimer.current !== null) window.clearTimeout(shareTimer.current); }, []);
   const activationTimer = useRef<number | null>(null);
   useEffect(() => () => { if (activationTimer.current !== null) window.clearTimeout(activationTimer.current); }, []);
   const username = post.profiles?.username || "unknown";
@@ -102,6 +106,30 @@ export default function PostCard({
     }
   }
 
+  async function handleShare() {
+    const url = typeof window !== "undefined" ? `${window.location.origin}${postHref}` : postHref;
+    const title = `${displayName} on AfterFur`;
+    const text = post.content?.slice(0, 120) || "";
+    if (shareTimer.current !== null) window.clearTimeout(shareTimer.current);
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title, text, url });
+        setShareStatus("shared");
+      } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setShareStatus("copied");
+      } else {
+        setShareStatus("error");
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setShareStatus("cancelled");
+      } else {
+        setShareStatus("error");
+      }
+    }
+    shareTimer.current = window.setTimeout(() => setShareStatus("idle"), 2000);
+  }
   function activateBookmark() { void interactions?.toggle("bookmarks", post.id, post.author_id); }
   async function activateRepost() {
     const previousReposted = isReposted;
@@ -158,7 +186,9 @@ export default function PostCard({
             </button>}
             {bookmarkError && <span role="status" className="basis-full text-xs text-af-danger">Bookmark update failed: {bookmarkError}</span>}
             {repostError && <span role="status" className="basis-full text-xs text-af-danger">Repost update failed: {repostError}</span>}
-            {onShare && <button type="button" onClick={() => onShare(post.id)} className="inline-flex min-h-9 items-center rounded-md px-2 transition-colors hover:bg-af-surface-2 hover:text-af-text">Share</button>}
+            <button type="button" onClick={() => { void handleShare(); }} aria-label={`Share ${displayName}'s post`} className="inline-flex min-h-9 items-center rounded-md px-2 transition-colors hover:bg-af-surface-2 hover:text-af-text">
+              {shareStatus === "copied" ? "Copied!" : shareStatus === "shared" ? "Shared" : shareStatus === "cancelled" ? "Cancelled" : shareStatus === "error" ? "Failed" : "Share"}
+            </button>
             {onEdit && <button type="button" onClick={() => onEdit(post.id)} className="inline-flex min-h-9 items-center rounded-md px-2 transition-colors hover:bg-af-surface-2 hover:text-af-text">Edit</button>}
             {onDelete && <button type="button" onClick={() => onDelete(post.id)} className="inline-flex min-h-9 items-center rounded-md px-2 text-af-danger/80 transition-colors hover:bg-af-danger/10 hover:text-af-danger">Delete</button>}
           </div>
