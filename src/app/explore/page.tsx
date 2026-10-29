@@ -6,12 +6,14 @@ import { EmptyState, PageHeader, Shell } from "@/components/Shell";
 import PostCard from "@/components/PostCard";
 import { createClient } from "@/lib/supabase/client";
 import { mergeByIdPage, pageRange } from "@/lib/search";
+import { useAuth } from "@/components/AuthProvider";
 import { BadgeList } from "@/components/BadgeList";
 
 type Creator = { id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string | null };
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 
 export default function Explore() {
+  const { user } = useAuth();
   const [creators, setCreators] = useState<Creator[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,22 @@ export default function Explore() {
       setLoading(false);
     }
   }, []);
+
+  async function deletePost(postId: string) {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    const { error: deleteError } = await supabase.from("posts").delete().eq("id", postId).eq("author_id", user.id);
+    if (deleteError) { setError(deleteError.message); return; }
+    setPosts((ps) => ps.filter((p) => p.id !== postId));
+  }
+
+  function startEdit(postId: string) {
+    const post = posts.find((p) => p.id === postId);
+    if (!post || post.author_id !== user?.id) return;
+    if (post.profiles?.username) {
+      window.location.href = `/${post.profiles.username}/status/${postId}`;
+    }
+  }
 
   async function loadMorePosts() {
     if (loadingMoreRef.current || !hasMorePosts) return;
@@ -98,7 +116,7 @@ export default function Explore() {
             <div className="min-w-0"><Link href={`/${encodeURIComponent(creator.username)}`} className="block truncate text-sm font-semibold hover:underline">{creator.display_name || creator.username}</Link><p className="truncate text-xs text-af-muted">@{creator.username}</p><BadgeList userId={creator.id} className="mt-1" />{creator.bio && <p className="mt-1 line-clamp-2 text-xs text-af-text-2">{creator.bio}</p>}</div>
           </li>)}</ul>}
         </section>
-        <section aria-labelledby="recent-posts-title"><h2 id="recent-posts-title" className="px-4 py-3 text-sm font-semibold">Recent posts</h2>{posts.length === 0 ? <EmptyState title="Nothing to explore yet" body="New public posts will appear here." /> : <div className="divide-y divide-af-border">{posts.map((post) => <PostCard key={post.id} post={post} />)}</div>}{postsError && <div role="alert" className="m-4 text-sm text-af-danger">{postsError}</div>}{hasMorePosts && <div className="p-4 text-center"><button type="button" onClick={() => { void loadMorePosts(); }} disabled={loadingMore} className="af-action-secondary disabled:opacity-50">{loadingMore ? "Loading…" : "Load more posts"}</button></div>}</section>
+        <section aria-labelledby="recent-posts-title"><h2 id="recent-posts-title" className="px-4 py-3 text-sm font-semibold">Recent posts</h2>{posts.length === 0 ? <EmptyState title="Nothing to explore yet" body="New public posts will appear here." /> : <div className="divide-y divide-af-border">{posts.map((post) => <PostCard key={post.id} post={post} onEdit={user?.id === post.author_id ? startEdit : undefined} onDelete={user?.id === post.author_id ? deletePost : undefined} />)}</div>}{postsError && <div role="alert" className="m-4 text-sm text-af-danger">{postsError}</div>}{hasMorePosts && <div className="p-4 text-center"><button type="button" onClick={() => { void loadMorePosts(); }} disabled={loadingMore} className="af-action-secondary disabled:opacity-50">{loadingMore ? "Loading…" : "Load more posts"}</button></div>}</section>
       </>}
     </Shell>
   );

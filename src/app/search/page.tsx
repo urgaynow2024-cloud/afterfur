@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { createClient } from "@/lib/supabase/client";
 import PostCard from "@/components/PostCard";
+import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { mergeByIdPage, pageRange } from "@/lib/search";
 import { BadgeList } from "@/components/BadgeList";
@@ -11,6 +12,7 @@ type Post = { id: string; content: string; created_at: string; author_id: string
 type ProfileSummary = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
 export default function Search() {
+  const { user } = useAuth();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Post[]>([]);
   const [people, setPeople] = useState<ProfileSummary[]>([]);
@@ -21,6 +23,21 @@ export default function Search() {
   const [error, setError] = useState("");
   const searchRequest = useRef(0);
 
+  async function deletePost(postId: string) {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    const { error: deleteError } = await supabase.from("posts").delete().eq("id", postId).eq("author_id", user.id);
+    if (deleteError) return;
+    setResults((rs) => rs.filter((r) => r.id !== postId));
+  }
+
+  function startEdit(postId: string) {
+    const post = results.find((p) => p.id === postId);
+    if (!post || post.author_id !== user?.id) return;
+    if (post.profiles?.username) {
+      window.location.href = `/${post.profiles.username}/status/${postId}`;
+    }
+  }
   async function run(loadMore = false) {
     const term = q.trim();
     if (!term) return;
@@ -96,7 +113,7 @@ export default function Search() {
              <div className="min-w-0"><Link href={`/${encodeURIComponent(person.username)}`} className="block truncate text-sm font-semibold hover:underline">{person.display_name || person.username}</Link><p className="truncate text-xs text-af-muted">@{person.username}</p><BadgeList userId={person.id} className="mt-1" /></div>
            </li>)}</ul>
          </section>}
-         {results.length > 0 && <section aria-labelledby="post-results-title"><h2 id="post-results-title" className="px-4 py-3 text-sm font-semibold text-af-text">Posts</h2><div className="divide-y divide-af-border">{results.map((post) => <PostCard key={post.id} post={post} />)}</div>{hasMorePosts && <div className="p-4 text-center"><button type="button" onClick={() => { void run(true); }} disabled={loadingMore || loading} className="af-action-secondary disabled:opacity-50">{loadingMore ? "Loading…" : "Load more posts"}</button></div>}</section>}
+         {results.length > 0 && <section aria-labelledby="post-results-title"><h2 id="post-results-title" className="px-4 py-3 text-sm font-semibold text-af-text">Posts</h2><div className="divide-y divide-af-border">{results.map((post) => <PostCard key={post.id} post={post} onEdit={user?.id === post.author_id ? startEdit : undefined} onDelete={user?.id === post.author_id ? deletePost : undefined} />)}</div>{hasMorePosts && <div className="p-4 text-center"><button type="button" onClick={() => { void run(true); }} disabled={loadingMore || loading} className="af-action-secondary disabled:opacity-50">{loadingMore ? "Loading…" : "Load more posts"}</button></div>}</section>}
        </>}
     </Shell>
   );
