@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canManageStaffBadge, changeStaffBadge, eligibleAccountAnniversaryBadges, eligiblePawPassBadgeIds, knownBadges, mergeBadgeAwards, PAWPASS_BADGES, STAFF_BADGE_IDS, TRUST_BADGES } from "@/lib/badges";
+import { BADGE_REGISTRY, canManageStaffBadge, changeStaffBadge, eligibleAccountAnniversaryBadges, eligiblePawPassBadgeIds, knownBadges, MANAGEABLE_BADGES, mergeBadgeAwards, PAWPASS_BADGES, STAFF_BADGE_IDS, TRUST_BADGES } from "@/lib/badges";
 
 describe("staff badge authorization rules", () => {
   const admin = { afterfur_staff_admin: true };
@@ -73,5 +73,28 @@ describe("trust badge registration", () => {
     expect(TRUST_BADGES.every((b) => b.category === "trust")).toBe(true);
     expect(knownBadges(["access_after_dark"]).map((b) => b.id)).toEqual(["access_after_dark"]);
     expect(knownBadges(["access_age_verified", "unknown_access"]).map((b) => b.id)).toEqual(["access_age_verified"]);
+  });
+});
+
+
+describe('badge catalogue', () => {
+  it('registers the expanded catalogue and manual badge set', () => {
+    const ids = MANAGEABLE_BADGES.map((b) => b.id);
+    expect(ids).toContain('access_age_verified');
+    expect(ids).toContain('access_approved');
+    expect(ids).toContain('creator_featured');
+    expect(ids).toContain('achievement_event_winner');
+    expect(ids).toContain('community_helper');
+    expect(MANAGEABLE_BADGES.length).toBe(11);
+  });
+});
+
+
+describe('ad creator badge', () => {
+  it('registers ad_creator with the correct label and icon', () => {
+    const badge = BADGE_REGISTRY.find((b) => b.id === 'ad_creator');
+    expect(badge).toBeDefined();
+    expect(badge?.label).toBe('AD Creator');
+    expect(badge?.mark).toBe('🌙');
   });
 });

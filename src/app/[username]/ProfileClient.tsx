@@ -9,8 +9,10 @@ import { useParams } from "next/navigation";
 import PostCard from "@/components/PostCard";
 import Link from "next/link";
 import { BadgeList } from "@/components/BadgeList";
+import ReportDialog from "@/components/ReportDialog";
+import { parseProfileCustomisation, nameStyle } from "@/lib/profileCustomisation";
 
-type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; profile_accent: string | null; created_at: string };
+type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; profile_accent: string | null; profile_customisation?: Record<string, unknown> | null; created_at: string };
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 type ProfileSummary = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
@@ -38,6 +40,7 @@ export default function ProfileClient() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState("");
   const editSubmittingRef = useRef(false);
+  const [reportUserOpen, setReportUserOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +198,7 @@ export default function ProfileClient() {
     event.preventDefault();
     const content = editDraft.trim();
     const supabase = createClient();
-    if (!editingPost || !user || !supabase || !content || content.length > 300 || editSubmittingRef.current) return;
+    if (!editingPost || !user || !supabase || !content || content.length > 600 || editSubmittingRef.current) return;
     editSubmittingRef.current = true;
     setEditSubmitting(true); setEditError("");
     const { data, error: updateError } = await supabase.from("posts").update({ content, edited_at: new Date().toISOString() }).eq("id", editingPost.id).eq("author_id", user.id).select("*").single();
@@ -216,18 +219,9 @@ export default function ProfileClient() {
   }
   const mediaItems = posts.flatMap((p) => (p.media_urls ?? []).map((u) => ({ url: u, post: p })));
   const isOwn = user?.id === profile.id;
-  const accentClass = profile.profile_accent ? {
-    purple: "text-af-brand",
-    blue: "text-af-accent",
-    emerald: "text-emerald-400",
-    amber: "text-amber-400",
-    rose: "text-rose-400",
-  }[profile.profile_accent] || "" : "";
-
   return (
     <Shell>
       <PageHeader title={profile.display_name || profile.username} subtitle={`@${profile.username}`} />
-      {accentClass && <div className="px-4 sm:px-5 -mt-2 mb-2"><span className={`text-xs font-medium ${accentClass}`}>✦ Prime accent</span></div>}
       <div className="relative">
         {profile.banner_url ? (
         <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-32 w-full object-cover sm:h-48" />
@@ -245,8 +239,8 @@ export default function ProfileClient() {
       <div className="px-4 pb-5 pt-14 sm:px-5 sm:pt-16">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="break-words text-xl font-semibold tracking-tight text-af-text">{profile.display_name || profile.username}</h1>
-            <p className="text-sm text-af-muted">@{profile.username}</p>
+            <h1 className="break-words text-xl font-semibold tracking-tight text-af-text" style={nameStyle(parseProfileCustomisation(profile.profile_customisation).displayNameColor, parseProfileCustomisation(profile.profile_customisation).effect)}>{profile.display_name || profile.username}</h1>
+            <p className="text-sm text-af-muted" style={nameStyle(parseProfileCustomisation(profile.profile_customisation).usernameColor, parseProfileCustomisation(profile.profile_customisation).effect)}>@{profile.username}</p>
             <BadgeList userId={profile.id} className="mt-2" />
           </div>
           {isOwn ? (
@@ -263,6 +257,9 @@ export default function ProfileClient() {
             >
               {followBusy ? "..." : isFollowing ? "Following" : "Follow"}
             </button>
+          )}
+          {user && !isOwn && (
+            <button type="button" onClick={() => setReportUserOpen(true)} className="min-h-10 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">Report user</button>
           )}
         </div>
         {followError && <p role="alert" className="mt-3 text-sm text-af-danger">Follow update failed: {followError}</p>}
@@ -353,14 +350,15 @@ export default function ProfileClient() {
             <h2 id="edit-post-title" className="text-lg font-semibold">Edit post</h2>
             {editError && <p role="alert" className="mt-3 rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">{editError}</p>}
             <label htmlFor="edit-post-content" className="sr-only">Post content</label>
-            <textarea id="edit-post-content" value={editDraft} onChange={(e) => setEditDraft(e.target.value)} maxLength={300} rows={6} className="af-field mt-4 min-h-36 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
-            <div className="mt-2 flex items-center justify-between"><span className="text-xs text-af-muted">{editDraft.length}/300</span><div className="flex gap-2">
+            <textarea id="edit-post-content" value={editDraft} onChange={(e) => setEditDraft(e.target.value)} maxLength={600} rows={6} className="af-field mt-4 min-h-36 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
+            <div className="mt-2 flex items-center justify-between"><span className="text-xs text-af-muted">{editDraft.length}/600</span><div className="flex gap-2">
               <button type="button" onClick={() => { setEditingPost(null); setEditDraft(""); }} disabled={editSubmitting} className="af-action-secondary">Cancel</button>
-              <button type="submit" disabled={editSubmitting || !editDraft.trim() || editDraft.length > 300} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{editSubmitting ? "Saving…" : "Save changes"}</button>
+              <button type="submit" disabled={editSubmitting || !editDraft.trim() || editDraft.length > 600} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{editSubmitting ? "Saving…" : "Save changes"}</button>
             </div></div>
           </form>
         </div>
       )}
+      <ReportDialog open={reportUserOpen} onClose={() => setReportUserOpen(false)} targetType="user" targetId={profile.id} targetLabel="this account" onSuccess={() => setReportUserOpen(false)} />
     </Shell>
   );
 }

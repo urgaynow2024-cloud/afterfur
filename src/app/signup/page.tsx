@@ -88,7 +88,7 @@ export default function SignUp() {
           email: emailClean,
           password,
           options: {
-            data: { username: usernameClean },
+            data: { username: usernameClean, terms_accepted_version: "0.4", terms_accepted_at: new Date().toISOString() },
             emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
           },
         })) as PromiseLike<SignUpResponse>,
@@ -118,7 +118,7 @@ export default function SignUp() {
         // Create profile if it doesn't exist
         try {
             const { error: profileError } = await withTimeout(
-              Promise.resolve(supabase.from("profiles").insert({ id: userId, username: usernameClean, display_name: displayName.trim() })) as PromiseLike<ProfileInsertResponse>,
+              Promise.resolve(supabase.from("profiles").insert({ id: userId, username: usernameClean, display_name: displayName.trim(), terms_accepted_version: "0.4", terms_accepted_at: new Date().toISOString() })) as PromiseLike<ProfileInsertResponse>,
               SIGNUP_TIMEOUT_MS,
               "Profile creation timed out."
             );

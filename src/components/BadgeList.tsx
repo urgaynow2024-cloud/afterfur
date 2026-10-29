@@ -8,6 +8,9 @@ const categoryClass = {
   membership: "border-amber-300/40 bg-amber-300/10 text-amber-200",
   milestone: "border-af-border-strong bg-af-surface-2 text-af-text-2",
   trust: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300",
+  creator: "border-purple-400/40 bg-purple-400/10 text-purple-300",
+  achievement: "border-sky-400/40 bg-sky-400/10 text-sky-300",
+  community: "border-rose-400/40 bg-rose-400/10 text-rose-300",
 } as const;
 
 export function BadgeList({ userId, className = "" }: { userId: string | null | undefined; className?: string }) {

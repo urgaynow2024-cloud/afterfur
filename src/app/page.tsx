@@ -32,7 +32,7 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [feedError, setFeedError] = useState("");
-  const max = 300;
+  const max = 600;
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [followingError, setFollowingError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -151,7 +151,7 @@ export default function Home() {
         return;
       }
       setSpotlightError("");
-      const eligible = (profs ?? []).filter((p: { id: string }) => p.id !== user?.id && !followingIds.has(p.id));
+      const eligible = (profs ?? []).filter((p: { id: string }) => p.id !== user?.id);
       const previous = JSON.parse(localStorage.getItem('af_spotlight_prev') || '[]');
       const pool = eligible.filter((p: { id: string }) => !previous.includes(p.id));
       const source = pool.length >= 5 ? pool : eligible;

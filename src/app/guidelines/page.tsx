@@ -1,5 +1,11 @@
-import PolicyPlaceholder from "@/components/PolicyPlaceholder";
+﻿import { Shell, PageHeader } from "@/components/Shell";
+import PolicySection from "@/components/PolicySection";
 
-export default function Guidelines() {
-  return <PolicyPlaceholder title="Community Guidelines" />;
+export default function Page() {
+  return (
+    <Shell>
+      <PageHeader title="Community Guidelines" />
+      <PolicySection part="B" title="Community Guidelines" />
+    </Shell>
+  );
 }

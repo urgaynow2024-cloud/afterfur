@@ -5,8 +5,10 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { usePostInteractions } from "@/components/PostInteractionProvider";
+import ReportDialog from "@/components/ReportDialog";
 import { optimisticLikeCount, reconcileLikeCount } from "@/lib/likes";
 import { BadgeList } from "@/components/BadgeList";
+import { parseProfileCustomisation, nameStyle } from "@/lib/profileCustomisation";
 
 export type PostData = {
   id: string;
@@ -14,7 +16,7 @@ export type PostData = {
   created_at: string;
   author_id: string;
   media_urls?: string[] | null;
-  profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null;
+  profiles?: { username: string; display_name: string | null; avatar_url: string | null; profile_customisation?: Record<string, unknown> | null } | null;
 };
 
 function timeAgo(dateStr: string) {
@@ -47,6 +49,7 @@ export default function PostCard({
 }) {
   const interactions = usePostInteractions();
   const [activating, setActivating] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [countOptimism, setCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
   const [repostCountOptimism, setRepostCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
   const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared" | "cancelled" | "error">("idle");
@@ -56,6 +59,9 @@ export default function PostCard({
   useEffect(() => () => { if (activationTimer.current !== null) window.clearTimeout(activationTimer.current); }, []);
   const username = post.profiles?.username || "unknown";
   const displayName = post.profiles?.display_name || username;
+  const custom = parseProfileCustomisation(post.profiles?.profile_customisation);
+  const displayNameStyle = nameStyle(custom.displayNameColor, custom.effect);
+  const usernameStyle = nameStyle(custom.usernameColor, custom.effect);
   const authorHref = post.profiles?.username ? `/${encodeURIComponent(post.profiles.username)}` : null;
   const postHref = post.profiles?.username
     ? `/${encodeURIComponent(post.profiles.username)}/status/${encodeURIComponent(post.id)}`
@@ -144,6 +150,7 @@ export default function PostCard({
   }
 
   return (
+    <>
     <article className="border-b border-af-border px-4 py-4 transition-colors hover:bg-af-surface/40 sm:px-5">
       {repostedBy && (
         <div className="mb-1 ml-12 text-xs text-af-muted">{repostedBy} reposted</div>
@@ -152,8 +159,8 @@ export default function PostCard({
           {authorHref ? <Link href={authorHref} aria-label={`View ${displayName}'s profile`} className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">{avatar}</Link> : <div aria-hidden="true" className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">{avatar}</div>}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-            {authorHref ? <Link href={authorHref} className="max-w-full truncate font-semibold text-af-text hover:underline">{displayName}</Link> : <span className="max-w-full truncate font-semibold text-af-text">{displayName}</span>}
-            <span className="truncate text-af-muted">@{username}</span>
+            {authorHref ? <Link href={authorHref} className="max-w-full truncate font-semibold text-af-text hover:underline" style={displayNameStyle}>{displayName}</Link> : <span className="max-w-full truncate font-semibold text-af-text" style={displayNameStyle}>{displayName}</span>}
+            <span className="truncate text-af-muted" style={usernameStyle}>@{username}</span>
             <BadgeList userId={post.author_id} />
             <span className="text-af-muted">Â·</span>
             <time dateTime={post.created_at} className="shrink-0 text-xs text-af-muted">{timeAgo(post.created_at)}</time>
@@ -191,10 +198,13 @@ export default function PostCard({
             </button>
             {onEdit && <button type="button" onClick={() => onEdit(post.id)} className="inline-flex min-h-9 items-center rounded-md px-2 transition-colors hover:bg-af-surface-2 hover:text-af-text">Edit</button>}
             {onDelete && <button type="button" onClick={() => onDelete(post.id)} className="inline-flex min-h-9 items-center rounded-md px-2 text-af-danger/80 transition-colors hover:bg-af-danger/10 hover:text-af-danger">Delete</button>}
+            <button type="button" onClick={() => setReportOpen(true)} aria-label={`Report ${displayName}'s post`} className="inline-flex min-h-9 items-center rounded-md px-2 transition-colors hover:bg-af-surface-2 hover:text-af-text">Report</button>
           </div>
         </div>
       </div>
     </article>
+    <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} targetType="post" targetId={post.id} targetLabel="this post" />
+    </>
   );
 }
 

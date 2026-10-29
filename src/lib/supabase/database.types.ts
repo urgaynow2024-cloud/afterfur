@@ -65,6 +65,7 @@ export type Database = {
       conversations: Table<{ id: string; created_at: string | null }, { id?: string; created_at?: string | null }, { id?: string; created_at?: string | null }>;
       conversation_participants: Table<{ conversation_id: string; user_id: string }, { conversation_id: string; user_id: string }, { conversation_id?: string; user_id?: string }>;
       messages: Table<MessageRow, Pick<MessageRow, "content"> & Partial<Omit<MessageRow, "id" | "content">>, Partial<Omit<MessageRow, "id">>>;
+      reports: Table<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; description: string | null; status: string; reviewed_by: string | null; reviewed_at: string | null; created_at: string | null }, { reporter_id: string; target_type: string; target_id: string; reason: string; description?: string | null }, { id?: string; status?: string; reviewed_by?: string | null; reviewed_at?: string | null }>;
       badge_registry: Table<{ id: string; category: string; display_name: string; display_order: number; is_public: boolean }, { id: string; category: string; display_name: string; display_order: number; is_public?: boolean }, Partial<{ category: string; display_name: string; display_order: number; is_public: boolean }>>;
       staff_badge_assignments: Table<{ user_id: string; badge_id: string; assigned_by: string; assigned_at: string }, { user_id: string; badge_id: string; assigned_by: string; assigned_at?: string }, never>;
       staff_badge_audit: Table<{ id: number; actor_id: string; target_id: string; badge_id: string; action: string; occurred_at: string }, never, never>;
@@ -84,6 +85,7 @@ export type Database = {
       mark_notification_read: { Args: { p_notification_id: string }; Returns: undefined };
       mark_all_notifications_read: { Args: Record<PropertyKey, never>; Returns: undefined };
       get_latest_conversation_messages: { Args: { p_conversation_ids: string[] }; Returns: MessageRow[] };
+      submit_report: { Args: { p_target_type: string; p_target_id: string; p_reason: string; p_description: string | null }; Returns: string };
       get_public_badges: { Args: { p_user_ids: string[] }; Returns: { user_id: string; badge_id: string }[] };
       search_staff_badge_targets: { Args: { p_query: string }; Returns: { user_id: string; username: string; display_name: string | null }[] };
       get_staff_badges_for_admin: { Args: { p_target_id: string }; Returns: { badge_id: string }[] };
@@ -92,6 +94,16 @@ export type Database = {
       get_my_pawpass_entitlement: { Args: Record<PropertyKey, never>; Returns: { is_active: boolean; status: string; current_period_end: string | null }[] };
       get_my_profile_accent: { Args: Record<PropertyKey, never>; Returns: string | null };
       update_profile_accent: { Args: { p_accent: string | null }; Returns: boolean };
+      is_prime_member: { Args: { p_user_id: string }; Returns: boolean };
+      get_my_membership_status: { Args: Record<PropertyKey, never>; Returns: { source: string; plan_interval: string | null; status: string; eligible_since: string; current_period_end: string | null; is_test: boolean; grant_reason: string | null }[] };
+      get_membership_for_admin: { Args: { p_target_id: string }; Returns: { user_id: string; source: string; plan_interval: string | null; status: string; eligible_since: string; current_period_end: string | null; is_test: boolean; granted_by: string | null; grant_reason: string | null }[] };
+      set_owner_test_prime: { Args: { p_target_id: string; p_active: boolean; p_days?: number; p_reason?: string | null }; Returns: boolean };
+      grant_free_prime_membership: { Args: { p_target_id: string; p_months: number; p_reason?: string | null }; Returns: boolean };
+      revoke_free_prime_membership: { Args: { p_target_id: string; p_reason?: string | null }; Returns: boolean };
+      claim_founding_prime: { Args: Record<PropertyKey, never>; Returns: boolean };
+      get_my_founding_status: { Args: Record<PropertyKey, never>; Returns: { claimed: boolean; claimed_at: string | null; expires_at: string | null }[] };
+      get_founding_rewards_remaining: { Args: Record<PropertyKey, never>; Returns: number };
+      get_membership_audit: { Args: { p_target_id?: string | null; p_limit?: number }; Returns: { id: number; actor_id: string | null; target_id: string; action: string; source: string | null; details: Json | null; occurred_at: string }[] };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

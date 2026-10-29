@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 import { useAuth } from "@/components/AuthProvider";
 import GlobalComposer from "@/components/GlobalComposer";
+import MoreMenu from "@/components/MoreMenu";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
@@ -26,6 +27,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
   const pathname = usePathname();
   const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(() => (user && profileCache.has(user.id)) ? profileCache.get(user.id) ?? null : null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   useEffect(() => {
     const run = async () => {
       const supabase = createClient();
@@ -76,6 +78,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
                 );
               })}
             </nav>
+            <MoreMenu />
             <button
               onClick={() => setComposerOpen(true)}
               className="mx-2 mt-4 min-h-11 rounded-lg bg-af-brand px-4 text-center text-[15px] font-semibold text-white transition-colors hover:bg-af-brand-hover"
@@ -84,7 +87,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
             </button>
             <div className="mt-auto mb-3 px-3">
               {loading ? (
-                <div className="text-sm text-af-muted">Checking session…</div>
+                <div className="text-sm text-af-muted">Checking sessionâ€¦</div>
               ) : user ? (
                 <div className="flex items-center gap-2 rounded-lg border border-af-border bg-af-surface/70 p-2">
                 <Link href={profile?.username ? `/${profile.username}` : "/profile"} className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 transition-colors hover:bg-af-surface-2">
@@ -99,19 +102,18 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
                     <div className="truncate text-sm font-bold">{profile?.display_name || profile?.username || user.email?.split("@")[0]}</div>
                     <div className="truncate text-sm text-af-muted">@{profile?.username || user.email?.split("@")[0]}</div>
                   </div>
-                  </Link>
-                  <button
-                    onClick={async () => {
-                      const r = await signOut();
-                      if (r.error) alert(r.error);
-                    }}
-                    aria-label="Sign out"
-                    title="Sign out"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-af-muted transition-colors hover:bg-af-surface-2 hover:text-af-text"
-                  >
-                    …
-                  </button>
-                </div>
+                  </Link>                  <div className="relative">
+                    <button type="button" onClick={() => setAccountMenuOpen((v) => !v)} aria-label="Account menu" aria-expanded={accountMenuOpen} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-af-muted transition-colors hover:bg-af-surface-2 hover:text-af-text">
+                      …
+                    </button>
+                    {accountMenuOpen && (
+                      <div className="absolute bottom-full right-0 mb-2 w-52 rounded-lg border border-af-border bg-af-surface p-2 shadow-lg">
+                        <Link href={profile?.username ? `/${profile.username}` : "/profile"} onClick={() => setAccountMenuOpen(false)} className="block rounded-md px-3 py-2 text-sm text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">View profile</Link>
+                        <Link href="/settings" onClick={() => setAccountMenuOpen(false)} className="block rounded-md px-3 py-2 text-sm text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">Settings and privacy</Link>
+                        <button type="button" onClick={async () => { setAccountMenuOpen(false); const r = await signOut(); if (r.error) alert(r.error); }} className="block w-full rounded-md px-3 py-2 text-left text-sm text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">Log out</button>
+                      </div>
+                    )}
+                  </div></div>
               ) : (
                 <div className="space-y-2">
                   <Link href="/signin" className="block rounded-full bg-af-accent py-2 text-center text-[15px] font-bold text-white hover:bg-af-accent-hover">

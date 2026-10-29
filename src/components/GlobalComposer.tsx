@@ -158,7 +158,7 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
           <h2 id="composer-title" className="text-sm font-semibold text-af-text">Create a post</h2>
           <div className="flex items-center gap-1">
             <button type="button" onClick={saveDraft} className="min-h-10 rounded-md px-3 text-sm font-medium text-af-brand-soft hover:bg-af-surface-2">Save draft</button>
-            <button type="button" onClick={requestClose} className="flex h-10 w-10 items-center justify-center rounded-md text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Close composer">×</button>
+            <button type="button" onClick={requestClose} className="flex h-10 w-10 items-center justify-center rounded-md text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Close composer">�</button>
           </div>
         </div>
         <div className="mt-4 flex gap-3">

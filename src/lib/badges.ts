@@ -1,4 +1,4 @@
-export type BadgeCategory = "staff" | "membership" | "milestone" | "trust";
+export type BadgeCategory = "staff" | "membership" | "milestone" | "trust" | "creator" | "achievement" | "community";
 export type BadgeDefinition = { id: string; label: string; category: BadgeCategory; order: number; mark: string };
 
 export const STAFF_BADGE_IDS = ["staff_founder", "staff_moderator", "staff_developer", "staff_tester"] as const;
@@ -22,6 +22,13 @@ export const PAWPASS_MEMBER_BADGE: BadgeDefinition = {
   category: "membership",
   order: 100,
   mark: "🐾",
+};
+export const PAWPASS_PRIME_BADGE: BadgeDefinition = {
+  id: "pawpass_prime",
+  label: "PawPass Prime",
+  category: "membership",
+  order: 105,
+  mark: "Prime",
 };
 export const PAWPASS_YEAR_BADGES: BadgeDefinition[] = Array.from({ length: 50 }, (_, index) => ({
   id: `pawpass_year_${index + 1}`,
@@ -49,7 +56,30 @@ export const TRUST_BADGES: BadgeDefinition[] = [
   { id: "access_age_verified", label: "Age Verified", category: "trust", order: 610, mark: "🔞" },
   { id: "access_approved", label: "Approved", category: "trust", order: 620, mark: "✅" },
 ];
-export const BADGE_REGISTRY: BadgeDefinition[] = [...STAFF_BADGES, PAWPASS_MEMBER_BADGE, ...PAWPASS_BADGES, ...PAWPASS_YEAR_BADGES, ...MILESTONE_BADGES, ...TRUST_BADGES];
+export const CREATOR_BADGES: BadgeDefinition[] = [
+  { id: "ad_creator", label: "AD Creator", category: "creator", order: 655, mark: "🌙" },
+  { id: "creator_featured", label: "Featured Creator", category: "creator", order: 660, mark: "⭐" },
+];
+export const COMMUNITY_BADGES: BadgeDefinition[] = [
+  { id: "community_helper", label: "Community Helper", category: "community", order: 700, mark: "🤝" },
+];
+export const ACHIEVEMENT_BADGES: BadgeDefinition[] = [
+  { id: "achievement_event_winner", label: "Event Winner", category: "achievement", order: 750, mark: "🏆" },
+];
+export const MEMBERSHIP_EXTRA_BADGES: BadgeDefinition[] = [
+  { id: "early_supporter", label: "Early Supporter", category: "membership", order: 108, mark: "🌱" },
+  { id: "founding_50", label: "Founding 50", category: "membership", order: 109, mark: "50" },
+];
+export const WEB_DESIGNER_BADGE: BadgeDefinition = {
+  id: "web_designer",
+  label: "Web Designer",
+  category: "staff",
+  order: 45,
+  mark: "🎨",
+};
+export const MANUAL_BADGE_IDS = ["staff_founder", "staff_moderator", "staff_developer", "staff_tester", "access_age_verified", "access_approved", "creator_featured", "achievement_event_winner", "community_helper", "web_designer", "ad_creator"] as const;
+export const BADGE_REGISTRY: BadgeDefinition[] = [...STAFF_BADGES, WEB_DESIGNER_BADGE, PAWPASS_MEMBER_BADGE, PAWPASS_PRIME_BADGE, ...PAWPASS_BADGES, ...PAWPASS_YEAR_BADGES, ...MILESTONE_BADGES, ...TRUST_BADGES, ...CREATOR_BADGES, ...COMMUNITY_BADGES, ...ACHIEVEMENT_BADGES, ...MEMBERSHIP_EXTRA_BADGES];
+export const MANAGEABLE_BADGES: BadgeDefinition[] = BADGE_REGISTRY.filter((badge) => (MANUAL_BADGE_IDS as readonly string[]).includes(badge.id));
 const badgeById = new Map(BADGE_REGISTRY.map((badge) => [badge.id, badge]));
 
 function utcAnniversary(start: Date, months: number): Date {

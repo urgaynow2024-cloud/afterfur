@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { parseProfileCustomisation, nameStyle } from "@/lib/profileCustomisation";
 import { Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
@@ -10,6 +11,7 @@ import EmojiPicker from "@/components/EmojiPicker";
 import PostCard from "@/components/PostCard";
 import { BadgeList } from "@/components/BadgeList";
 import { usePostInteractions } from "@/components/PostInteractionProvider";
+import ReportDialog from "@/components/ReportDialog";
 
 type Post = {
   id: string;
@@ -17,7 +19,7 @@ type Post = {
   created_at: string;
   author_id: string;
   media_urls?: string[] | null;
-  profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null;
+  profiles?: { username: string; display_name: string | null; avatar_url: string | null; profile_customisation?: Record<string, unknown> | null } | null;
 };
 type Reply = {
   id: string;
@@ -26,12 +28,15 @@ type Reply = {
   author_id: string;
   post_id: string;
   parent_reply_id?: string | null;
-  profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null;
+  edited_at?: string | null;
+  profiles?: { username: string; display_name: string | null; avatar_url: string | null; profile_customisation?: Record<string, unknown> | null } | null;
 };
 
-function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, setDraft, submitting, onSubmit, insertReplyEmoji, replyTextareaRef, currentUserProfile, currentUser }: { reply: Reply; replies: Reply[]; depth: number; replyingTo: string | null; setReplyingTo: (id: string | null) => void; draft: string; setDraft: (v: string) => void; submitting: boolean; onSubmit: () => void; insertReplyEmoji: (emoji: string) => void; replyTextareaRef: React.RefObject<HTMLTextAreaElement | null>; currentUserProfile?: { avatar_url?: string | null; display_name?: string | null } | null; currentUser?: { email?: string } | null }) {
+function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, setDraft, submitting, onSubmit, insertReplyEmoji, replyTextareaRef, currentUserProfile, currentUser, currentUserId, editingReplyId, editReplyDraft, setEditReplyDraft, editReplySubmitting, onStartEdit, onSaveEdit, onCancelEdit, onDelete, confirmDeleteId, setConfirmDeleteId }: { reply: Reply; replies: Reply[]; depth: number; replyingTo: string | null; setReplyingTo: (id: string | null) => void; draft: string; setDraft: (v: string) => void; submitting: boolean; onSubmit: () => void; insertReplyEmoji: (emoji: string) => void; replyTextareaRef: React.RefObject<HTMLTextAreaElement | null>; currentUserProfile?: { avatar_url?: string | null; display_name?: string | null } | null; currentUser?: { email?: string } | null; currentUserId: string | null; editingReplyId: string | null; editReplyDraft: string; setEditReplyDraft: (v: string) => void; editReplySubmitting: boolean; onStartEdit: (reply: Reply) => void; onSaveEdit: (replyId: string) => void; onCancelEdit: () => void; onDelete: (replyId: string) => void; confirmDeleteId: string | null; setConfirmDeleteId: (id: string | null) => void }) {
   const children = replies.filter((r) => r.parent_reply_id === reply.id);
+  const [reportingReply, setReportingReply] = useState<string | null>(null);
   return (
+    <>
     <article className={`border-b border-af-border px-4 py-4 transition-colors hover:bg-af-surface/40 sm:px-5 ${depth > 0 ? "ml-4 border-l border-af-border pl-4 sm:ml-8" : ""}`}>
       <div className="flex gap-3">
         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
@@ -39,20 +44,51 @@ function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, 
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-[15px]">
-            <span className="truncate font-bold text-af-text">{reply.profiles?.display_name || reply.profiles?.username || "Unknown"}</span>
-            <span className="truncate text-af-muted">@{reply.profiles?.username || "unknown"}</span>
+            <span className="truncate font-bold text-af-text" style={nameStyle(parseProfileCustomisation(reply.profiles?.profile_customisation).displayNameColor, parseProfileCustomisation(reply.profiles?.profile_customisation).effect)}>{reply.profiles?.display_name || reply.profiles?.username || "Unknown"}</span>
+            <span className="truncate text-af-muted" style={nameStyle(parseProfileCustomisation(reply.profiles?.profile_customisation).usernameColor, parseProfileCustomisation(reply.profiles?.profile_customisation).effect)}>@{reply.profiles?.username || "unknown"}</span>
             <BadgeList userId={reply.author_id} />
-            <span className="text-af-muted">·</span>
+            <span className="text-af-muted">Â·</span>
             <span className="text-af-muted">{new Date(reply.created_at).toLocaleString()}</span>
           </div>
-          <p className="mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal text-af-text">{reply.content}</p>
-          <button onClick={() => setReplyingTo(reply.id)} className="mt-2 text-xs font-medium text-af-accent hover:underline">Reply</button>
+          {editingReplyId === reply.id ? (
+            <div className="mt-2 space-y-2">
+              <textarea value={editReplyDraft} onChange={(e) => setEditReplyDraft(e.target.value)} maxLength={300} rows={3} className="af-field min-h-20 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-af-muted">{editReplyDraft.length}/300</span>
+                <div className="flex gap-2">
+                  <button type="button" onClick={onCancelEdit} disabled={editReplySubmitting} className="af-action-secondary">Cancel</button>
+                  <button type="button" onClick={() => onSaveEdit(reply.id)} disabled={editReplySubmitting || !editReplyDraft.trim() || editReplyDraft.length > 300} className="min-h-9 rounded-md bg-af-brand px-4 text-xs font-semibold text-white disabled:opacity-50">{editReplySubmitting ? "Savingâ€¦" : "Save"}</button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal text-af-text">{reply.content}</p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <button onClick={() => setReplyingTo(reply.id)} className="text-xs font-medium text-af-accent hover:underline">Reply</button>
+            <button onClick={() => setReportingReply(reply.id)} className="text-xs font-medium text-af-accent hover:underline">Report</button>
+            {currentUserId && currentUserId === reply.author_id && editingReplyId !== reply.id && (
+              <>
+                <button onClick={() => onStartEdit(reply)} className="text-xs font-medium text-af-accent hover:underline">Edit</button>
+                {confirmDeleteId === reply.id ? (
+                  <>
+                    <span className="text-xs text-af-muted">Delete reply?</span>
+                    <button onClick={() => onDelete(reply.id)} className="text-xs font-medium text-af-danger hover:underline">Confirm</button>
+                    <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-medium text-af-muted hover:underline">Cancel</button>
+                  </>
+                ) : (
+                  <button onClick={() => setConfirmDeleteId(reply.id)} className="text-xs font-medium text-af-danger hover:underline">Delete</button>
+                )}
+              </>
+            )}
+          </div>
               {replyingTo === reply.id && (
                 <div className="mt-3 flex gap-3">
                   <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
                     {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-xs font-bold text-white">{(currentUserProfile?.display_name || currentUser?.email || "?").slice(0, 1).toUpperCase()}</div>}
                   </div>
                   <div className="flex-1">
+                    <p className="mb-1 text-xs text-af-muted">Replying to @{reply.profiles?.username || "unknown"} <button type="button" onClick={() => { setReplyingTo(null); setDraft(""); }} className="ml-2 text-af-accent hover:underline">Cancel</button></p>
                 <textarea ref={replyTextareaRef} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Post your reply" className="w-full resize-none bg-transparent text-[15px] outline-none placeholder:text-af-muted" rows={2} />
                 <div className="mt-2 flex items-center justify-between border-t border-af-border pt-2">
                   <EmojiPicker onPick={insertReplyEmoji} />
@@ -64,11 +100,13 @@ function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, 
             </div>
           )}
           {depth < 4 && children.map((child) => (
-            <ReplyThread key={child.id} reply={child} replies={replies} depth={depth + 1} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={onSubmit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={currentUser} />
+            <ReplyThread key={child.id} reply={child} replies={replies} depth={depth + 1} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={onSubmit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={currentUser} currentUserId={currentUserId} editingReplyId={editingReplyId} editReplyDraft={editReplyDraft} setEditReplyDraft={setEditReplyDraft} editReplySubmitting={editReplySubmitting} onStartEdit={onStartEdit} onSaveEdit={onSaveEdit} onCancelEdit={onCancelEdit} onDelete={onDelete} confirmDeleteId={confirmDeleteId} setConfirmDeleteId={setConfirmDeleteId} />
           ))}
         </div>
       </div>
     </article>
+    <ReportDialog open={reportingReply === reply.id} onClose={() => setReportingReply(null)} targetType="reply" targetId={reply.id} targetLabel="this reply" onSuccess={() => setReportingReply(null)} />
+    </>
   );
 }
 
@@ -110,6 +148,10 @@ function PostPageInner() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState("");
   const editSubmittingRef = useRef(false);
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+  const [editReplyDraft, setEditReplyDraft] = useState("");
+  const [editReplySubmitting, setEditReplySubmitting] = useState(false);
+  const [deleteReplyId, setDeleteReplyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -167,7 +209,7 @@ function PostPageInner() {
     event.preventDefault();
     const content = editDraft.trim();
     const supabase = createClient();
-    if (!editingPost || !user || !supabase || !content || content.length > 300 || editSubmittingRef.current) return;
+    if (!editingPost || !user || !supabase || !content || content.length > 600 || editSubmittingRef.current) return;
     editSubmittingRef.current = true;
     setEditSubmitting(true); setEditError("");
     const { data, error: updateError } = await supabase.from("posts").update({ content, edited_at: new Date().toISOString() }).eq("id", editingPost.id).eq("author_id", user.id).select("*").single();
@@ -182,6 +224,49 @@ function PostPageInner() {
     setEditDraft("");
     editSubmittingRef.current = false;
     setEditSubmitting(false);
+  }
+
+  function startEditReply(reply: Reply) {
+    if (reply.author_id !== user?.id) return;
+    setEditingReplyId(reply.id);
+    setEditReplyDraft(reply.content);
+    setError("");
+  }
+
+  function cancelEditReply() {
+    setEditingReplyId(null);
+    setEditReplyDraft("");
+  }
+
+  async function saveEditReply(replyId: string) {
+    const content = editReplyDraft.trim();
+    const supabase = createClient();
+    if (!user || !supabase || !content || content.length > 300 || editReplySubmitting) return;
+    setEditReplySubmitting(true);
+    const { data, error: updateError } = await supabase.from("replies").update({ content, edited_at: new Date().toISOString() }).eq("id", replyId).eq("author_id", user.id).select("*").single();
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Reply not updated. Your changes are still here.");
+      setEditReplySubmitting(false);
+      return;
+    }
+    setReplies((current) => current.map((r) => r.id === replyId ? { ...r, content: (data as Reply).content, edited_at: (data as { edited_at?: string | null }).edited_at ?? r.edited_at } : r));
+    setEditingReplyId(null);
+    setEditReplyDraft("");
+    setEditReplySubmitting(false);
+  }
+
+  async function deleteReply(replyId: string) {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    const { error: deleteError } = await supabase.from("replies").delete().eq("id", replyId).eq("author_id", user.id);
+    if (deleteError) {
+      setError(deleteError.message);
+      setDeleteReplyId(null);
+      return;
+    }
+    setReplies((current) => current.filter((r) => r.id !== replyId));
+    setDeleteReplyId(null);
+    interactions?.requestReplyCount(id, true);
   }
 
   useEffect(() => {
@@ -234,7 +319,7 @@ function PostPageInner() {
     <Shell>
       <PageHeader title="Post" subtitle="Conversation" />
       {loading ? (
-        <div className="p-8 text-center text-sm text-af-muted">Loading…</div>
+        <div className="p-8 text-center text-sm text-af-muted">Loadingâ€¦</div>
       ) : error && !post ? (
         <div role="alert" className="m-4 rounded-lg border border-af-danger/40 bg-af-danger/10 p-4 text-sm text-af-danger">{error}<button type="button" onClick={() => { void load(); }} className="ml-3 underline">Retry</button></div>
       ) : !post ? (
@@ -247,10 +332,10 @@ function PostPageInner() {
               <form onSubmit={saveEdit} className="space-y-3">
                 <h3 className="text-sm font-semibold text-af-text">Edit post</h3>
                 {editError && <p role="alert" className="rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">{editError}</p>}
-                <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} maxLength={300} rows={4} className="af-field min-h-24 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
-                <div className="flex items-center justify-between"><span className="text-xs text-af-muted">{editDraft.length}/300</span><div className="flex gap-2">
+                <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} maxLength={600} rows={4} className="af-field min-h-24 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
+                <div className="flex items-center justify-between"><span className="text-xs text-af-muted">{editDraft.length}/600</span><div className="flex gap-2">
                   <button type="button" onClick={() => { setEditingPost(null); setEditDraft(""); }} disabled={editSubmitting} className="af-action-secondary">Cancel</button>
-                  <button type="submit" disabled={editSubmitting || !editDraft.trim() || editDraft.length > 300} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{editSubmitting ? "Saving…" : "Save changes"}</button>
+                  <button type="submit" disabled={editSubmitting || !editDraft.trim() || editDraft.length > 600} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{editSubmitting ? "Savingâ€¦" : "Save changes"}</button>
                 </div></div>
               </form>
             </div>
@@ -262,6 +347,12 @@ function PostPageInner() {
                   {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(currentUserProfile?.display_name || user.email || "?").slice(0, 1).toUpperCase()}</div>}
                 </div>
                 <div className="flex-1">
+                  {replyingTo && (
+                    <p className="mb-2 text-xs text-af-muted">
+                      Replying to @{replies.find((r) => r.id === replyingTo)?.profiles?.username || "comment"}
+                      <button type="button" onClick={() => { setReplyingTo(null); setDraft(""); }} className="ml-2 text-af-accent hover:underline">Cancel</button>
+                    </p>
+                  )}
                   <textarea
                     ref={replyTextareaRef}
                     value={draft}
@@ -299,7 +390,7 @@ function PostPageInner() {
           ) : (
             <div>
               {replies.filter((r) => !r.parent_reply_id).map((r) => (
-                <ReplyThread key={r.id} reply={r} replies={replies} depth={0} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={submit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={user} />
+                <ReplyThread key={r.id} reply={r} replies={replies} depth={0} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={submit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={user} currentUserId={user?.id ?? null} editingReplyId={editingReplyId} editReplyDraft={editReplyDraft} setEditReplyDraft={setEditReplyDraft} editReplySubmitting={editReplySubmitting} onStartEdit={startEditReply} onSaveEdit={saveEditReply} onCancelEdit={cancelEditReply} onDelete={deleteReply} confirmDeleteId={deleteReplyId} setConfirmDeleteId={setDeleteReplyId} />
               ))}
             </div>
           )}
@@ -311,7 +402,7 @@ function PostPageInner() {
 
 export default function PostPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-sm text-af-muted">Loading…</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-sm text-af-muted">Loadingâ€¦</div>}>
       <PostPageInner />
     </Suspense>
   );

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { publicPostUrl, publicProfileUrl } from "@/lib/follow";
 
-type NotificationRow = { id: string; user_id: string; type: string; payload: { actor_id?: string; post_id?: string } | null; read: boolean; created_at: string };
+type NotificationRow = { id: string; user_id: string; type: string; payload: { actor_id?: string; post_id?: string; message?: string; system?: boolean; badge_id?: string } | null; read: boolean; created_at: string };
 type ActorProfile = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 type NotificationPost = { id: string; content: string };
 
@@ -80,6 +80,11 @@ export default function Notifications() {
   const unreadCount = items.filter((n) => !n.read).length;
 
   function describe(n: NotificationRow) {
+    if (n.type === "badge") {
+      const msg = n.payload?.message;
+      if (typeof msg === "string") return msg;
+      return "You've earned a new badge!";
+    }
     const actorId = n.payload?.actor_id;
     const actor = actorId ? profiles[actorId] : undefined;
     const name = actor?.display_name || actor?.username || "Someone";
