@@ -1,5 +1,4 @@
 ﻿import type { Metadata } from "next";
-import { connection } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 
@@ -8,7 +7,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
   const { username } = await params;
-  await connection();
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const { data: profile } = await supabase.from("profiles").select("id,username,display_name,bio,avatar_url").eq("username", username).maybeSingle();
   if (!profile) {
