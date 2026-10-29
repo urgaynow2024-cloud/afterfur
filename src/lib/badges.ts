@@ -15,6 +15,14 @@ export const PAWPASS_BADGES: BadgeDefinition[] = Array.from({ length: 12 }, (_, 
   order: 110 + index * 10,
   mark: String(index + 1),
 }));
+// Active PawPass membership badge — shown only when a verified active entitlement exists.
+export const PAWPASS_MEMBER_BADGE: BadgeDefinition = {
+  id: "pawpass_member",
+  label: "PawPass",
+  category: "membership",
+  order: 100,
+  mark: "🐾",
+};
 export const PAWPASS_YEAR_BADGES: BadgeDefinition[] = Array.from({ length: 50 }, (_, index) => ({
   id: `pawpass_year_${index + 1}`,
   label: `PawPass Year ${index + 1}`,
@@ -41,7 +49,7 @@ export const TRUST_BADGES: BadgeDefinition[] = [
   { id: "access_age_verified", label: "Age Verified", category: "trust", order: 610, mark: "🔞" },
   { id: "access_approved", label: "Approved", category: "trust", order: 620, mark: "✅" },
 ];
-export const BADGE_REGISTRY: BadgeDefinition[] = [...STAFF_BADGES, ...PAWPASS_BADGES, ...PAWPASS_YEAR_BADGES, ...MILESTONE_BADGES, ...TRUST_BADGES];
+export const BADGE_REGISTRY: BadgeDefinition[] = [...STAFF_BADGES, PAWPASS_MEMBER_BADGE, ...PAWPASS_BADGES, ...PAWPASS_YEAR_BADGES, ...MILESTONE_BADGES, ...TRUST_BADGES];
 const badgeById = new Map(BADGE_REGISTRY.map((badge) => [badge.id, badge]));
 
 function utcAnniversary(start: Date, months: number): Date {

@@ -14,7 +14,7 @@ insert into public.badge_registry (id, category, display_name, display_order) va
   ('staff_moderator', 'staff', 'Moderator', 20),
   ('staff_developer', 'staff', 'Developer', 30),
   ('staff_tester', 'staff', 'Tester', 40),
-  ('pawpass_month_1', 'membership', 'PawPass Month 1', 110),
+  ('pawpass_member', 'membership', 'PawPass', 100),
   ('pawpass_month_2', 'membership', 'PawPass Month 2', 120),
   ('pawpass_month_3', 'membership', 'PawPass Month 3', 130),
   ('pawpass_month_4', 'membership', 'PawPass Month 4', 140),
@@ -274,14 +274,21 @@ begin
       perform public.award_pawpass_months(v_user_id, v_membership.eligible_since, v_cutoff);
     end if;
   end loop;
-  return query
-    select s.user_id, s.badge_id from public.staff_badge_assignments s
-    join public.badge_registry r on r.id = s.badge_id and r.is_public
-    where s.user_id = any(p_user_ids)
-    union
-    select a.user_id, a.badge_id from public.user_badge_awards a
-    join public.badge_registry r on r.id = a.badge_id and r.is_public
-    where a.user_id = any(p_user_ids);
+   return query
+     select s.user_id, s.badge_id from public.staff_badge_assignments s
+     join public.badge_registry r on r.id = s.badge_id and r.is_public
+     where s.user_id = any(p_user_ids)
+     union
+     select a.user_id, a.badge_id from public.user_badge_awards a
+     join public.badge_registry r on r.id = a.badge_id and r.is_public
+     where a.user_id = any(p_user_ids)
+     union
+     select e.user_id, 'pawpass_member'::text from public.pawpass_entitlements e
+     join public.badge_registry r on r.id = 'pawpass_member' and r.is_public
+     where e.user_id = any(p_user_ids)
+       and e.status in ('active', 'cancel_at_period_end')
+       and e.current_period_end is not null
+       and e.current_period_end > now();
 end;
 $function$;
 revoke all on function public.get_public_badges(uuid[]) from public;

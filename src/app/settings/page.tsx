@@ -19,6 +19,11 @@ export default function Settings() {
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [membershipState, setMembershipState] = useState<{ loading: boolean; error: string; entitlement: PawPassEntitlement | null }>({ loading: true, error: "", entitlement: null });
+  const dirty = JSON.stringify(form) !== JSON.stringify(saved);
+  const [accent, setAccent] = useState<string | null>(null);
+  const [accentSaving, setAccentSaving] = useState(false);
+  const [accentError, setAccentError] = useState("");
+  const [accentMsg, setAccentMsg] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +71,20 @@ export default function Settings() {
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [user]);
 
-  const dirty = JSON.stringify(form) !== JSON.stringify(saved);
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (!user) { setAccent(null); return; }
+      const supabase = createClient();
+      if (!supabase) return;
+      void supabase.rpc("get_my_profile_accent").then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { setAccentError(error.message); return; }
+        setAccent((data as string | null) ?? null);
+      });
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [user]);
 
   async function compressImage(file: File): Promise<File> {
     if (file.size < 5 * 1024 * 1024) return file;
@@ -232,6 +250,40 @@ export default function Settings() {
           <h2 id="pawpass-heading" className="text-base font-semibold">PawPass membership</h2>
           <p className="mt-1 text-sm leading-relaxed text-af-muted">Membership status is read from a verified provider entitlement. AfterFur Prime is not enabled unless billing configures an active entitlement.</p>
           {membershipState.loading ? <p role="status" className="mt-3 text-sm text-af-muted">Checking membership…</p> : membershipState.error ? <p role="status" className="mt-3 text-sm text-af-muted">Verified membership status is not available: {membershipState.error}</p> : !membershipState.entitlement ? <p role="status" className="mt-3 text-sm text-af-muted">No verified PawPass membership is connected to this account.</p> : membershipState.entitlement.active ? <p role="status" className="mt-3 text-sm text-af-text-2">PawPass entitlement active through {membershipState.entitlement.currentPeriodEnd ? new Date(membershipState.entitlement.currentPeriodEnd).toLocaleDateString() : "the current period"}.</p> : <p role="status" className="mt-3 text-sm text-af-muted">Membership is {membershipState.entitlement.status}. Earned anniversary badges remain on your profile.</p>}
+          <div className="mt-4 rounded-lg border border-af-border bg-af-surface-2 p-4">
+            <h3 className="text-sm font-semibold text-af-text">Profile accent colour (Prime benefit)</h3>
+            <p className="mt-1 text-xs text-af-muted">Choose an accent colour for your profile. Available to PawPass Prime members only.</p>
+            {accentError && <p role="alert" className="mt-2 text-xs text-af-danger">{accentError}</p>}
+            {accentMsg && <p role="status" className="mt-2 text-xs text-af-text-2">{accentMsg}</p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["default", "purple", "blue", "emerald", "amber", "rose"].map((colour) => {
+                const selected = (accent ?? "default") === colour;
+                const isPrime = membershipState.entitlement?.active === true;
+                const disabled = !isPrime && colour !== "default";
+                return (
+                  <button
+                    key={colour}
+                    type="button"
+                    disabled={disabled || accentSaving}
+                    onClick={async () => {
+                      const supabase = createClient();
+                      if (!supabase) return;
+                      setAccentSaving(true); setAccentError(""); setAccentMsg("");
+                      const { error } = await supabase.rpc("update_profile_accent", { p_accent: colour });
+                      if (error) { setAccentError(error.message); }
+                      else { setAccent(colour === "default" ? null : colour); setAccentMsg("Accent colour saved."); }
+                      setAccentSaving(false);
+                    }}
+                    className={`min-h-9 rounded-md border px-3 text-xs font-medium capitalize transition-colors ${selected ? "border-af-brand bg-af-brand/15 text-af-brand-soft" : "border-af-border-strong text-af-text-2 hover:bg-af-surface"} ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
+                    aria-pressed={selected}
+                  >
+                    {colour}
+                  </button>
+                );
+              })}
+            </div>
+            {!membershipState.entitlement?.active && <p className="mt-3 text-xs text-af-muted">Activate PawPass Prime to unlock custom accent colours.</p>}
+          </div>
           <div className="mt-4 rounded-lg border border-af-border bg-af-surface-2 p-4">
             <h3 className="text-sm font-semibold text-af-text">PawPass benefits (planned)</h3>
             <ul className="mt-2 space-y-1 text-xs text-af-muted">

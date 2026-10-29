@@ -10,7 +10,7 @@ import PostCard from "@/components/PostCard";
 import Link from "next/link";
 import { BadgeList } from "@/components/BadgeList";
 
-type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; created_at: string };
+type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; profile_accent: string | null; created_at: string };
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 type ProfileSummary = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
@@ -214,12 +214,20 @@ export default function ProfileClient() {
     editSubmittingRef.current = false;
     setEditSubmitting(false);
   }
-  const isOwn = user?.id === profile.id;
   const mediaItems = posts.flatMap((p) => (p.media_urls ?? []).map((u) => ({ url: u, post: p })));
+  const isOwn = user?.id === profile.id;
+  const accentClass = profile.profile_accent ? {
+    purple: "text-af-brand",
+    blue: "text-af-accent",
+    emerald: "text-emerald-400",
+    amber: "text-amber-400",
+    rose: "text-rose-400",
+  }[profile.profile_accent] || "" : "";
 
   return (
     <Shell>
       <PageHeader title={profile.display_name || profile.username} subtitle={`@${profile.username}`} />
+      {accentClass && <div className="px-4 sm:px-5 -mt-2 mb-2"><span className={`text-xs font-medium ${accentClass}`}>✦ Prime accent</span></div>}
       <div className="relative">
         {profile.banner_url ? (
         <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-32 w-full object-cover sm:h-48" />

@@ -13,6 +13,13 @@ export function parsePawPassEntitlement(value: unknown): PawPassEntitlement | nu
   return { active: row.is_active, status: row.status as PawPassStatus, currentPeriodEnd: row.current_period_end };
 }
 
+export function isPrimeEntitlement(entitlement: PawPassEntitlement | null): boolean {
+  if (!entitlement) return false;
+  if (!entitlement.active) return false;
+  if (entitlement.status !== "active" && entitlement.status !== "cancel_at_period_end") return false;
+  if (!entitlement.currentPeriodEnd) return false;
+  return new Date(entitlement.currentPeriodEnd).getTime() > Date.now();
+}
 export async function loadMyPawPassEntitlement(client: SupabaseClient<Database>): Promise<{ entitlement: PawPassEntitlement | null; error: string | null }> {
   try {
     const { data, error } = await client.rpc("get_my_pawpass_entitlement");

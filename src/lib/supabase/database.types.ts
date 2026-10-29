@@ -90,6 +90,8 @@ export type Database = {
       manage_staff_badge: { Args: { p_target_id: string; p_badge_id: string; p_action: string }; Returns: boolean };
       process_pawpass_entitlement_event: { Args: { p_user_id: string; p_provider: string; p_customer_id: string; p_subscription_id: string; p_event_id: string; p_event_type: string; p_status: string; p_eligible_since: string; p_current_period_end: string | null; p_occurred_at: string }; Returns: boolean };
       get_my_pawpass_entitlement: { Args: Record<PropertyKey, never>; Returns: { is_active: boolean; status: string; current_period_end: string | null }[] };
+      get_my_profile_accent: { Args: Record<PropertyKey, never>; Returns: string | null };
+      update_profile_accent: { Args: { p_accent: string | null }; Returns: boolean };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
