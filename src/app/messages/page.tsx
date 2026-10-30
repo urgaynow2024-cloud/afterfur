@@ -206,3 +206,6 @@ export default function Messages() {
     </Shell>
   );
 }
+
+export const dynamic = 'force-dynamic';
+

@@ -137,3 +137,6 @@ export default function Notifications() {
     </Shell>
   );
 }
+
+export const dynamic = 'force-dynamic';
+

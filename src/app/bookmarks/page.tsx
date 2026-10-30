@@ -63,3 +63,6 @@ export default function Bookmarks() {
     </Shell>
   );
 }
+
+export const dynamic = 'force-dynamic';
+

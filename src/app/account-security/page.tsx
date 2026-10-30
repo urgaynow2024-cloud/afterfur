@@ -9,3 +9,6 @@ export default function Page() {
     </Shell>
   );
 }
+
+export const dynamic = 'force-dynamic';
+
