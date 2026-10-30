@@ -1,10 +1,12 @@
 ﻿import type { Metadata } from "next";
-export const instant = false;
+import { cache } from "react";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-async function fetchProfile(username: string) {
+const fetchProfile = cache(async (username: string) => {
   const url = `${supabaseUrl}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id,username,display_name,bio,avatar_url`;
   const res = await fetch(url, {
     headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
@@ -13,9 +15,9 @@ async function fetchProfile(username: string) {
   if (!res.ok) return null;
   const data = await res.json();
   return Array.isArray(data) && data.length ? data[0] : null;
-}
+});
 
-async function fetchCount(table: string, column: string, value: string) {
+const fetchCount = cache(async (table: string, column: string, value: string) => {
   const url = `${supabaseUrl}/rest/v1/${table}?${column}=eq.${encodeURIComponent(value)}&select=*`;
   const res = await fetch(url, {
     headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}`, Prefer: "count=exact" },
@@ -27,7 +29,7 @@ async function fetchCount(table: string, column: string, value: string) {
     return total && total !== "*" ? Number(total) : 0;
   }
   return 0;
-}
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
   const { username } = await params;
