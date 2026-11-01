@@ -5,11 +5,13 @@ import { createClient } from "@/lib/supabase/client";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
+import { useAuth } from "@/components/AuthProvider";
 
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 
 export default function PostClient() {
   const { username, id } = useParams<{ username: string; id: string }>();
+  const { user } = useAuth();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -23,11 +25,33 @@ export default function PostClient() {
       if (typeof p.created_at !== "string") { setError("Post not found."); setLoading(false); return; }
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", p.author_id).maybeSingle();
       if (!prof || prof.username !== username) { setError("Post not found."); setLoading(false); return; }
+
+      const isPrivate = !!(prof as any).is_private;
+      const isOwner = user?.id === prof.id;
+      if (isPrivate && !isOwner) {
+        if (!user) {
+          setError("Post not found.");
+          setLoading(false);
+          return;
+        }
+        const { data: rel } = await supabase
+          .from("follows")
+          .select("status")
+          .eq("follower_id", user.id)
+          .eq("following_id", prof.id)
+          .maybeSingle();
+        if ((rel as any)?.status !== "accepted") {
+          setError("Post not found.");
+          setLoading(false);
+          return;
+        }
+      }
+
       setPost({ ...p, created_at: p.created_at, profiles: prof });
       setLoading(false);
     };
     run();
-  }, [username, id]);
+  }, [username, id, user]);
 
   if (loading) return <Shell><PageHeader title="Post" /><div className="p-8 text-center text-sm text-af-muted">Loading…</div></Shell>;
   if (error || !post) return <Shell><PageHeader title="Post" /><EmptyState title="Post not found" body="This post may have been removed or is unavailable." /></Shell>;

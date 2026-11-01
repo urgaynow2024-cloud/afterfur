@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addPostToFeed, mergeFeedPosts, submitAndPublishPost } from "@/lib/feed";
+import { addPostToFeed, filterVisibleFeedPosts, mergeFeedPosts, submitAndPublishPost } from "@/lib/feed";
 import { acquireInteractionLock, nextLikeState, optimisticLikeCount, parseLikeCountRows, reconcileLikeCount, reconcileLikeCountRows, releaseInteractionLock, resolveLikeToggle } from "@/lib/likes";
 
 type TestPost = { id: string; created_at: string; content: string };
@@ -57,6 +57,44 @@ describe("feed post submission", () => {
   });
 });
 
+describe("feed visibility filtering", () => {
+  const posts = [
+    { id: "public", author_id: "u2", profiles: { is_private: false } },
+    { id: "private", author_id: "u3", profiles: { is_private: true } },
+    { id: "self", author_id: "u1", profiles: { is_private: true } },
+    { id: "blocked", author_id: "u4", profiles: { is_private: false } },
+  ];
+
+  it("For You hides private posts from non-followers and blocked authors", () => {
+    const result = filterVisibleFeedPosts(posts, {
+      userId: "u1",
+      followingIds: new Set(),
+      blockedIds: new Set(["u4"]),
+      tab: "foryou",
+    });
+    expect(result.map((p) => p.id)).toEqual(["public", "self"]);
+  });
+
+  it("For You shows private posts when the viewer follows the author", () => {
+    const result = filterVisibleFeedPosts(posts, {
+      userId: "u1",
+      followingIds: new Set(["u3"]),
+      blockedIds: new Set(),
+      tab: "foryou",
+    });
+    expect(result.map((p) => p.id)).toEqual(["public", "private", "self", "blocked"]);
+  });
+
+  it("Following only includes posts from followed accounts", () => {
+    const result = filterVisibleFeedPosts(posts, {
+      userId: "u1",
+      followingIds: new Set(["u3"]),
+      blockedIds: new Set(),
+      tab: "following",
+    });
+    expect(result.map((p) => p.id)).toEqual(["private"]);
+  });
+});
 describe("post like state reconciliation", () => {
   it("flips the visible state optimistically", () => {
     expect(nextLikeState(false)).toBe(true);

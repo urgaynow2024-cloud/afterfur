@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import PostCard from "@/components/PostCard";
@@ -22,6 +23,12 @@ const interactions = vi.hoisted(() => ({
 }));
 
 vi.mock("@/components/PostInteractionProvider", () => ({ usePostInteractions: () => interactions }));
+vi.mock("@/lib/media-url-state", () => ({
+  useResolvedMediaUrls: (urls: string[] | null) => ({
+    items: (urls ?? []).map((url) => ({ original: url, resolved: url, loading: false, error: false })),
+    loading: false,
+  }),
+}));
 vi.mock("next/link", () => ({ default: ({ href, children, ...props }: { href: string; children: React.ReactNode; [key: string]: unknown }) => <a href={href} {...props}>{children}</a> }));
 
 const post = {
@@ -38,16 +45,13 @@ afterEach(() => {
 });
 
 describe("shared post action counts", () => {
-  it("renders accurate zero and nonzero reply, like, and repost counts with the supplied art", () => {
+  it("renders accurate zero and nonzero reply, like, and repost counts", () => {
     render(<PostCard post={post} />);
     expect(screen.getByRole("link", { name: /0 replies/ })).toBeTruthy();
     const likeButton = screen.getByRole("button", { name: /2 likes/ });
     expect(within(likeButton).getByText("2")).toBeTruthy();
     const repostButton = screen.getByRole("button", { name: /0 reposts/ });
     expect(within(repostButton).getByText("0")).toBeTruthy();
-    const repostImage = repostButton.querySelector("img");
-    expect(repostImage?.getAttribute("src")).toContain("/_next/image?");
-    expect(new URL(repostImage?.getAttribute("src") ?? "", window.location.href).searchParams.get("url")).toBe("/images/reactions/Repost.png");
     expect(interactions.requestRepostCount).toHaveBeenCalledWith("post-1");
     expect(interactions.requestReplyCount).toHaveBeenCalledWith("post-1");
   });
@@ -62,5 +66,16 @@ describe("shared post action counts", () => {
     interactions.replyCount.mockReturnValue(6);
     render(<PostCard post={post} />);
     expect(screen.getByRole("link", { name: /6 replies/ })).toBeTruthy();
+  });
+});
+
+describe("shared post content rendering", () => {
+  it("renders links, mentions and hashtags inside post content", () => {
+    render(<PostCard post={{ ...post, content: "See https://example.com and @artist #VRChat!" }} />);
+    expect(screen.getByRole("link", { name: "https://example.com" })).toBeTruthy();
+    const mention = screen.getByRole("link", { name: "@artist" });
+    expect(mention).toHaveAttribute("href", "/artist");
+    const hashtag = screen.getByRole("link", { name: "#VRChat" });
+    expect(hashtag).toHaveAttribute("href", "/search?q=%23VRChat");
   });
 });

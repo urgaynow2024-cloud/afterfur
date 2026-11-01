@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canFollow, publicProfileUrl, publicPostUrl, insertAtCursor } from "@/lib/follow";
+import { canFollow, publicProfileUrl, publicPostUrl, insertAtCursor, followActionFor } from "@/lib/follow";
 
 describe("follow helpers", () => {
   it("prevents self-follow", () => {
@@ -14,6 +14,29 @@ describe("follow helpers", () => {
     expect(canFollow(null, "user-2")).toBe(false);
     expect(canFollow("user-1", null)).toBe(false);
     expect(canFollow(undefined, undefined)).toBe(false);
+  });
+
+  it("returns follow for public profile when none", () => {
+    expect(followActionFor(false, "none")).toBe("follow");
+  });
+
+  it("returns request for private profile when none", () => {
+    expect(followActionFor(true, "none")).toBe("request");
+  });
+
+  it("returns unfollow when accepted", () => {
+    expect(followActionFor(false, "accepted")).toBe("unfollow");
+    expect(followActionFor(true, "accepted")).toBe("unfollow");
+  });
+
+  it("returns cancel when pending", () => {
+    expect(followActionFor(false, "pending")).toBe("cancel");
+    expect(followActionFor(true, "pending")).toBe("cancel");
+  });
+
+  it("allows requesting again after rejection", () => {
+    expect(followActionFor(false, "rejected")).toBe("request");
+    expect(followActionFor(true, "rejected")).toBe("request");
   });
 });
 
@@ -62,3 +85,4 @@ describe("cursor insertion", () => {
     expect(insertAtCursor("abc", 10, 20, "!")).toBe("abc!");
   });
 });
+

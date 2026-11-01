@@ -19,13 +19,18 @@ export const metadata: Metadata = {
 };
 
 import { AuthProvider } from "@/components/AuthProvider";
+import { NotificationProvider } from "@/components/NotificationProvider";
 import { PostInteractionGate } from "@/components/PostInteractionGate";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-af-bg text-af-text">
-        <AuthProvider><PostInteractionGate>{children}</PostInteractionGate></AuthProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <PostInteractionGate>{children}</PostInteractionGate>
+          </NotificationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

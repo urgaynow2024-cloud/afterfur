@@ -89,22 +89,24 @@ export default function Profile() {
         <div>
           <div className="relative">
             {profile.banner_url ? (
-              <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-32 w-full object-cover sm:h-48" />
+              <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-40 w-full object-cover sm:h-56" />
             ) : (
-              <div aria-hidden="true" className="h-32 w-full border-b border-af-border bg-af-surface sm:h-48" />
+              <div aria-hidden="true" className="h-40 w-full border-b border-af-border bg-gradient-to-br from-af-surface to-af-surface-2 sm:h-56" />
             )}
-            <div className="absolute -bottom-10 left-4 sm:-bottom-12">
+            <div className="absolute -bottom-12 left-5 sm:-bottom-14 sm:left-6">
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={`${profile.display_name || profile.username}'s avatar`} className="h-20 w-20 rounded-full border-4 border-af-bg object-cover sm:h-24 sm:w-24" />
+                <img src={profile.avatar_url} alt={`${profile.display_name || profile.username}'s avatar`} className="h-24 w-24 rounded-full border-4 border-af-bg object-cover shadow-xl sm:h-28 sm:w-28" />
               ) : (
-                <div aria-hidden="true" className="h-20 w-20 rounded-full border-4 border-af-bg bg-af-surface-raised sm:h-24 sm:w-24" />
+                <div aria-hidden="true" className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-af-bg bg-af-surface-raised text-2xl font-bold text-af-brand-soft shadow-xl sm:h-28 sm:w-28">
+                  {(profile.display_name || profile.username).slice(0, 1).toUpperCase()}
+                </div>
               )}
             </div>
           </div>
-          <div className="px-4 pb-5 pt-14 sm:px-5 sm:pt-16">
+          <div className="px-5 pb-6 pt-16 sm:px-6 sm:pt-20">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="break-words text-xl font-semibold tracking-tight">{profile.display_name || profile.username}</h2>
+                <h2 className="break-words text-2xl font-bold tracking-tight">{profile.display_name || profile.username}</h2>
                 <p className="text-sm text-af-muted">@{profile.username}</p>
                 <BadgeList userId={profile.id} className="mt-2" />
               </div>
@@ -112,26 +114,26 @@ export default function Profile() {
                 Edit profile
               </Link>
             </div>
-            {profile.bio && <p className="mt-3 max-w-prose whitespace-pre-wrap text-[15px] leading-6 text-af-text-2">{profile.bio}</p>}
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-af-muted">
-              {profile.location && <span>📍 {profile.location}</span>}
+            {profile.bio && <p className="mt-4 max-w-prose whitespace-pre-wrap text-[15px] leading-6 text-af-text-2">{profile.bio}</p>}
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-af-muted">
+              {profile.location && <span>{profile.location}</span>}
               {profile.website && (
                 <a href={profile.website} className="text-af-accent hover:underline">
-                  🔗 {profile.website.replace(/^https?:\/\//, "")}
+                  {profile.website.replace(/^https?:\/\//, "")}
                 </a>
               )}
-              <span>📅 Joined {new Date(profile.created_at).toLocaleDateString()}</span>
+              <span>Joined {new Date(profile.created_at).toLocaleDateString()}</span>
             </div>
-            <div className="mt-4 flex gap-5 text-sm">
+            <div className="mt-5 flex gap-6 text-sm">
               <span>
-                <strong>{counts.following}</strong> <span className="text-af-muted">Following</span>
+                <strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span>
               </span>
               <span>
-                <strong>{counts.followers}</strong> <span className="text-af-muted">Followers</span>
+                <strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span>
               </span>
             </div>
           </div>
-          <div role="tablist" aria-label="Your profile posts" className="flex border-b border-af-border px-2">
+          <div role="tablist" aria-label="Your profile posts" className="flex border-b border-af-border px-2 sm:px-4">
             {(["posts", "replies", "reposts", "media"] as const).map((t) => (
               <button
                 key={t}

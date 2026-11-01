@@ -1,4 +1,30 @@
 export type FeedPost = { id: string; created_at: string; [key: string]: unknown };
+export type FeedVisibilityOptions = {
+  userId?: string | null;
+  followingIds: Set<string>;
+  blockedIds: Set<string>;
+  tab: "foryou" | "following";
+};
+
+export function isFeedPostVisible<T extends { author_id: string; profiles?: { is_private?: boolean | null } | null }>(
+  post: T,
+  options: FeedVisibilityOptions,
+): boolean {
+  if (options.blockedIds.has(post.author_id)) return false;
+  const isPrivate = !!post.profiles?.is_private;
+  const isSelf = post.author_id === options.userId;
+  const isFollowing = options.followingIds.has(post.author_id);
+  if (isPrivate && !isSelf && !isFollowing) return false;
+  if (options.tab === "following" && !isFollowing) return false;
+  return true;
+}
+
+export function filterVisibleFeedPosts<T extends { author_id: string; profiles?: { is_private?: boolean | null } | null }>(
+  posts: T[],
+  options: FeedVisibilityOptions,
+): T[] {
+  return posts.filter((post) => isFeedPostVisible(post, options));
+}
 
 function compareFeedPosts(a: FeedPost, b: FeedPost): number {
   const byTime = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();

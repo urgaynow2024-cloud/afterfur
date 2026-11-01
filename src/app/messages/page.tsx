@@ -16,6 +16,25 @@ function toMessage(row: MessageRow): Message | null {
 type Peer = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 type Conversation = { id: string; peer: Peer | null; lastMessage: Message | null };
 
+function formatTime(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function Avatar({ peer, size = "h-11 w-11" }: { peer: Peer | null; size?: string }) {
+  const label = peer?.display_name || peer?.username || "Conversation";
+  if (peer?.avatar_url) {
+    return <img src={peer.avatar_url} alt="" className={`${size} rounded-full object-cover ring-1 ring-af-border`} />;
+  }
+  return (
+    <div className={`${size} flex items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white ring-1 ring-af-border`}>
+      {label.slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
+
 export default function Messages() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -163,8 +182,8 @@ export default function Messages() {
   return (
     <Shell>
       <PageHeader title="Messages" subtitle="Private conversations between members." />
-      <div className="grid min-h-[65vh] md:grid-cols-[minmax(14rem,0.8fr)_minmax(0,1.4fr)]">
-        <aside className={`${activeId ? "hidden md:block" : ""} border-b border-af-border md:border-b-0 md:border-r`} aria-label="Conversation list">
+      <div className="grid min-h-[65vh] md:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.35fr)]">
+        <aside className={`${activeId ? "hidden md:flex" : "flex"} min-h-0 flex-col border-b border-af-border md:border-b-0 md:border-r`} aria-label="Conversation list">
           <form onSubmit={startConversation} className="flex gap-2 border-b border-af-border p-3">
             <label className="sr-only" htmlFor="new-message-username">Start conversation by username</label>
             <input id="new-message-username" value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="Message a username" className="af-field min-w-0 flex-1 px-3 text-sm" />
@@ -172,33 +191,61 @@ export default function Messages() {
           </form>
           {error && <p role="alert" className="m-3 text-sm text-af-danger">{error}</p>}
           {loading ? <p className="p-5 text-sm text-af-muted">Loading conversations…</p> : conversations.length === 0 ? <p className="p-5 text-sm text-af-muted">No conversations yet. Start one with a username.</p> : (
-            <ul className="divide-y divide-af-border">
-              {conversations.map((conversation) => <li key={conversation.id}>
-                <button type="button" onClick={() => setActiveId(conversation.id)} aria-current={activeId === conversation.id ? "true" : undefined} className={`w-full p-4 text-left hover:bg-af-surface ${activeId === conversation.id ? "bg-af-surface-2" : ""}`}>
-                  <span className="block truncate text-sm font-semibold">{conversation.peer?.display_name || conversation.peer?.username || "Conversation"}</span>
-                  {conversation.peer && <span className="block truncate text-xs text-af-muted">@{conversation.peer.username}</span>}
-                  <span className="mt-1 block truncate text-xs text-af-muted">{conversation.lastMessage ? `${conversation.lastMessage.sender_id === user.id ? "You: " : ""}${conversation.lastMessage.content}` : "No messages yet"}</span>
-                </button>
-              </li>)}
+            <ul className="min-h-0 flex-1 divide-y divide-af-border overflow-y-auto">
+              {conversations.map((conversation) => {
+                const unread = !!conversation.lastMessage && conversation.lastMessage.sender_id !== user.id && activeId !== conversation.id;
+                return (
+                  <li key={conversation.id}>
+                    <button type="button" onClick={() => setActiveId(conversation.id)} aria-current={activeId === conversation.id ? "true" : undefined} className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-af-surface-2/60 ${activeId === conversation.id ? "bg-af-surface-2" : ""}`}>
+                      <span className="relative shrink-0">
+                        <Avatar peer={conversation.peer} />
+                        {unread && <span className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-af-surface bg-af-brand" aria-label="Unread" title="Unread" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-af-text">{conversation.peer?.display_name || conversation.peer?.username || "Conversation"}</span>
+                          {conversation.lastMessage && <span className="shrink-0 text-[11px] text-af-muted">{formatTime(conversation.lastMessage.created_at)}</span>}
+                        </span>
+                        {conversation.peer && <span className="block truncate text-xs text-af-muted">@{conversation.peer.username}</span>}
+                        <span className="mt-0.5 block truncate text-xs text-af-text-2">{conversation.lastMessage ? `${conversation.lastMessage.sender_id === user.id ? "You: " : ""}${conversation.lastMessage.content}` : "No messages yet"}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {error && !loading && <button type="button" onClick={() => { void loadConversations(); }} className="mx-3 mb-3 text-sm text-af-brand-soft">Retry</button>}
         </aside>
 
-        <section className={`${activeId ? "" : "hidden md:flex"} min-h-[60vh] flex-col`} aria-label="Conversation">
+        <section className={`${activeId ? "flex" : "hidden md:flex"} min-h-0 flex-col`} aria-label="Conversation">
           {activeId && activeConversation ? <>
-            <header className="flex items-center gap-3 border-b border-af-border p-4">
+            <header className="flex items-center gap-3 border-b border-af-border px-4 py-3">
               <button type="button" onClick={() => setActiveId(null)} className="min-h-10 rounded-md px-2 text-sm text-af-muted hover:bg-af-surface-2 md:hidden">Back</button>
-              {activeConversation.peer && <Link href={`/${encodeURIComponent(activeConversation.peer.username)}`} className="text-sm font-semibold hover:underline">{activeConversation.peer.display_name || activeConversation.peer.username}</Link>}
+              <Avatar peer={activeConversation.peer} size="h-9 w-9" />
+              <div className="min-w-0 flex-1">
+                {activeConversation.peer && <Link href={`/${encodeURIComponent(activeConversation.peer.username)}`} className="block truncate text-sm font-semibold hover:underline">{activeConversation.peer.display_name || activeConversation.peer.username}</Link>}
+                {activeConversation.peer && <span className="block truncate text-xs text-af-muted">@{activeConversation.peer.username}</span>}
+              </div>
             </header>
             {messageError && <div role="alert" className="m-3 rounded-md bg-af-danger/10 p-3 text-sm text-af-danger">{messageError}<button type="button" onClick={() => setMessageReload((current) => current + 1)} className="ml-2 underline">Retry</button></div>}
-            <div className="flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
-              {messagesLoading ? <p className="text-sm text-af-muted">Loading messages…</p> : messages.length === 0 ? <p className="text-center text-sm text-af-muted">Start the conversation.</p> : messages.map((message) => <div key={message.id} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${message.sender_id === user.id ? "ml-auto bg-af-brand text-white" : "bg-af-surface-2 text-af-text"}`}><p className="whitespace-pre-wrap break-words">{message.content}</p><time className="mt-1 block text-right text-[10px] opacity-70" dateTime={message.created_at}>{new Date(message.created_at).toLocaleString()}</time></div>)}
+            <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4" aria-live="polite">
+              {messagesLoading ? <p className="text-sm text-af-muted">Loading messages…</p> : messages.length === 0 ? <p className="text-center text-sm text-af-muted">Start the conversation.</p> : messages.map((message) => {
+                const mine = message.sender_id === user.id;
+                return (
+                  <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm ${mine ? "rounded-br-md bg-af-brand text-white" : "rounded-bl-md bg-af-surface-2 text-af-text"}`}>
+                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                      <time className={`mt-1 block text-[10px] opacity-70 ${mine ? "text-right" : "text-left"}`} dateTime={message.created_at}>{new Date(message.created_at).toLocaleString()}</time>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <form onSubmit={sendMessage} className="border-t border-af-border p-3">
               <label htmlFor="message-draft" className="sr-only">Message</label>
-              <textarea id="message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={3} placeholder="Write a message…" className="af-field min-h-20 w-full resize-y px-3 py-2 text-sm" />
-              <div className="mt-2 flex items-center justify-between"><span className="text-xs text-af-muted">{draft.length}/2000</span><button type="submit" disabled={submitting || !draft.trim() || messagesLoading} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{submitting ? "Sending…" : "Send"}</button></div>
+              <textarea id="message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={2} placeholder="Write a message…" className="af-field min-h-16 w-full resize-y px-3 py-2 text-sm" />
+              <div className="mt-2 flex items-center justify-between gap-2"><span className="text-xs text-af-muted">{draft.length}/2000</span><button type="submit" disabled={submitting || !draft.trim() || messagesLoading} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{submitting ? "Sending…" : "Send"}</button></div>
             </form>
           </> : <div className="hidden flex-1 items-center justify-center md:flex"><p className="text-sm text-af-muted">Choose a conversation or start a new one.</p></div>}
         </section>
@@ -208,4 +255,3 @@ export default function Messages() {
 }
 
 export const dynamic = 'force-dynamic';
-

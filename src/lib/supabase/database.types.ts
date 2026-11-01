@@ -12,6 +12,16 @@ type Table<Row, Insert, Update> = {
   Relationships: [];
 };
 
+type MediaRow = {
+  id: string;
+  owner_id: string;
+  post_id: string | null;
+  storage_path: string;
+  bucket_id: string;
+  media_type: string | null;
+  created_at: string | null;
+};
+
 type ProfileRow = {
   id: string;
   username: string;
@@ -19,9 +29,11 @@ type ProfileRow = {
   bio: string | null;
   avatar_url: string | null;
   banner_url: string | null;
-  website: string | null;
   created_at: string | null;
   location: string | null;
+  website: string | null;
+  profile_customisation: Json | null;
+  is_private: boolean | null;
 };
 
 type PostRow = {
@@ -57,9 +69,10 @@ export type Database = {
       profiles: Table<ProfileRow, Pick<ProfileRow, "id" | "username"> & Partial<Omit<ProfileRow, "id" | "username">>, Partial<Omit<ProfileRow, "id">>>;
       posts: Table<PostRow, Pick<PostRow, "author_id" | "content"> & Partial<Omit<PostRow, "id" | "author_id" | "content">>, Partial<Omit<PostRow, "id">>>;
       likes: Table<{ user_id: string; post_id: string }, { user_id: string; post_id: string }, { user_id?: string; post_id?: string }>;
+      media: Table<MediaRow, Omit<MediaRow, "id" | "created_at"> & { id?: string; created_at?: string }, Partial<Omit<MediaRow, "id">>>;
       reposts: Table<{ user_id: string; post_id: string }, { user_id: string; post_id: string }, { user_id?: string; post_id?: string }>;
       bookmarks: Table<{ user_id: string; post_id: string }, { user_id: string; post_id: string }, { user_id?: string; post_id?: string }>;
-      follows: Table<{ follower_id: string; following_id: string }, { follower_id: string; following_id: string }, { follower_id?: string; following_id?: string }>;
+      follows: Table<{ follower_id: string; following_id: string; status: string }, { follower_id: string; following_id: string; status?: string }, { follower_id?: string; following_id?: string; status?: string }>;
       replies: Table<ReplyRow, Pick<ReplyRow, "content"> & Partial<Omit<ReplyRow, "id" | "content">>, Partial<Omit<ReplyRow, "id">>>;
       notifications: Table<{ id: string; user_id: string | null; type: string; payload: Json | null; read: boolean | null; created_at: string | null }, { id?: string; user_id?: string | null; type: string; payload?: Json | null; read?: boolean | null; created_at?: string | null }, { id?: string; user_id?: string | null; type?: string; payload?: Json | null; read?: boolean | null; created_at?: string | null }>;
       conversations: Table<{ id: string; created_at: string | null }, { id?: string; created_at?: string | null }, { id?: string; created_at?: string | null }>;
@@ -104,6 +117,9 @@ export type Database = {
       get_my_founding_status: { Args: Record<PropertyKey, never>; Returns: { claimed: boolean; claimed_at: string | null; expires_at: string | null }[] };
       get_founding_rewards_remaining: { Args: Record<PropertyKey, never>; Returns: number };
       get_membership_audit: { Args: { p_target_id?: string | null; p_limit?: number }; Returns: { id: number; actor_id: string | null; target_id: string; action: string; source: string | null; details: Json | null; occurred_at: string }[] };
+      get_my_ui_preferences: { Args: Record<PropertyKey, never>; Returns: Json };
+      update_ui_preferences: { Args: { p_preferences: Json }; Returns: boolean };
+      update_profile_customisation: { Args: { p_config: Json }; Returns: boolean };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

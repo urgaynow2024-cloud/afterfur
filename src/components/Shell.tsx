@@ -19,7 +19,6 @@ const NAV = [
   { href: "/bookmarks", label: "Bookmarks", icon: "bookmark" },
   { href: "/after-dark", label: "After Dark", icon: "lock" },
   { href: "/profile", label: "Profile", icon: "user-round" },
-  { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
 function ShellInner({ children, right }: { children: ReactNode; right?: ReactNode }) {
@@ -51,15 +50,18 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
       <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-[var(--af-shell-width)] md:min-h-screen">
         <aside className="hidden w-[var(--af-navigation-width)] shrink-0 md:flex">
           <div className="sticky top-0 flex h-screen w-full flex-col border-r border-af-border/70 px-3 py-4 xl:border-0">
-            <div className="mb-7 px-3 py-2">
-              <Link href="/" className="flex items-center gap-2">
-                <div className="text-xl font-bold tracking-tight">
-                  <span className="text-af-brand">After</span>Fur
+            <div className="mb-8 px-2 py-1">
+              <Link href="/" className="group flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors hover:bg-af-surface/70">
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-af-brand to-af-brand-hover text-lg font-black text-white shadow-lg shadow-af-brand/25">A</span>
+                <div>
+                  <div className="text-lg font-bold tracking-tight text-af-text">
+                    <span className="text-af-brand-soft">After</span>Fur
+                  </div>
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-af-muted">Midnight</div>
                 </div>
               </Link>
-              <div className="mt-0.5 text-xs text-af-muted">Social media, after dark.</div>
             </div>
-            <nav aria-label="Primary navigation" className="flex flex-col gap-1">
+            <nav aria-label="Primary navigation" className="flex flex-col gap-1.5">
               {NAV.map((n) => {
                 const routeHref = n.href === "/profile" && profile?.username ? `/${profile.username}` : n.href;
                 const isActive = pathname === routeHref || (routeHref !== "/" && pathname?.startsWith(`${routeHref}/`));
@@ -68,12 +70,13 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
                     key={n.href}
                     href={routeHref}
                     aria-current={isActive ? "page" : undefined}
-                    className={`flex min-h-11 items-center gap-3 rounded-lg px-3 text-[15px] transition-colors ${
-  isActive ? "bg-af-surface-2 font-semibold text-af-text" : "font-medium text-af-text-2 hover:bg-af-surface hover:text-af-text"
+                    className={`group flex min-h-11 items-center gap-3 rounded-2xl px-3 text-[15px] transition-all duration-200 ${
+  isActive ? "bg-af-brand/12 font-semibold text-af-text ring-1 ring-af-brand/25" : "font-medium text-af-text-2 hover:bg-af-surface hover:text-af-text"
 }`}
                   >
-                    <span aria-hidden="true" className="h-5 w-5 shrink-0 bg-current opacity-75" style={{ maskImage: `url(/icons/afterfur/${n.icon}.svg)`, maskPosition: "center", maskRepeat: "no-repeat", maskSize: "contain" }} />
-                    {n.label}
+                    <span aria-hidden="true" className={`h-5 w-5 shrink-0 bg-current transition-transform duration-200 ${isActive ? "scale-110 text-af-brand-soft" : "opacity-75 group-hover:scale-105"}`} style={{ maskImage: `url(/icons/afterfur/${n.icon}.svg)`, maskPosition: "center", maskRepeat: "no-repeat", maskSize: "contain" }} />
+                    <span className="truncate">{n.label}</span>
+                    {isActive && <span className="ml-auto h-2 w-2 rounded-full bg-af-brand-soft" />}
                   </Link>
                 );
               })}
@@ -81,9 +84,9 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
             <MoreMenu />
             <button
               onClick={() => setComposerOpen(true)}
-              className="mx-2 mt-4 min-h-11 rounded-lg bg-af-brand px-4 text-center text-[15px] font-semibold text-white transition-colors hover:bg-af-brand-hover"
+              className="mx-1 mt-5 min-h-12 rounded-2xl bg-gradient-to-r from-af-brand to-af-accent-hover px-4 text-center text-[15px] font-bold text-white shadow-lg shadow-af-brand/25 transition-all hover:scale-[1.02] hover:shadow-af-brand/35"
             >
-              Post
+              Create post
             </button>
             <div className="mt-auto mb-3 px-3">
               {loading ? (
@@ -156,7 +159,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
 export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <header className="sticky top-0 z-10 border-b border-af-border bg-af-bg/95 px-4 py-4 backdrop-blur-sm sm:px-6">
-      <h1 className="text-lg font-semibold tracking-tight text-af-text sm:text-xl">{title}</h1>
+      <h1 className="text-xl font-bold tracking-tight text-af-text sm:text-2xl">{title}</h1>
       {subtitle && <p className="mt-1 max-w-prose text-sm leading-relaxed text-af-muted">{subtitle}</p>}
     </header>
   );
@@ -173,12 +176,12 @@ export function Shell({ children, right }: { children: ReactNode; right?: ReactN
 }
 export function EmptyState({ title, body, action }: { title: string; body: string; action?: { label: string; href: string } }) {
   return (
-    <div className="px-6 py-14 text-center sm:px-10">
+    <div className="px-6 py-16 text-center sm:px-10">
       <div className="mx-auto max-w-sm">
-      <h2 className="text-lg font-semibold tracking-tight text-af-text">{title}</h2>
+      <h2 className="text-xl font-bold tracking-tight text-af-text">{title}</h2>
       <p className="mt-2 text-sm leading-relaxed text-af-muted">{body}</p>
       {action && (
-        <Link href={action.href} className="mt-5 inline-flex min-h-10 items-center rounded-lg bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover">
+        <Link href={action.href} className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-af-brand px-5 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover">
           {action.label}
         </Link>
       )}

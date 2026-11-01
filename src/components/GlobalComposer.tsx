@@ -75,6 +75,13 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, requestClose]);
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el || !open) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
+  }, [text, open]);
+
   function saveDraft() {
     if (!draftKey) return;
     try { localStorage.setItem(draftKey, JSON.stringify({ text })); } catch {}
@@ -111,10 +118,9 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
       try {
         const ext = mediaFile.name.split(".").pop();
         const path = `${user.id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("media").upload(path, mediaFile, { upsert: true });
+        const { error: upErr } = await supabase.storage.from("media_private").upload(path, mediaFile, { upsert: true });
         if (upErr) throw upErr;
-        const { data } = supabase.storage.from("media").getPublicUrl(path);
-        mediaUrls = [data.publicUrl];
+        mediaUrls = [path];
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Could not upload media.");
         submittingRef.current = false;
@@ -149,71 +155,97 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
     previousFocus.current?.focus();
   }
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 192)}px`;
+  }, [text]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="composer-title">
-      <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-xl overflow-y-auto rounded-xl border border-af-border bg-af-surface p-4 shadow-2xl sm:p-5">
-        <div className="flex items-center justify-between">
-          <h2 id="composer-title" className="text-sm font-semibold text-af-text">Create a post</h2>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="composer-title">
+      <div className="max-h-[100dvh] w-full overflow-y-auto rounded-t-2xl border border-af-border bg-af-surface p-4 shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:max-w-xl sm:rounded-2xl sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="composer-title" className="text-base font-semibold text-af-text">Create a post</h2>
           <div className="flex items-center gap-1">
             <button type="button" onClick={saveDraft} className="min-h-10 rounded-md px-3 text-sm font-medium text-af-brand-soft hover:bg-af-surface-2">Save draft</button>
-            <button type="button" onClick={requestClose} className="flex h-10 w-10 items-center justify-center rounded-md text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Close composer">�</button>
+            <button type="button" onClick={requestClose} className="flex h-10 w-10 items-center justify-center rounded-md text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Close composer">×</button>
           </div>
         </div>
         <div className="mt-4 flex gap-3">
           {profile?.avatar_url ? (
-            <img src={profile.avatar_url} alt="" className="h-11 w-11 rounded-full object-cover" />
+            <img src={profile.avatar_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-af-border" />
           ) : (
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white ring-1 ring-af-border">
               {(profile?.display_name || profile?.username || user?.email || "?").slice(0, 1).toUpperCase()}
             </div>
           )}
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <textarea
               ref={textareaRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
               maxLength={300}
-              placeholder="What's happening?"
-              className="min-h-32 w-full resize-y bg-transparent py-1 text-[16px] leading-6 text-af-text outline-none placeholder:text-af-muted"
+              placeholder="What's on your mind?"
+              style={{ resize: "none" }}
+              rows={1}
+              className="min-h-[40px] max-h-48 w-full resize-none overflow-y-auto bg-transparent py-2 text-[16px] leading-6 text-af-text outline-none placeholder:text-af-muted"
             />
             {mediaPreview && (
-              <div className="mt-3 overflow-hidden rounded-2xl border border-af-border">
-                {mediaFile?.type.startsWith("video/") ? <video src={mediaPreview} controls playsInline className="max-h-72 w-full bg-black object-contain" /> : <img src={mediaPreview} alt="Selected post media preview" className="max-h-72 w-full object-contain" />}
+              <div className="relative mt-3 overflow-hidden rounded-2xl border border-af-border bg-black/30">
+                {mediaFile?.type.startsWith("video/") ? (
+                  <video src={mediaPreview} controls playsInline className="max-h-72 w-full bg-black object-contain" />
+                ) : (
+                  <img src={mediaPreview} alt="Selected post media preview" className="max-h-72 w-full object-contain" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setMediaFile(null); setMediaPreview(null); }}
+                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-sm text-white transition-colors hover:bg-black/90"
+                  aria-label="Remove media"
+                >
+                  ×
+                </button>
               </div>
             )}
           </div>
         </div>
         {error && <p className="mt-3 text-sm text-af-danger">{error}</p>}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-af-border pt-3">
-          <EmojiPicker onPick={insertEmoji} />
-          <label className="inline-flex min-h-10 cursor-pointer items-center rounded-md px-3 text-sm font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2 focus-within:ring-2 focus-within:ring-af-focus">
-            Add media
-            <input
-              type="file"
-              accept="image/*,video/*"
-              className="sr-only"
-              aria-label="Attach image or video"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) {
-                  setMediaFile(f);
-                  setMediaPreview(URL.createObjectURL(f));
-                }
-              }}
-            />
-          </label>
-          {mediaFile && (
-            <button type="button" onClick={() => { setMediaFile(null); setMediaPreview(null); }} className="min-h-10 rounded-md px-3 text-sm text-af-muted hover:bg-af-surface-2 hover:text-af-danger">
-              Remove
-            </button>
-          )}
+        {submitting && mediaFile && <p className="mt-2 text-xs text-af-muted">Uploading media…</p>}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-af-border/70 bg-af-surface/60 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1">
+            <EmojiPicker onPick={insertEmoji} />
+            <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full px-3 text-sm font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2 focus-within:ring-2 focus-within:ring-af-focus">
+              <span aria-hidden="true" className="h-4 w-4 shrink-0 bg-current" style={{ maskImage: "url(/icons/afterfur/image.svg)", maskPosition: "center", maskRepeat: "no-repeat", maskSize: "contain" }} />
+              <span>Media</span>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                className="sr-only"
+                aria-label="Attach image or video"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    setMediaFile(f);
+                    setMediaPreview(URL.createObjectURL(f));
+                  }
+                }}
+              />
+            </label>
+            {mediaFile && (
+              <button type="button" onClick={() => { setMediaFile(null); setMediaPreview(null); }} className="min-h-9 rounded-full px-3 text-sm text-af-muted transition-colors hover:bg-af-surface-2 hover:text-af-danger">
+                Remove
+              </button>
+            )}
+            <span aria-live="polite" className={`px-2 text-xs ${text.length > 270 ? "text-af-brand-soft" : "text-af-muted"}`}>{text.length}/300</span>
+          </div>
           <button
             type="button"
             onClick={submit}
             disabled={(!text.trim() && !mediaFile) || submitting}
-            className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-9 rounded-full bg-af-brand px-5 text-sm font-semibold text-white transition-all hover:bg-af-brand-hover hover:shadow-md hover:shadow-af-brand/25 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Posting..." : "Post"}
           </button>

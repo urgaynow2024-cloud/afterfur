@@ -8,7 +8,8 @@ import { usePostInteractions } from "@/components/PostInteractionProvider";
 import ReportDialog from "@/components/ReportDialog";
 import { optimisticLikeCount, reconcileLikeCount } from "@/lib/likes";
 import { BadgeList } from "@/components/BadgeList";
-import { parseProfileCustomisation, nameStyle } from "@/lib/profileCustomisation";
+import PostText from "@/components/PostText";
+import { parseProfileCustomisation, displayNameStyle as computeDisplayNameStyle, usernameStyle as computeUsernameStyle } from "@/lib/profileCustomisation";
 
 export type PostData = {
   id: string;
@@ -60,8 +61,8 @@ export default function PostCard({
   const username = post.profiles?.username || "unknown";
   const displayName = post.profiles?.display_name || username;
   const custom = parseProfileCustomisation(post.profiles?.profile_customisation);
-  const displayNameStyle = nameStyle(custom.displayNameColor, custom.effect);
-  const usernameStyle = nameStyle(custom.usernameColor, custom.effect);
+  const { className: displayNameFxClass, style: displayNameStyle } = computeDisplayNameStyle(custom);
+  const { className: usernameFxClass, style: usernameStyle } = computeUsernameStyle(custom);
   const authorHref = post.profiles?.username ? `/${encodeURIComponent(post.profiles.username)}` : null;
   const postHref = post.profiles?.username
     ? `/${encodeURIComponent(post.profiles.username)}/status/${encodeURIComponent(post.id)}`
@@ -151,25 +152,25 @@ export default function PostCard({
 
   return (
     <>
-    <article className="border-b border-af-border px-4 py-4 transition-colors hover:bg-af-surface/40 sm:px-5">
+    <article className="border-b border-af-border px-4 py-4 transition-colors hover:bg-af-surface/50 sm:px-5">
       {repostedBy && (
-        <div className="mb-1 ml-12 text-xs text-af-muted">{repostedBy} reposted</div>
+        <div className="mb-2 ml-14 text-xs font-medium text-af-muted">{repostedBy} reposted</div>
       )}
       <div className="flex min-w-0 gap-3">
           {authorHref ? <Link href={authorHref} aria-label={`View ${displayName}'s profile`} className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">{avatar}</Link> : <div aria-hidden="true" className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">{avatar}</div>}
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-            {authorHref ? <Link href={authorHref} className="max-w-full truncate font-semibold text-af-text hover:underline" style={displayNameStyle}>{displayName}</Link> : <span className="max-w-full truncate font-semibold text-af-text" style={displayNameStyle}>{displayName}</span>}
-            <span className="truncate text-af-muted" style={usernameStyle}>@{username}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+            {authorHref ? <Link href={authorHref} className={`max-w-full truncate font-bold text-af-text hover:underline ${displayNameFxClass}`} style={displayNameStyle}>{displayName}</Link> : <span className={`max-w-full truncate font-bold text-af-text ${displayNameFxClass}`} style={displayNameStyle}>{displayName}</span>}
+            <span className={`truncate text-af-muted ${usernameFxClass}`} style={usernameStyle}>@{username}</span>
             <BadgeList userId={post.author_id} />
-            <span className="text-af-muted">Â·</span>
+            <span className="text-af-muted">·</span>
             <time dateTime={post.created_at} className="shrink-0 text-xs text-af-muted">{timeAgo(post.created_at)}</time>
           </div>
           <Link href={postHref} className="mt-2 block rounded-sm">
-            <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-af-text-2">{post.content}</p>
+            <PostText content={post.content} />
           </Link>
           {post.media_urls && post.media_urls.length > 0 && (
-            <div className={`mt-3 overflow-hidden rounded-lg border border-af-border bg-black/30 ${post.media_urls.length > 1 ? "grid grid-cols-2 gap-px" : ""}`}>
+            <div className={`mt-3 overflow-hidden rounded-2xl border border-af-border bg-black/30 ${post.media_urls.length > 1 ? "grid grid-cols-2 gap-px" : ""}`}>
               {post.media_urls.length === 1 ? (
                 isVideo(post.media_urls[0]) ? <video src={post.media_urls[0]} controls playsInline preload="metadata" className="max-h-[min(70vh,640px)] w-full object-contain" /> : <img src={post.media_urls[0]} alt="Post attachment" loading="lazy" className="max-h-[min(70vh,640px)] w-full object-contain" />
               ) : (
@@ -177,7 +178,7 @@ export default function PostCard({
               )}
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-af-muted sm:gap-x-3">
+          <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-1 text-xs text-af-muted sm:gap-x-2">
             <Link href={postHref} aria-label={`Open ${displayName}'s post${replyCount !== null ? `, ${replyCount} replies` : ""}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 transition-colors hover:bg-af-surface-2 hover:text-af-accent"><span>Reply</span>{replyCount !== null && <span className="text-xs tabular-nums text-af-text-2">{replyCount}</span>}</Link>
             {!interactions?.userId ? <Link href="/signin" aria-label="Sign in to like this post" title="Like" className="af-post-action"><Image src="/images/reactions/default_like.png" alt="" width={28} height={28} className="h-7 w-7 object-contain" /></Link> : <button type="button" data-tooltip={isLiked ? "Unlike" : "Like"} title={isLiked ? "Unlike" : "Like"} aria-label={`${isLiked ? "Unlike" : "Like"} ${displayName}'s post${visibleLikeCount !== null ? `, ${visibleLikeCount} likes` : ""}`} aria-pressed={isLiked} disabled={!interactions.available || isLikePending} onClick={() => { void activateLike(); }} className={`af-post-action ${isLiked ? "is-active" : ""}`}>
               <Image key={isLiked ? "liked" : "default"} src={isLiked ? "/images/reactions/liked.png" : "/images/reactions/default_like.png"} alt="" aria-hidden="true" width={28} height={28} className={`af-reaction-art ${activating ? "is-activating" : ""}`} />

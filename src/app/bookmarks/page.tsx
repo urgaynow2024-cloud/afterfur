@@ -51,18 +51,26 @@ export default function Bookmarks() {
 
   return (
     <Shell>
-      <PageHeader title="Bookmarks" />
-      {loading || !interactions?.ready ? <div className="p-8 text-center text-sm text-af-muted">Loading</div> :
-       error ? <div className="p-8 text-center text-sm text-af-danger">{error}</div> :
-       visiblePosts.length === 0 ? <EmptyState title="Keep the good stuff close" body="Bookmark posts you want to find again." /> :
-       <div className="divide-y divide-af-border">
-         {visiblePosts.map((p) => (
-           <PostCard key={p.id} post={p} />
-         ))}
-       </div>}
+      <PageHeader title="Bookmarks" subtitle="Posts you saved for later." />
+      {loading || !interactions?.ready ? (
+        <div className="flex flex-col gap-3 px-4 py-6">
+          <div className="h-24 animate-pulse rounded-2xl bg-af-surface-2" />
+          <div className="h-24 animate-pulse rounded-2xl bg-af-surface-2" />
+          <div className="h-24 animate-pulse rounded-2xl bg-af-surface-2" />
+        </div>
+      ) : error ? (
+        <div className="px-6 py-10 text-center text-sm text-af-danger">{error}</div>
+      ) : visiblePosts.length === 0 ? (
+        <EmptyState title="Keep the good stuff close" body="Bookmark posts you want to find again." />
+      ) : (
+        <div className="divide-y divide-af-border">
+          {visiblePosts.map((p) => (
+            <PostCard key={p.id} post={p} />
+          ))}
+        </div>
+      )}
     </Shell>
   );
 }
 
 export const dynamic = 'force-dynamic';
-

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { callRpc } from "@/lib/rpc";
 import { loadMyMembershipStatus, claimFoundingPrime, loadFoundingStatus, loadFoundingRemaining, type MembershipStatus } from "@/lib/pawpass";
-import { Separator } from "@/components/ui/separator";
+
 import ProfileCustomisationStudio from "@/components/settings/ProfileCustomisationStudio";
 import { parseProfileCustomisation, type ProfileCustomisation } from "@/lib/profileCustomisation";
 
@@ -31,6 +31,14 @@ export default function Settings() {
   const [privateError, setPrivateError] = useState("");
   const [customisation, setCustomisation] = useState<ProfileCustomisation>({});
   const [profileName, setProfileName] = useState<{ display_name: string | null; username: string | null }>({ display_name: null, username: null });
+  const [notifPrefs, setNotifPrefs] = useState({ likes: true, replies: true, reposts: true, follows: true, mentions: true });
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacyMsg, setPrivacyMsg] = useState("");
+  const [privacyError, setPrivacyError] = useState("");
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifMsg, setNotifMsg] = useState("");
+  const [notifError, setNotifError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +83,16 @@ export default function Settings() {
             theme: typeof d.theme === "string" ? d.theme : "default",
             accent: typeof d.accent === "string" ? d.accent : "#8b5cf6",
           });
+          if (d.notifications && typeof d.notifications === "object") {
+            const n = d.notifications as Record<string, unknown>;
+            setNotifPrefs({
+              likes: n.likes !== false,
+              replies: n.replies !== false,
+              reposts: n.reposts !== false,
+              follows: n.follows !== false,
+              mentions: n.mentions !== false,
+            });
+          }
         }
       });
       void supabase.from("profiles").select("display_name, username, profile_customisation").eq("id", user.id).maybeSingle().then(({ data }) => {
@@ -102,153 +120,187 @@ export default function Settings() {
   return (
     <Shell>
       <PageHeader title="Settings" />
-      {user.app_metadata?.afterfur_staff_admin === true && <div className="px-4 sm:px-6 space-y-2"><Link href="/staff/badges" className="af-action-secondary">Manage staff badges</Link><Link href="/staff/membership" className="af-action-secondary">Manage memberships</Link></div>}
-      <div className="space-y-3">
-        <input value={settingsQuery} onChange={(e) => setSettingsQuery(e.target.value)} placeholder="Search settings" className="af-field w-full text-sm" />
-        <nav aria-label="Settings sections" className="flex flex-wrap gap-2 rounded-lg border border-af-border bg-af-surface p-2">
-          {matching.map((s) => (
-            <a key={s.id} href={`#${s.id}`} className="rounded-md px-3 py-1.5 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">{s.label}</a>
-          ))}
-          {settingsQuery && matching.length === 0 && <span className="px-3 py-1.5 text-xs text-af-muted">No matching settings.</span>}
-        </nav>
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+        <div className="flex flex-col gap-6 md:flex-row">
+          <aside className="md:w-64 md:shrink-0">
+            <div className="md:sticky md:top-20 space-y-4 rounded-2xl border border-af-border bg-af-surface p-4 shadow-sm">
+              <input value={settingsQuery} onChange={(e) => setSettingsQuery(e.target.value)} placeholder="Search settings" className="af-field w-full text-sm" />
+              <nav aria-label="Settings sections" className="flex flex-col gap-1">
+                {matching.map((s) => (
+                  <a key={s.id} href={`#${s.id}`} className="rounded-xl px-3 py-2 text-sm font-medium text-af-text-2 transition-colors hover:bg-af-surface-2 hover:text-af-text">{s.label}</a>
+                ))}
+                {settingsQuery && matching.length === 0 && <span className="px-3 py-2 text-xs text-af-muted">No matching settings.</span>}
+              </nav>
+            </div>
+          </aside>
+
+          <main className="min-w-0 flex-1 space-y-6">
+            {user.app_metadata?.afterfur_staff_admin === true && (
+              <div className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm">
+                <div className="flex flex-wrap gap-2">
+                  <Link href="/staff/badges" className="af-action-secondary">Manage staff badges</Link>
+                  <Link href="/staff/membership" className="af-action-secondary">Manage memberships</Link>
+                </div>
+              </div>
+            )}
+
+            <section id="account" aria-labelledby="account-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="account-heading" className="text-base font-semibold text-af-text">Account</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">Signed in as {user.email || "unknown"}. User ID: {user.id || "—"}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link href="/edit-profile" className="inline-flex min-h-10 items-center justify-center rounded-md bg-af-brand px-4 text-xs font-semibold text-white">Edit profile</Link>
+              </div>
+            </section>
+
+            <section id="security" aria-labelledby="security-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="security-heading" className="text-base font-semibold text-af-text">Security and account access</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">Password recovery is handled through the existing authentication flow.</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link href="/forgot-password" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Reset password</Link>
+              </div>
+            </section>
+
+            <section id="privacy" aria-labelledby="privacy-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="privacy-heading" className="text-base font-semibold text-af-text">Privacy and safety</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">Privacy controls are documented in the Privacy Policy. Blocking and visibility enforcement are not yet implemented.</p>
+              <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} /> Private account</label>
+              <button type="button" disabled={privacySaving} onClick={async () => {
+                const supabase = createClient();
+                if (!supabase || !user) return;
+                setPrivacySaving(true); setPrivacyError(""); setPrivacyMsg("");
+                const { error } = await supabase.from("profiles").update({ is_private: isPrivate }).eq("id", user.id);
+                if (error) setPrivacyError(error.message); else setPrivacyMsg("Saved.");
+                setPrivacySaving(false);
+              }} className="mt-4 min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50">{privacySaving ? "Saving…" : "Save privacy"}</button>
+              {privacyError && <p role="alert" className="mt-3 text-sm text-af-danger">{privacyError}</p>}
+              {privacyMsg && <p role="status" className="mt-3 text-sm text-af-text-2">{privacyMsg}</p>}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link href="/privacy" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Privacy Policy</Link>
+                <Link href="/safety" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Safety</Link>
+              </div>
+            </section>
+
+            <section id="notifications" aria-labelledby="notifications-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="notifications-heading" className="text-base font-semibold text-af-text">Notifications</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">Notification preferences are saved to your account. Enforcement depends on existing database triggers.</p>
+              {notifError && <p role="alert" className="mt-3 rounded-md border border-af-danger/40 bg-af-danger/10 px-3 py-2 text-sm text-af-danger">{notifError}</p>}
+              {notifMsg && <p role="status" className="mt-3 rounded-md border border-af-border bg-af-surface-2 px-3 py-2 text-sm text-af-text-2">{notifMsg}</p>}
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {(["likes","replies","reposts","follows","mentions"] as const).map((k) => (
+                  <label key={k} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={notifPrefs[k]} onChange={(e) => setNotifPrefs({ ...notifPrefs, [k]: e.target.checked })} /> {k}</label>
+                ))}
+              </div>
+              <button type="button" disabled={notifSaving} onClick={async () => {
+                const supabase = createClient();
+                if (!supabase) return;
+                setNotifSaving(true); setNotifError(""); setNotifMsg("");
+                const { error } = await callRpc(supabase, "update_ui_preferences", { p_preferences: { ...privatePrefs, notifications: notifPrefs } });
+                if (error) setNotifError(error.message); else setNotifMsg("Saved.");
+                setNotifSaving(false);
+              }} className="mt-4 min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50">{notifSaving ? "Saving…" : "Save notification preferences"}</button>
+            </section>
+
+            <section id="accessibility" aria-labelledby="accessibility-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="accessibility-heading" className="text-base font-semibold text-af-text">Accessibility</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">AfterFur respects your operating system&apos;s reduced-motion preference. Animations and transitions are disabled when Reduce Motion is enabled.</p>
+            </section>
+
+            <section id="appearance" aria-labelledby="appearance-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="appearance-heading" className="text-base font-semibold text-af-text">Appearance</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">Private interface preferences are stored separately and affect only your own account. They are not visible to other users.</p>
+              {privateError && <p role="alert" className="mt-3 rounded-md border border-af-danger/40 bg-af-danger/10 px-3 py-2 text-sm text-af-danger">{privateError}</p>}
+              {privateMsg && <p role="status" className="mt-3 rounded-md border border-af-border bg-af-surface-2 px-3 py-2 text-sm text-af-text-2">{privateMsg}</p>}
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-af-text-2">Interface theme</span>
+                  <select value={privatePrefs.theme} onChange={(e) => setPrivatePrefs({ ...privatePrefs, theme: e.target.value })} className="af-field mt-0 w-full text-sm" aria-label="Interface theme">
+                    <option value="default">Default</option>
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-af-text-2">Personal accent colour</span>
+                  <input type="color" value={privatePrefs.accent} onChange={(e) => setPrivatePrefs({ ...privatePrefs, accent: e.target.value })} className="af-field h-10 w-full cursor-pointer" aria-label="Personal accent colour" />
+                </label>
+              </div>
+              <button type="button" disabled={privateSaving} onClick={async () => {
+                const supabase = createClient();
+                if (!supabase) return;
+                setPrivateSaving(true); setPrivateError(""); setPrivateMsg("");
+                const { error } = await callRpc(supabase, "update_ui_preferences", { p_preferences: privatePrefs });
+                if (error) setPrivateError(error.message); else setPrivateMsg("Saved.");
+                setPrivateSaving(false);
+              }} className="mt-4 min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50">{privateSaving ? "Saving…" : "Save private appearance"}</button>
+            </section>
+
+            <section id="membership" aria-labelledby="membership-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="membership-heading" className="text-base font-semibold text-af-text">Membership and Prime</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">Membership status is read from a verified provider entitlement. AfterFur Prime is not enabled unless billing configures an active entitlement.</p>
+              {membershipState.loading ? <p role="status" className="mt-3 text-sm text-af-muted">Checking membership status</p> : membershipState.error ? <p role="status" className="mt-3 text-sm text-af-muted">Verified membership status is not available: {membershipState.error}</p> : !membershipState.status ? <p role="status" className="mt-3 text-sm text-af-muted">No verified PawPass membership is connected to this account.</p> : membershipState.status.status === "active" || membershipState.status.status === "cancel_at_period_end" ? <p role="status" className="mt-3 text-sm text-af-text-2">PawPass {membershipState.status.source === "owner_test" ? "(test mode) " : ""}entitlement active through {membershipState.status.currentPeriodEnd ? new Date(membershipState.status.currentPeriodEnd).toLocaleDateString() : "the current period"}.</p> : <p role="status" className="mt-3 text-sm text-af-muted">Membership is {membershipState.status.status}. Source: {membershipState.status.source}. Earned anniversary badges remain on your profile.</p>}
+
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-af-text">Founding 50 reward</h3>
+                <p className="mt-1 text-xs text-af-muted">Limited to 50 successful claims. 12 months of Prime from claim time. No payment method required.</p>
+                {foundingState.loading ? <p className="mt-2 text-xs text-af-muted">Checking founding status </p> : foundingState.error ? <p className="mt-2 text-xs text-af-danger">{foundingState.error}</p> : foundingState.claimed ? <p className="mt-2 text-xs text-af-text-2">Claimed on {foundingState.claimedAt ? new Date(foundingState.claimedAt).toLocaleString() : "?"}; active through {foundingState.expiresAt ? new Date(foundingState.expiresAt).toLocaleDateString() : "?"}.</p> : (
+                  <>
+                    <p className="mt-2 text-xs text-af-muted">{foundingState.remaining ?? 0} of 50 rewards remaining.</p>
+                    <button
+                      type="button"
+                      disabled={foundingState.remaining === 0 || foundingState.remaining === null}
+                      onClick={async () => {
+                        const supabase = createClient();
+                        if (!supabase) return;
+                        const { ok, error } = await claimFoundingPrime(supabase);
+                        if (error || !ok) { setFoundingState((s) => ({ ...s, error: error ?? "Claim failed." })); return; }
+                        const [f, r] = await Promise.all([loadFoundingStatus(supabase), loadFoundingRemaining(supabase)]);
+                        setFoundingState({ loading: false, error: "", claimed: f.claimed, claimedAt: f.claimedAt, expiresAt: f.expiresAt, remaining: r.remaining });
+                        const m = await loadMyMembershipStatus(supabase);
+                        setMembershipState({ loading: false, error: m.error ?? "", status: m.status });
+                      }}
+                      className="mt-2 min-h-10 rounded-md bg-af-brand px-4 text-xs font-semibold text-white hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Claim founding Prime
+                    </button>
+                    {foundingState.remaining === 0 && <p className="mt-2 text-xs text-af-muted">All 50 founding rewards have been claimed.</p>}
+                  </>
+                )}
+              </div>
+
+              <ProfileCustomisationStudio
+                isPrime={isPrime}
+                customisation={customisation}
+                displayName={profileName.display_name ?? profileName.username ?? "Your name"}
+                username={profileName.username ?? "yourname"}
+              />
+
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-af-text">Planned benefits (not yet available)</h3>
+                <ul className="mt-2 space-y-1 text-xs text-af-muted">
+                  <li>Extra bookmark folders</li>
+                  <li>Advanced search filters</li>
+                  <li>Analytics dashboard</li>
+                  <li>Monthly boosts</li>
+                  <li>Anniversary badges retained after expiry</li>
+                </ul>
+                <p className="mt-3 text-xs text-af-muted">Payment processing is not yet configured. No charges are made. Upgrade options will appear here when billing is enabled.</p>
+              </div>
+            </section>
+
+            <section id="resources" aria-labelledby="resources-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+              <h2 id="resources-heading" className="text-base font-semibold text-af-text">Additional resources</h2>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">Policies and support links.</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link href="/terms" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Terms of Service</Link>
+                <Link href="/privacy" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Privacy Policy</Link>
+                <Link href="/policies" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">All policies</Link>
+              </div>
+            </section>
+          </main>
+        </div>
       </div>
-
-      <section id="account" aria-labelledby="account-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="account-heading" className="text-base font-semibold text-af-text">Account</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">Signed in as {user.email || "unknown"}. User ID: {user.id || "—"}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/edit-profile" className="inline-flex min-h-10 items-center justify-center rounded-md bg-af-brand px-4 text-xs font-semibold text-white">Edit profile</Link>
-        </div>
-      </section>
-
-      <Separator className="mt-6 mb-2" />
-      <section id="security" aria-labelledby="security-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="security-heading" className="text-base font-semibold text-af-text">Security and account access</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">Password recovery is handled through the existing authentication flow.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/forgot-password" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Reset password</Link>
-        </div>
-      </section>
-
-      <Separator className="mt-6 mb-2" />
-      <section id="privacy" aria-labelledby="privacy-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="privacy-heading" className="text-base font-semibold text-af-text">Privacy and safety</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">Privacy controls are documented in the Privacy Policy. Blocking and visibility enforcement are not yet implemented.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/privacy" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Privacy Policy</Link>
-          <Link href="/safety" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Safety</Link>
-        </div>
-      </section>
-
-      <Separator className="mt-6 mb-2" />
-      <section id="notifications" aria-labelledby="notifications-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="notifications-heading" className="text-base font-semibold text-af-text">Notifications</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">Notification preference persistence is not yet implemented. Badge awards and social notifications continue to use the existing notification system.</p>
-      </section>
-
-      <Separator className="mt-6 mb-2" />
-      <section id="accessibility" aria-labelledby="accessibility-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="accessibility-heading" className="text-base font-semibold text-af-text">Accessibility</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">AfterFur respects your operating system&apos;s reduced-motion preference. Animations and transitions are disabled when Reduce Motion is enabled.</p>
-      </section>
-
-      <Separator className="mt-6 mb-2" />
-      <section id="appearance" aria-labelledby="appearance-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="appearance-heading" className="text-base font-semibold text-af-text">Appearance</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">Private interface preferences are stored separately and affect only your own account. They are not visible to other users.</p>
-        {privateError && <p role="alert" className="mt-3 rounded-md border border-af-danger/40 bg-af-danger/10 px-3 py-2 text-sm text-af-danger">{privateError}</p>}
-        {privateMsg && <p role="status" className="mt-3 rounded-md border border-af-border bg-af-surface-2 px-3 py-2 text-sm text-af-text-2">{privateMsg}</p>}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-af-text-2">Interface theme</span>
-            <select value={privatePrefs.theme} onChange={(e) => setPrivatePrefs({ ...privatePrefs, theme: e.target.value })} className="af-field mt-0 w-full text-sm" aria-label="Interface theme">
-              <option value="default">Default</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-af-text-2">Personal accent colour</span>
-            <input type="color" value={privatePrefs.accent} onChange={(e) => setPrivatePrefs({ ...privatePrefs, accent: e.target.value })} className="af-field h-10 w-full cursor-pointer" aria-label="Personal accent colour" />
-          </label>
-        </div>
-        <button type="button" disabled={privateSaving} onClick={async () => {
-          const supabase = createClient();
-          if (!supabase) return;
-          setPrivateSaving(true); setPrivateError(""); setPrivateMsg("");
-          const { error } = await callRpc(supabase, "update_ui_preferences", { p_preferences: privatePrefs });
-          if (error) setPrivateError(error.message); else setPrivateMsg("Saved.");
-          setPrivateSaving(false);
-        }} className="mt-3 af-btn af-btn-primary">{privateSaving ? "Saving…" : "Save private appearance"}</button>
-      </section>
-
-      <Separator className="mt-6 mb-2" />
-      <section id="membership" aria-labelledby="membership-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="membership-heading" className="text-base font-semibold text-af-text">Membership and Prime</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">Membership status is read from a verified provider entitlement. AfterFur Prime is not enabled unless billing configures an active entitlement.</p>
-        {membershipState.loading ? <p role="status" className="mt-3 text-sm text-af-muted">Checking membership status</p> : membershipState.error ? <p role="status" className="mt-3 text-sm text-af-muted">Verified membership status is not available: {membershipState.error}</p> : !membershipState.status ? <p role="status" className="mt-3 text-sm text-af-muted">No verified PawPass membership is connected to this account.</p> : membershipState.status.status === "active" || membershipState.status.status === "cancel_at_period_end" ? <p role="status" className="mt-3 text-sm text-af-text-2">PawPass {membershipState.status.source === "owner_test" ? "(test mode) " : ""}entitlement active through {membershipState.status.currentPeriodEnd ? new Date(membershipState.status.currentPeriodEnd).toLocaleDateString() : "the current period"}.</p> : <p role="status" className="mt-3 text-sm text-af-muted">Membership is {membershipState.status.status}. Source: {membershipState.status.source}. Earned anniversary badges remain on your profile.</p>}
-
-        <div className="mt-6">
-          <h3 className="text-sm font-semibold text-af-text">Founding 50 reward</h3>
-          <p className="mt-1 text-xs text-af-muted">Limited to 50 successful claims. 12 months of Prime from claim time. No payment method required.</p>
-          {foundingState.loading ? <p className="mt-2 text-xs text-af-muted">Checking founding status </p> : foundingState.error ? <p className="mt-2 text-xs text-af-danger">{foundingState.error}</p> : foundingState.claimed ? <p className="mt-2 text-xs text-af-text-2">Claimed on {foundingState.claimedAt ? new Date(foundingState.claimedAt).toLocaleString() : "?"}; active through {foundingState.expiresAt ? new Date(foundingState.expiresAt).toLocaleDateString() : "?"}.</p> : (
-            <>
-              <p className="mt-2 text-xs text-af-muted">{foundingState.remaining ?? 0} of 50 rewards remaining.</p>
-              <button
-                type="button"
-                disabled={foundingState.remaining === 0 || foundingState.remaining === null}
-                onClick={async () => {
-                  const supabase = createClient();
-                  if (!supabase) return;
-                  const { ok, error } = await claimFoundingPrime(supabase);
-                  if (error || !ok) { setFoundingState((s) => ({ ...s, error: error ?? "Claim failed." })); return; }
-                  const [f, r] = await Promise.all([loadFoundingStatus(supabase), loadFoundingRemaining(supabase)]);
-                  setFoundingState({ loading: false, error: "", claimed: f.claimed, claimedAt: f.claimedAt, expiresAt: f.expiresAt, remaining: r.remaining });
-                  const m = await loadMyMembershipStatus(supabase);
-                  setMembershipState({ loading: false, error: m.error ?? "", status: m.status });
-                }}
-                className="mt-2 min-h-10 rounded-md bg-af-brand px-4 text-xs font-semibold text-white hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Claim founding Prime
-              </button>
-              {foundingState.remaining === 0 && <p className="mt-2 text-xs text-af-muted">All 50 founding rewards have been claimed.</p>}
-            </>
-          )}
-        </div>
-
-        <ProfileCustomisationStudio
-          isPrime={isPrime}
-          customisation={customisation}
-          displayName={profileName.display_name ?? profileName.username ?? "Your name"}
-          username={profileName.username ?? "yourname"}
-        />
-
-        <div className="mt-6">
-          <h3 className="text-sm font-semibold text-af-text">Planned benefits (not yet available)</h3>
-          <ul className="mt-2 space-y-1 text-xs text-af-muted">
-            <li>Extra bookmark folders</li>
-            <li>Advanced search filters</li>
-            <li>Analytics dashboard</li>
-            <li>Monthly boosts</li>
-            <li>Anniversary badges retained after expiry</li>
-          </ul>
-          <p className="mt-3 text-xs text-af-muted">Payment processing is not yet configured. No charges are made. Upgrade options will appear here when billing is enabled.</p>
-        </div>
-      </section>
-
-      <Separator className="mt-6 mb-2" />
-      <section id="resources" aria-labelledby="resources-heading" className="mt-4 rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
-        <h2 id="resources-heading" className="text-base font-semibold text-af-text">Additional resources</h2>
-        <p className="mt-1 text-sm leading-relaxed text-af-muted">Policies and support links.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/terms" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Terms of Service</Link>
-          <Link href="/privacy" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Privacy Policy</Link>
-          <Link href="/policies" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">All policies</Link>
-        </div>
-      </section>
     </Shell>
   );
 }
 
 export const dynamic = 'force-dynamic';
-

@@ -37,75 +37,79 @@ function ReplyThread({ reply, replies, depth, replyingTo, setReplyingTo, draft, 
   const [reportingReply, setReportingReply] = useState<string | null>(null);
   return (
     <>
-    <article className={`border-b border-af-border px-4 py-4 transition-colors hover:bg-af-surface/40 sm:px-5 ${depth > 0 ? "ml-4 border-l border-af-border pl-4 sm:ml-8" : ""}`}>
-      <div className="flex gap-3">
-        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-          {reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(reply.profiles?.display_name || reply.profiles?.username || "?").slice(0, 1).toUpperCase()}</div>}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 text-[15px]">
-            <span className="truncate font-bold text-af-text" style={nameStyle(parseProfileCustomisation(reply.profiles?.profile_customisation).displayNameColor, parseProfileCustomisation(reply.profiles?.profile_customisation).effect)}>{reply.profiles?.display_name || reply.profiles?.username || "Unknown"}</span>
-            <span className="truncate text-af-muted" style={nameStyle(parseProfileCustomisation(reply.profiles?.profile_customisation).usernameColor, parseProfileCustomisation(reply.profiles?.profile_customisation).effect)}>@{reply.profiles?.username || "unknown"}</span>
-            <BadgeList userId={reply.author_id} />
-            <span className="text-af-muted">Â·</span>
-            <span className="text-af-muted">{new Date(reply.created_at).toLocaleString()}</span>
+      <article className={`px-4 py-4 transition-colors hover:bg-af-surface-2/40 sm:px-5 ${depth > 0 ? "ml-2 border-l-2 border-af-border pl-4 sm:ml-6 sm:pl-5" : ""}`}>
+        <div className="flex gap-3">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">
+            {reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(reply.profiles?.display_name || reply.profiles?.username || "?").slice(0, 1).toUpperCase()}</div>}
           </div>
-          {editingReplyId === reply.id ? (
-            <div className="mt-2 space-y-2">
-              <textarea value={editReplyDraft} onChange={(e) => setEditReplyDraft(e.target.value)} maxLength={300} rows={3} className="af-field min-h-20 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-af-muted">{editReplyDraft.length}/300</span>
-                <div className="flex gap-2">
-                  <button type="button" onClick={onCancelEdit} disabled={editReplySubmitting} className="af-action-secondary">Cancel</button>
-                  <button type="button" onClick={() => onSaveEdit(reply.id)} disabled={editReplySubmitting || !editReplyDraft.trim() || editReplyDraft.length > 300} className="min-h-9 rounded-md bg-af-brand px-4 text-xs font-semibold text-white disabled:opacity-50">{editReplySubmitting ? "Savingâ€¦" : "Save"}</button>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+              <span className="truncate font-bold text-af-text" style={nameStyle(parseProfileCustomisation(reply.profiles?.profile_customisation).displayNameColor, parseProfileCustomisation(reply.profiles?.profile_customisation).displayNameEffect ?? undefined)}>{reply.profiles?.display_name || reply.profiles?.username || "Unknown"}</span>
+              <span className="truncate text-af-muted" style={nameStyle(parseProfileCustomisation(reply.profiles?.profile_customisation).usernameColor, parseProfileCustomisation(reply.profiles?.profile_customisation).usernameEffect ?? undefined)}>@{reply.profiles?.username || "unknown"}</span>
+              <BadgeList userId={reply.author_id} />
+              <span className="text-af-muted">·</span>
+              <time dateTime={reply.created_at} className="text-af-muted">{new Date(reply.created_at).toLocaleString()}</time>
+            </div>
+            {editingReplyId === reply.id ? (
+              <div className="mt-3 space-y-2 rounded-xl border border-af-border bg-af-surface/60 p-3">
+                <textarea value={editReplyDraft} onChange={(e) => setEditReplyDraft(e.target.value)} maxLength={300} rows={3} className="af-field min-h-20 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-af-muted">{editReplyDraft.length}/300</span>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={onCancelEdit} disabled={editReplySubmitting} className="af-action-secondary">Cancel</button>
+                    <button type="button" onClick={() => onSaveEdit(reply.id)} disabled={editReplySubmitting || !editReplyDraft.trim() || editReplyDraft.length > 300} className="min-h-9 rounded-md bg-af-brand px-4 text-xs font-semibold text-white disabled:opacity-50">{editReplySubmitting ? "Saving…" : "Save"}</button>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-af-text">{reply.content}</p>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button onClick={() => setReplyingTo(reply.id)} className="inline-flex min-h-9 items-center rounded-md px-2 text-xs font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2 hover:text-af-text">Reply</button>
+              <button onClick={() => setReportingReply(reply.id)} className="inline-flex min-h-9 items-center rounded-md px-2 text-xs font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2 hover:text-af-text">Report</button>
+              {currentUserId && currentUserId === reply.author_id && editingReplyId !== reply.id && (
+                <>
+                  <button onClick={() => onStartEdit(reply)} className="inline-flex min-h-9 items-center rounded-md px-2 text-xs font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2 hover:text-af-text">Edit</button>
+                  {confirmDeleteId === reply.id ? (
+                    <>
+                      <span className="text-xs text-af-muted">Delete reply?</span>
+                      <button onClick={() => onDelete(reply.id)} className="inline-flex min-h-9 items-center rounded-md px-2 text-xs font-medium text-af-danger transition-colors hover:bg-af-danger/10">Confirm</button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="inline-flex min-h-9 items-center rounded-md px-2 text-xs font-medium text-af-muted transition-colors hover:bg-af-surface-2">Cancel</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteId(reply.id)} className="inline-flex min-h-9 items-center rounded-md px-2 text-xs font-medium text-af-danger transition-colors hover:bg-af-danger/10">Delete</button>
+                  )}
+                </>
+              )}
             </div>
-          ) : (
-            <p className="mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal text-af-text">{reply.content}</p>
-          )}
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <button onClick={() => setReplyingTo(reply.id)} className="text-xs font-medium text-af-accent hover:underline">Reply</button>
-            <button onClick={() => setReportingReply(reply.id)} className="text-xs font-medium text-af-accent hover:underline">Report</button>
-            {currentUserId && currentUserId === reply.author_id && editingReplyId !== reply.id && (
-              <>
-                <button onClick={() => onStartEdit(reply)} className="text-xs font-medium text-af-accent hover:underline">Edit</button>
-                {confirmDeleteId === reply.id ? (
-                  <>
-                    <span className="text-xs text-af-muted">Delete reply?</span>
-                    <button onClick={() => onDelete(reply.id)} className="text-xs font-medium text-af-danger hover:underline">Confirm</button>
-                    <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-medium text-af-muted hover:underline">Cancel</button>
-                  </>
-                ) : (
-                  <button onClick={() => setConfirmDeleteId(reply.id)} className="text-xs font-medium text-af-danger hover:underline">Delete</button>
-                )}
-              </>
+            {replyingTo === reply.id && (
+              <div className="mt-3 flex gap-3 rounded-xl border border-af-border bg-af-surface/60 p-3">
+                <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">
+                  {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-xs font-bold text-white">{(currentUserProfile?.display_name || currentUser?.email || "?").slice(0, 1).toUpperCase()}</div>}
+                </div>
+                <div className="flex-1">
+                  <p className="mb-2 text-xs text-af-muted">Replying to @{reply.profiles?.username || "unknown"} <button type="button" onClick={() => { setReplyingTo(null); setDraft(""); }} className="ml-2 text-af-brand-soft hover:underline">Cancel</button></p>
+                  <textarea ref={replyTextareaRef} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Post your reply" className="w-full resize-none bg-transparent text-[15px] leading-6 text-af-text outline-none placeholder:text-af-muted" rows={2} />
+                  <div className="mt-2 flex items-center justify-between border-t border-af-border pt-2">
+                    <EmojiPicker onPick={insertReplyEmoji} />
+                    <button onClick={onSubmit} disabled={!draft.trim() || submitting} className="min-h-9 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50">
+                      {submitting ? "Replying…" : "Reply"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {depth < 4 && children.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {children.map((child) => (
+                  <ReplyThread key={child.id} reply={child} replies={replies} depth={depth + 1} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={onSubmit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={currentUser} currentUserId={currentUserId} editingReplyId={editingReplyId} editReplyDraft={editReplyDraft} setEditReplyDraft={setEditReplyDraft} editReplySubmitting={editReplySubmitting} onStartEdit={onStartEdit} onSaveEdit={onSaveEdit} onCancelEdit={onCancelEdit} onDelete={onDelete} confirmDeleteId={confirmDeleteId} setConfirmDeleteId={setConfirmDeleteId} />
+                ))}
+              </div>
             )}
           </div>
-              {replyingTo === reply.id && (
-                <div className="mt-3 flex gap-3">
-                  <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-                    {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-xs font-bold text-white">{(currentUserProfile?.display_name || currentUser?.email || "?").slice(0, 1).toUpperCase()}</div>}
-                  </div>
-                  <div className="flex-1">
-                    <p className="mb-1 text-xs text-af-muted">Replying to @{reply.profiles?.username || "unknown"} <button type="button" onClick={() => { setReplyingTo(null); setDraft(""); }} className="ml-2 text-af-accent hover:underline">Cancel</button></p>
-                <textarea ref={replyTextareaRef} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Post your reply" className="w-full resize-none bg-transparent text-[15px] outline-none placeholder:text-af-muted" rows={2} />
-                <div className="mt-2 flex items-center justify-between border-t border-af-border pt-2">
-                  <EmojiPicker onPick={insertReplyEmoji} />
-                  <button onClick={onSubmit} disabled={!draft.trim() || submitting} className="rounded-full bg-af-accent px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-af-accent-hover disabled:cursor-not-allowed disabled:opacity-50">
-                    {submitting ? "Replying..." : "Reply"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {depth < 4 && children.map((child) => (
-            <ReplyThread key={child.id} reply={child} replies={replies} depth={depth + 1} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={onSubmit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={currentUser} currentUserId={currentUserId} editingReplyId={editingReplyId} editReplyDraft={editReplyDraft} setEditReplyDraft={setEditReplyDraft} editReplySubmitting={editReplySubmitting} onStartEdit={onStartEdit} onSaveEdit={onSaveEdit} onCancelEdit={onCancelEdit} onDelete={onDelete} confirmDeleteId={confirmDeleteId} setConfirmDeleteId={setConfirmDeleteId} />
-          ))}
         </div>
-      </div>
-    </article>
-    <ReportDialog open={reportingReply === reply.id} onClose={() => setReportingReply(null)} targetType="reply" targetId={reply.id} targetLabel="this reply" onSuccess={() => setReportingReply(null)} />
+      </article>
+      <ReportDialog open={reportingReply === reply.id} onClose={() => setReportingReply(null)} targetType="reply" targetId={reply.id} targetLabel="this reply" onSuccess={() => setReportingReply(null)} />
     </>
   );
 }
@@ -319,38 +323,40 @@ function PostPageInner() {
     <Shell>
       <PageHeader title="Post" subtitle="Conversation" />
       {loading ? (
-        <div className="p-8 text-center text-sm text-af-muted">Loadingâ€¦</div>
+        <div role="status" className="flex min-h-[30vh] items-center justify-center px-6 py-12 text-sm text-af-muted">Loading…</div>
       ) : error && !post ? (
-        <div role="alert" className="m-4 rounded-lg border border-af-danger/40 bg-af-danger/10 p-4 text-sm text-af-danger">{error}<button type="button" onClick={() => { void load(); }} className="ml-3 underline">Retry</button></div>
+        <div role="alert" className="m-4 rounded-2xl border border-af-danger/40 bg-af-danger/10 p-4 text-sm text-af-danger sm:m-6">{error}<button type="button" onClick={() => { void load(); }} className="ml-3 font-semibold underline underline-offset-2">Retry</button></div>
       ) : !post ? (
         <EmptyState title="Post not found" body="This post may have been removed or is unavailable." />
       ) : (
-        <div>
-          <PostCard post={post} onEdit={user?.id === post.author_id ? startEdit : undefined} onDelete={user?.id === post.author_id ? deletePost : undefined} />
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5 sm:px-6 sm:py-6">
+          <section className="overflow-hidden rounded-2xl border border-af-border bg-af-surface/70 shadow-sm">
+            <PostCard post={post} onEdit={user?.id === post.author_id ? startEdit : undefined} onDelete={user?.id === post.author_id ? deletePost : undefined} />
+          </section>
           {editingPost && (
-            <div className="border-b border-af-border px-4 py-4 sm:px-5">
+            <section className="rounded-2xl border border-af-border bg-af-surface/70 p-4 shadow-sm sm:p-5">
               <form onSubmit={saveEdit} className="space-y-3">
                 <h3 className="text-sm font-semibold text-af-text">Edit post</h3>
                 {editError && <p role="alert" className="rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">{editError}</p>}
                 <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} maxLength={600} rows={4} className="af-field min-h-24 w-full resize-y px-3 py-2 text-sm leading-relaxed" />
                 <div className="flex items-center justify-between"><span className="text-xs text-af-muted">{editDraft.length}/600</span><div className="flex gap-2">
                   <button type="button" onClick={() => { setEditingPost(null); setEditDraft(""); }} disabled={editSubmitting} className="af-action-secondary">Cancel</button>
-                  <button type="submit" disabled={editSubmitting || !editDraft.trim() || editDraft.length > 600} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{editSubmitting ? "Savingâ€¦" : "Save changes"}</button>
+                  <button type="submit" disabled={editSubmitting || !editDraft.trim() || editDraft.length > 600} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{editSubmitting ? "Saving…" : "Save changes"}</button>
                 </div></div>
               </form>
-            </div>
+            </section>
           )}
           {user ? (
-            <div className="border-b border-af-border px-4 py-4 sm:px-5">
+            <section className="rounded-2xl border border-af-border bg-af-surface/70 p-4 shadow-sm sm:p-5">
               <div className="flex gap-3">
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">
                   {currentUserProfile?.avatar_url ? <img src={currentUserProfile.avatar_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-af-accent to-af-accent-2 text-sm font-bold text-white">{(currentUserProfile?.display_name || user.email || "?").slice(0, 1).toUpperCase()}</div>}
                 </div>
                 <div className="flex-1">
                   {replyingTo && (
                     <p className="mb-2 text-xs text-af-muted">
                       Replying to @{replies.find((r) => r.id === replyingTo)?.profiles?.username || "comment"}
-                      <button type="button" onClick={() => { setReplyingTo(null); setDraft(""); }} className="ml-2 text-af-accent hover:underline">Cancel</button>
+                      <button type="button" onClick={() => { setReplyingTo(null); setDraft(""); }} className="ml-2 text-af-brand-soft hover:underline">Cancel</button>
                     </p>
                   )}
                   <textarea
@@ -369,30 +375,36 @@ function PostPageInner() {
                       disabled={!draft.trim() || submitting}
                       className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {submitting ? "Replying..." : "Reply"}
+                      {submitting ? "Replying…" : "Reply"}
                     </button>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           ) : (
-            <div className="border-b border-af-border p-4 text-center">
-              <Link href="/signin" className="text-af-accent hover:underline">
-                Sign in to reply
-              </Link>
-            </div>
+            <section className="rounded-2xl border border-af-border bg-af-surface/70 p-6 text-center shadow-sm">
+              <Link href="/signin" className="text-af-brand-soft hover:underline">Sign in to reply</Link>
+            </section>
           )}
 
-          {error && <div role="alert" className="border-b border-af-border px-4 py-3 text-sm text-af-danger">{error}<button type="button" onClick={() => { void load(); }} className="ml-3 underline">Retry</button></div>}
+          {error && <div role="alert" className="rounded-2xl border border-af-danger/40 bg-af-danger/10 px-4 py-3 text-sm text-af-danger">{error}<button type="button" onClick={() => { void load(); }} className="ml-3 font-semibold underline underline-offset-2">Retry</button></div>}
 
           {replies.length === 0 ? (
-            <EmptyState title="No replies yet" body="Be the first to reply." />
-          ) : (
-            <div>
-              {replies.filter((r) => !r.parent_reply_id).map((r) => (
-                <ReplyThread key={r.id} reply={r} replies={replies} depth={0} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={submit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={user} currentUserId={user?.id ?? null} editingReplyId={editingReplyId} editReplyDraft={editReplyDraft} setEditReplyDraft={setEditReplyDraft} editReplySubmitting={editReplySubmitting} onStartEdit={startEditReply} onSaveEdit={saveEditReply} onCancelEdit={cancelEditReply} onDelete={deleteReply} confirmDeleteId={deleteReplyId} setConfirmDeleteId={setDeleteReplyId} />
-              ))}
+            <div className="rounded-2xl border border-af-border bg-af-surface/70 px-6 py-8 shadow-sm">
+              <EmptyState title="No replies yet" body="Be the first to reply." />
             </div>
+          ) : (
+            <section className="overflow-hidden rounded-2xl border border-af-border bg-af-surface/70 shadow-sm">
+              <header className="border-b border-af-border px-4 py-3 sm:px-5">
+                <h2 className="text-base font-semibold tracking-tight text-af-text">Replies</h2>
+                <p className="mt-0.5 text-xs text-af-muted">{replies.length} {replies.length === 1 ? "reply" : "replies"}</p>
+              </header>
+              <div className="divide-y divide-af-border">
+                {replies.filter((r) => !r.parent_reply_id).map((r) => (
+                  <ReplyThread key={r.id} reply={r} replies={replies} depth={0} replyingTo={replyingTo} setReplyingTo={setReplyingTo} draft={draft} setDraft={setDraft} submitting={submitting} onSubmit={submit} insertReplyEmoji={insertReplyEmoji} replyTextareaRef={replyTextareaRef} currentUserProfile={currentUserProfile} currentUser={user} currentUserId={user?.id ?? null} editingReplyId={editingReplyId} editReplyDraft={editReplyDraft} setEditReplyDraft={setEditReplyDraft} editReplySubmitting={editReplySubmitting} onStartEdit={startEditReply} onSaveEdit={saveEditReply} onCancelEdit={cancelEditReply} onDelete={deleteReply} confirmDeleteId={deleteReplyId} setConfirmDeleteId={setDeleteReplyId} />
+                ))}
+              </div>
+            </section>
           )}
         </div>
       )}
@@ -402,7 +414,7 @@ function PostPageInner() {
 
 export default function PostPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-sm text-af-muted">Loadingâ€¦</div>}>
+    <Suspense fallback={<div role="status" className="p-8 text-center text-sm text-af-muted">Loading…</div>}>
       <PostPageInner />
     </Suspense>
   );

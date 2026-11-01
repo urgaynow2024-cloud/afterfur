@@ -4,8 +4,10 @@ import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import { canFollow } from "@/lib/follow";
-import { addPostToFeed, mergeFeedPosts, submitAndPublishPost } from "@/lib/feed";
+import { addPostToFeed, filterVisibleFeedPosts, mergeFeedPosts, submitAndPublishPost } from "@/lib/feed";
+import { loadMyMembershipStatus } from "@/lib/pawpass";
 import PostCard from "@/components/PostCard";
+import EmojiPicker from "@/components/EmojiPicker";
 import Link from "next/link";
 
 type Post = {
@@ -15,12 +17,14 @@ type Post = {
   created_at: string;
   author_id: string;
   media_urls?: string[] | null;
-  profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null;
+  profiles?: { username: string; display_name: string | null; avatar_url: string | null; is_private?: boolean | null } | null;
 };
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const [isPawPass, setIsPawPass] = useState(false);
   const submittingRef = useRef(false);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [tab, setTab] = useState<"foryou" | "following">("foryou");
   const [draft, setDraft] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -32,9 +36,10 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [feedError, setFeedError] = useState("");
-  const max = 600;
+  const max = isPawPass ? 1000 : 600;
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [followingError, setFollowingError] = useState("");
+  const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -45,8 +50,26 @@ export default function Home() {
   const [spotlightError, setSpotlightError] = useState("");
   const spotlightLoaded = useRef(false);
   const [spotlightAction, setSpotlightAction] = useState<string | null>(null);
-  const [spotlightActionError, setSpotlightActionError] = useState("");
+  const [spotlightActionError, setSpotlightActionError] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<{ avatar_url?: string | null; display_name?: string | null; username?: string | null } | null>(null);
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) { setIsPawPass(false); return; }
+    let cancelled = false;
+    void loadMyMembershipStatus(supabase).then(({ status }) => {
+      if (cancelled) return;
+      const active = !!status && (status.status === "active" || status.status === "cancel_at_period_end") && !!status.currentPeriodEnd && new Date(status.currentPeriodEnd).getTime() > Date.now();
+      setIsPawPass(active);
+    });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    const el = composerTextareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [draft]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -57,6 +80,14 @@ export default function Home() {
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }: { data: { avatar_url?: string | null; display_name?: string | null; username?: string | null } | null }) => setCurrentUserProfile(data));
+  }, [user]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    void supabase.from("blocks").select("blocked_id").eq("blocker_id", user.id).then(({ data }: { data: { blocked_id: string }[] | null }) => {
+      setBlockedSet(new Set((data ?? []).map((row) => row.blocked_id)));
+    });
   }, [user]);
 
   async function load() {
@@ -78,17 +109,20 @@ export default function Home() {
     const ids = [...new Set((data ?? []).map((p: { author_id: string }) => p.author_id))];
     let profMap = new Map();
     if (ids.length) {
-      const { data: profs, error: profileError } = await supabase.from("profiles").select("*").in("id", ids);
+      const { data: profs, error: profileError } = await supabase.from("profiles").select("id,username,display_name,avatar_url,is_private").in("id", ids);
       if (profileError) {
         setFeedError(profileError.message);
         setLoading(false);
         return;
       }
-      profMap = new Map((profs ?? []).map((p: { id: string }) => [p.id, p]));
+      profMap = new Map((profs ?? []).map((p: { id: string; username: string; display_name: string | null; avatar_url: string | null; is_private?: boolean | null }) => [p.id, p]));
     }
-        const fetchedPosts = ((data ?? []).map((p: { author_id: string }) => ({ ...p, profiles: profMap.get(p.author_id) || null })) as Post[]);
-        setPosts((current) => mergeFeedPosts(current, fetchedPosts));
-        setLoading(false);
+    const fetchedPosts = ((data ?? []).map((p: { author_id: string }) => {
+      const prof = profMap.get(p.author_id) || null;
+      return { ...p, profiles: prof ? { username: prof.username, display_name: prof.display_name, avatar_url: prof.avatar_url, is_private: !!prof.is_private } : null };
+    })) as Post[];
+    setPosts((current) => mergeFeedPosts(current, fetchedPosts));
+    setLoading(false);
   }
 
   async function loadOlder() {
@@ -100,10 +134,13 @@ export default function Home() {
     if (olderError) { setFeedError(olderError.message); setLoadingMore(false); return; }
     const rows = data ?? [];
     const authorIds = [...new Set(rows.map((post: { author_id: string }) => post.author_id))];
-    const { data: profiles, error: profilesError } = authorIds.length ? await supabase.from("profiles").select("*").in("id", authorIds) : { data: [], error: null };
+    const { data: profiles, error: profilesError } = authorIds.length ? await supabase.from("profiles").select("id,username,display_name,avatar_url,is_private").in("id", authorIds) : { data: [], error: null };
     if (profilesError) { setFeedError(profilesError.message); setLoadingMore(false); return; }
-    const profileMap = new Map((profiles ?? []).map((profile: { id: string }) => [profile.id, profile]));
-    const olderPosts = rows.map((post: { author_id: string }) => ({ ...post, profiles: profileMap.get(post.author_id) ?? null })) as Post[];
+    const profileMap = new Map((profiles ?? []).map((profile: { id: string; username: string; display_name: string | null; avatar_url: string | null; is_private?: boolean | null }) => [profile.id, profile]));
+    const olderPosts = rows.map((post: { author_id: string }) => {
+      const prof = profileMap.get(post.author_id) || null;
+      return { ...post, profiles: prof ? { username: prof.username, display_name: prof.display_name, avatar_url: prof.avatar_url, is_private: !!prof.is_private } : null };
+    }) as Post[];
     setPosts((current) => mergeFeedPosts(current, olderPosts));
     setHasMore(rows.length === 40);
     setLoadingMore(false);
@@ -207,15 +244,15 @@ export default function Home() {
     }
     submittingRef.current = true;
     setSubmitting(true);
+    setError("");
     let mediaUrls: string[] = [];
     if (mediaFile) {
       try {
         const ext = mediaFile.name.split(".").pop();
         const path = `${user.id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("media").upload(path, mediaFile, { upsert: true });
+        const { error: upErr } = await supabase.storage.from("media_private").upload(path, mediaFile, { upsert: true });
         if (upErr) throw upErr;
-        const { data } = supabase.storage.from("media").getPublicUrl(path);
-        mediaUrls = [data.publicUrl];
+        mediaUrls = [path];
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Could not upload media.");
         submittingRef.current = false;
@@ -285,7 +322,12 @@ export default function Home() {
     setEditSubmitting(false);
   }
 
-  const visiblePosts = tab === "following" ? posts.filter((p) => followingIds.has(p.author_id)) : posts;
+  const visiblePosts = filterVisibleFeedPosts(posts, {
+    userId: user?.id ?? null,
+    followingIds,
+    blockedIds: blockedSet,
+    tab,
+  });
 
   return (
     <Shell
@@ -336,58 +378,71 @@ export default function Home() {
       }
     >
       <PageHeader title="Home" subtitle="Your space for the AfterFur community" />
-      <div role="tablist" aria-label="Feed selection" className="flex border-b border-af-border/80 px-2 sm:px-4">
-        <button
-          role="tab"
-          aria-selected={tab === "foryou"}
-          onClick={() => setTab("foryou")}
-          className={`relative min-h-12 flex-1 px-3 text-sm transition-colors hover:text-af-text ${tab === "foryou" ? "font-semibold text-af-text" : "text-af-muted"}`}
-        >
-          For You
-          {tab === "foryou" && <div className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-af-brand" />}
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "following"}
-          onClick={() => setTab("following")}
-          className={`relative min-h-12 flex-1 px-3 text-sm transition-colors hover:text-af-text ${tab === "following" ? "font-semibold text-af-text" : "text-af-muted"}`}
-        >
-          Following
-          {tab === "following" && <div className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-af-brand" />}
-        </button>
+      <div className="border-b border-af-border/80 px-4 py-3 sm:px-5">
+        <div role="tablist" aria-label="Feed selection" className="inline-flex w-full rounded-2xl border border-af-border bg-af-surface/80 p-1 shadow-sm">
+          <button
+            role="tab"
+            aria-selected={tab === "foryou"}
+            onClick={() => setTab("foryou")}
+            className={`flex min-h-10 flex-1 items-center justify-center rounded-xl px-4 text-sm font-semibold transition-all duration-200 ${
+              tab === "foryou"
+                ? "bg-af-brand text-white shadow-sm shadow-af-brand/20"
+                : "text-af-text-2 hover:bg-af-surface-2 hover:text-af-text"
+            }`}
+          >
+            For You
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === "following"}
+            onClick={() => setTab("following")}
+            className={`flex min-h-10 flex-1 items-center justify-center rounded-xl px-4 text-sm font-semibold transition-all duration-200 ${
+              tab === "following"
+                ? "bg-af-brand text-white shadow-sm shadow-af-brand/20"
+                : "text-af-text-2 hover:bg-af-surface-2 hover:text-af-text"
+            }`}
+          >
+            Following
+          </button>
+        </div>
       </div>
       {tab === "following" && followingError && <div role="alert" className="m-4 rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">Could not load the following feed: {followingError}<button type="button" onClick={() => { const supabase = createClient(); if (!supabase || !user) return; void supabase.from("follows").select("following_id").eq("follower_id", user.id).then(({ data, error: queryError }) => { if (queryError) setFollowingError(queryError.message); else { setFollowingIds(new Set((data ?? []).flatMap((row) => row.following_id ? [row.following_id] : []))); setFollowingError(""); } }); }} className="ml-2 underline">Retry</button></div>}
       {spotlightActionError && <div role="alert" className="mx-4 mt-2 text-sm text-af-danger">Follow update failed: {spotlightActionError}</div>}
 
       {user && (
         <div className="border-b border-af-border/80 px-4 py-4 sm:px-5">
-          <div className="flex gap-3">
+          <div className="rounded-2xl border border-af-border bg-af-surface/70 p-3 shadow-sm transition-colors focus-within:border-af-brand/40">
+            <div className="flex gap-3">
             {currentUserProfile?.avatar_url ? (
-              <img src={currentUserProfile.avatar_url} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+              <img src={currentUserProfile.avatar_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-af-border" />
             ) : (
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-af-brand text-sm font-bold text-white">
                 {(currentUserProfile?.display_name || user.email || "?").slice(0, 1).toUpperCase()}
               </div>
             )}
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <textarea
+                ref={composerTextareaRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 maxLength={max}
-                placeholder="Share something with the community..."
+                placeholder="What's on your mind?"
                 aria-label="Write a post"
-                className="min-h-24 w-full resize-y bg-transparent py-1 text-[15px] leading-6 text-af-text placeholder:text-af-muted focus:outline-none"
-                rows={2}
+                style={{ resize: "none" }}
+                className="min-h-[40px] max-h-40 w-full resize-none overflow-y-auto bg-transparent py-2 text-[15px] leading-6 text-af-text placeholder:text-af-muted/80 focus:outline-none"
+                rows={1}
               />
               {mediaPreview && (
-                <div className="mt-3 overflow-hidden rounded-lg border border-af-border bg-black/20">
+                <div className="mt-3 overflow-hidden rounded-2xl border border-af-border bg-black/20">
                   {mediaFile?.type.startsWith("video/") ? <video src={mediaPreview} controls playsInline className="max-h-72 w-full object-contain" /> : <img src={mediaPreview} alt="Selected post media preview" className="max-h-72 w-full object-contain" />}
                 </div>
               )}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-af-border/70 pt-3">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-af-border/60 bg-af-surface/50 px-2 py-1.5">
                 <div className="flex flex-wrap items-center gap-1">
-                  <label className="inline-flex min-h-9 cursor-pointer items-center rounded-md px-2 text-sm font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2">
-                    Add media
+                  <EmojiPicker onPick={(emoji) => setDraft((t) => t + emoji)} />
+                  <label className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2">
+                    <span aria-hidden="true" className="h-4 w-4 shrink-0 bg-current" style={{ maskImage: "url(/icons/afterfur/image.svg)", maskPosition: "center", maskRepeat: "no-repeat", maskSize: "contain" }} />
+                    <span>Media</span>
                     <input
                       type="file"
                       accept="image/*,video/*"
@@ -408,29 +463,30 @@ export default function Home() {
                         setMediaFile(null);
                         setMediaPreview(null);
                       }}
-                      className="min-h-9 rounded-md px-2 text-sm text-af-muted hover:bg-af-surface-2 hover:text-af-danger"
+                      className="min-h-8 rounded-full px-2.5 text-sm text-af-muted transition-colors hover:bg-af-surface-2 hover:text-af-danger"
                     >
                       Remove
                     </button>
                   )}
-                  <span aria-live="polite" className={`px-2 text-xs ${draft.length > max - 30 ? "text-af-brand-soft" : "text-af-muted"}`}>{draft.length}/{max}</span>
+                  <span aria-live="polite" className={`px-1.5 text-xs ${draft.length > max - 30 ? "text-af-brand-soft" : "text-af-muted"}`}>{draft.length}/{max}</span>
                 </div>
                 <button
                   onClick={submit}
                   disabled={(!draft.trim() && !mediaFile) || submitting}
-                  className="min-h-9 rounded-md bg-af-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-8 rounded-full bg-af-brand px-4 text-sm font-semibold text-white transition-all hover:bg-af-brand-hover hover:shadow-sm hover:shadow-af-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {submitting ? "Posting..." : "Post"}
                 </button>
               </div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
       {error && <div role="alert" className="mx-4 mt-3 rounded-lg border border-af-danger/40 bg-af-danger/10 px-3 py-2 text-sm text-af-danger sm:mx-5">{error}</div>}
 
-      {loading ? (
+      {authLoading || loading ? (
         <div aria-label="Loading posts" className="divide-y divide-af-border/70">
           {[0, 1, 2].map((n) => <div key={n} aria-hidden="true" className="flex animate-pulse gap-3 px-4 py-5 sm:px-5"><div className="h-10 w-10 shrink-0 rounded-full bg-af-surface-2" /><div className="flex-1 space-y-3"><div className="h-3 w-2/5 rounded bg-af-surface-2" /><div className="h-3 w-full rounded bg-af-surface-2" /><div className="h-3 w-4/5 rounded bg-af-surface-2" /></div></div>)}
         </div>
@@ -439,11 +495,28 @@ export default function Home() {
           <p className="text-sm text-af-danger">Could not load the feed: {feedError}</p>
           <button type="button" onClick={() => { setLoading(true); void load(); }} className="mt-3 min-h-9 rounded-md border border-af-border-strong px-3 text-sm font-medium text-af-text hover:bg-af-surface-2">Try again</button>
         </div>
-      ) : (tab === "following" && followingError) ? null : visiblePosts.length === 0 ? (
+      ) : (tab === "following" && followingError) ? (
+        <div role="alert" className="m-4 rounded-lg border border-af-danger/40 bg-af-danger/10 p-4 sm:m-5">
+          <p className="text-sm text-af-danger">Could not load following: {followingError}</p>
+          <button type="button" onClick={() => { setLoading(true); void load(); }} className="mt-3 min-h-9 rounded-md border border-af-border-strong px-3 text-sm font-medium text-af-text hover:bg-af-surface-2">Try again</button>
+        </div>
+      ) : visiblePosts.length === 0 ? (
         <EmptyState
-          title={tab === "following" ? (user ? "Nothing from follows yet" : "Sign in to follow creators") : "Your feed awaits"}
-          body={tab === "following" ? (user ? "Follow creators to see their work here." : "Sign in to build a personalised following feed.") : "Explore creators or sign in to start building your space."}
-          action={{ label: user ? "Explore creators" : "Sign in", href: user ? "/explore" : "/signin" }}
+          title={
+            !user
+              ? "Sign in to view your feed"
+              : tab === "following"
+                ? (followingIds.size === 0 ? "Follow creators to see their posts" : "No posts from followed accounts yet")
+                : "No posts yet"
+          }
+          body={
+            !user
+              ? "Create an account or sign in to see posts from the community."
+              : tab === "following"
+                ? (followingIds.size === 0 ? "Discover creators and follow them to build your Following feed." : "The accounts you follow haven't posted yet.")
+                : "Be the first to share something with the AfterFur community."
+          }
+          action={{ label: !user ? "Sign in" : "Explore creators", href: !user ? "/signin" : "/explore" }}
         />
       ) : (
         <div className="divide-y divide-af-border/70">
@@ -509,6 +582,3 @@ export default function Home() {
     </Shell>
   );
 }
-
-
-

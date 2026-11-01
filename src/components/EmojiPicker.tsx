@@ -16,8 +16,8 @@ export default function EmojiPicker({ onPick }: { onPick: (emoji: string) => voi
   }, [open]);
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="rounded-full px-3 py-1.5 text-lg text-af-muted hover:bg-af-surface-2 hover:text-af-text" aria-label="Emoji picker">
-        😊
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-full text-af-muted transition-colors hover:bg-af-surface-2 hover:text-af-text" aria-label="Emoji picker">
+        <span aria-hidden="true" className="h-5 w-5 shrink-0 bg-current" style={{ maskImage: "url(/icons/afterfur/smile.svg)", maskPosition: "center", maskRepeat: "no-repeat", maskSize: "contain" }} />
       </button>
       {open && (
         <div className="absolute bottom-10 left-0 z-50 grid w-64 grid-cols-5 gap-1 rounded-2xl border border-af-border bg-af-surface p-2 shadow-xl">

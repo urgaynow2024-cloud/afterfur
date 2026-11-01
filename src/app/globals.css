@@ -2,23 +2,23 @@
 
 :root {
   color-scheme: dark;
-  --af-bg: #09090D;
-  --af-surface: #111827;
-  --af-surface-2: #172033;
-  --af-surface-raised: #1B2537;
-  --af-border: #1F2937;
-  --af-border-strong: #334155;
-  --af-text: #F3F4F6;
-  --af-text-2: #D1D5DB;
-  --af-muted: #9CA3AF;
-  --af-accent: #3B82F6;
-  --af-accent-hover: #2563EB;
+  --af-bg: #09090F;
+  --af-surface: #151622;
+  --af-surface-2: #1B1C2A;
+  --af-surface-raised: #242538;
+  --af-border: #292A39;
+  --af-border-strong: #3A3B4D;
+  --af-text: #F5F3FA;
+  --af-text-2: #AAA8B8;
+  --af-muted: #777588;
+  --af-accent: #8B5CF6;
+  --af-accent-hover: #7042D8;
   --af-brand: #8B5CF6;
-  --af-brand-hover: #7C3AED;
-  --af-brand-soft: #C4B5FD;
-  --af-danger: #f91880;
-  --af-success: #00ba7c;
-  --af-focus: #C4B5FD;
+  --af-brand-hover: #7042D8;
+  --af-brand-soft: #B69AFF;
+  --af-danger: #F06B79;
+  --af-success: #39C98A;
+  --af-focus: #B69AFF;
   --af-content-width: 800px;
   --af-navigation-width: 240px;
   --af-sidebar-width: 300px;
@@ -257,6 +257,54 @@ body {
   object-fit: contain;
 }
 
+/* Profile customisation effects */
+.af-effect-none { animation: none !important; text-shadow: none !important; filter: none !important; }
+.af-effect-solid { }
+.af-effect-gradient { }
+.af-effect-neon { text-shadow: 0 0 6px currentColor, 0 0 14px currentColor; }
+.af-effect-toon { text-shadow: 2px 2px 0 rgba(0,0,0,0.7), 4px 4px 0 rgba(0,0,0,0.35); }
+.af-effect-pop { display: inline-block; transform: scale(1.04); }
+.af-effect-gummy { text-shadow: 0 2px 0 rgba(0,0,0,0.35); letter-spacing: 0.02em; }
+.af-effect-prism {
+  background: linear-gradient(120deg, #8b5cf6, #06b6d4, #ec4899, #f59e0b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.af-effect-shadow { text-shadow: 2px 2px 5px rgba(0,0,0,0.55); }
+.af-effect-outline { -webkit-text-stroke: 1px currentColor; color: transparent; }
+.af-effect-metallic {
+  background: linear-gradient(180deg, #f8fafc 0%, #94a3b8 45%, #e2e8f0 55%, #64748b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.af-effect-frost { text-shadow: 0 0 4px rgba(255,255,255,0.7), 0 0 10px rgba(148,163,184,0.5); opacity: 0.92; }
+.af-effect-ember { text-shadow: 0 0 6px #ff6b35, 0 0 14px #ff3d00, 0 0 22px #b91c1c; }
+@keyframes af-glitch {
+  0%, 100% { transform: translate(0); text-shadow: 0 0 0 transparent; }
+  20% { transform: translate(-1px, 1px); text-shadow: -2px 0 #ff006e, 2px 0 #00f5ff; }
+  40% { transform: translate(1px, -1px); text-shadow: 2px 0 #ff006e, -2px 0 #00f5ff; }
+  60% { transform: translate(-1px, -1px); text-shadow: -1px 0 #ff006e, 1px 0 #00f5ff; }
+  80% { transform: translate(1px, 1px); text-shadow: 1px 0 #ff006e, -1px 0 #00f5ff; }
+}
+.af-effect-glitch { animation: af-glitch 1.6s infinite linear alternate-reverse; display: inline-block; }
+@keyframes af-aurora {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.af-effect-aurora {
+  background: linear-gradient(120deg, #8b5cf6, #06b6d4, #ec4899, #f59e0b, #8b5cf6);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: af-aurora 4s ease infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   .af-reaction-art.is-activating { animation: none; }
   .af-post-action,
