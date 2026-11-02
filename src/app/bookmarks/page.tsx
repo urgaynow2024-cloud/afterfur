@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
@@ -18,10 +19,10 @@ export default function Bookmarks() {
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
+  const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
   const [newFolder, setNewFolder] = useState("");
   const [folderError, setFolderError] = useState("");
   const [isPawPass, setIsPawPass] = useState(false);
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -61,16 +62,18 @@ export default function Bookmarks() {
       setIsPawPass(active);
     });
     const loadFolders = async () => {
-      const { data, error } = await (supabase as any).from("bookmark_folders").select("id,name").eq("user_id", user.id).order("created_at", { ascending: true });
-      if (!cancelled && !error) setFolders((data ?? []) as { id: string; name: string }[]);
+      const { data: f } = await (supabase as any).from("bookmark_folders").select("id,name").eq("user_id", user.id).order("created_at", { ascending: true });
+      if (!cancelled && f) setFolders(f as { id: string; name: string }[]);
+      const { data: items } = await (supabase as any).from("bookmark_folder_items").select("folder_id").eq("user_id", user.id);
+      if (!cancelled && items) {
+        const counts: Record<string, number> = {};
+        for (const row of items as { folder_id: string }[]) counts[row.folder_id] = (counts[row.folder_id] || 0) + 1;
+        setFolderCounts(counts);
+      }
     };
     void loadFolders();
     return () => { cancelled = true; };
   }, [user]);
-
-  if (!user) return <Shell><PageHeader title="Bookmarks" /><EmptyState title="Sign in to view bookmarks" body="Saved posts appear here after you sign in." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
-
-  const visiblePosts = posts.filter((post) => !interactions?.available || interactions.bookmarked(post.id));
 
   async function createFolder() {
     const supabase = createClient();
@@ -78,15 +81,19 @@ export default function Bookmarks() {
     if (folders.length >= 5) { setFolderError("Folder limit reached."); return; }
     const name = newFolder.trim();
     if (!name) return;
-    const { data, error } = await (supabase as any).rpc("create_bookmark_folder", { p_name: name });
+    const { error } = await (supabase as any).rpc("create_bookmark_folder", { p_name: name });
     if (error) { setFolderError(error.message); return; }
-    const loadFolders = async () => {
-      const { data: f } = await (supabase as any).from("bookmark_folders").select("id,name").eq("user_id", user.id).order("created_at", { ascending: true });
-      setFolders((f ?? []) as { id: string; name: string }[]);
-    };
-    await loadFolders();
+    const { data: f } = await (supabase as any).from("bookmark_folders").select("id,name").eq("user_id", user.id).order("created_at", { ascending: true });
+    setFolders((f ?? []) as { id: string; name: string }[]);
     setNewFolder("");
     setFolderError("");
+  }
+
+  async function renameFolder(id: string, name: string) {
+    const supabase = createClient();
+    if (!supabase) return;
+    const { error } = await (supabase as any).rpc("rename_bookmark_folder", { p_folder_id: id, p_name: name });
+    if (!error) setFolders((f) => f.map((x) => (x.id === id ? { ...x, name } : x)));
   }
 
   async function deleteFolder(id: string) {
@@ -95,6 +102,16 @@ export default function Bookmarks() {
     const { error } = await (supabase as any).rpc("delete_bookmark_folder", { p_folder_id: id });
     if (!error) setFolders((f) => f.filter((x) => x.id !== id));
   }
+
+  async function moveBookmarkToFolder(postId: string, folderId: string) {
+    const supabase = createClient();
+    if (!supabase || !folderId) return;
+    await (supabase as any).rpc("add_bookmark_to_folder", { p_folder_id: folderId, p_post_id: postId });
+  }
+
+  if (!user) return <Shell><PageHeader title="Bookmarks" /><EmptyState title="Sign in to view bookmarks" body="Saved posts appear here after you sign in." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
+
+  const visiblePosts = posts.filter((post) => !interactions?.available || interactions.bookmarked(post.id));
 
   return (
     <Shell>
@@ -110,8 +127,15 @@ export default function Bookmarks() {
             {folderError && <p className="mt-2 text-xs text-af-danger">{folderError}</p>}
             <ul className="mt-3 space-y-2">
               {folders.map((folder) => (
-                <li key={folder.id} className="flex items-center justify-between rounded-lg border border-af-border bg-af-surface-2 px-3 py-2 text-sm">
-                  <span>{folder.name}</span>
+                <li key={folder.id} className="flex items-center justify-between gap-2 rounded-lg border border-af-border bg-af-surface-2 px-3 py-2 text-sm">
+                  <span className="min-w-0 flex-1">
+                    <input
+                      defaultValue={folder.name}
+                      onBlur={(e) => { if (e.target.value.trim() && e.target.value !== folder.name) renameFolder(folder.id, e.target.value.trim()); }}
+                      className="w-full bg-transparent text-sm text-af-text focus:outline-none"
+                    />
+                    <span className="block text-xs text-af-muted">{folderCounts[folder.id] || 0} posts</span>
+                  </span>
                   <button type="button" onClick={() => deleteFolder(folder.id)} className="text-xs text-af-danger">Delete</button>
                 </li>
               ))}
@@ -132,7 +156,17 @@ export default function Bookmarks() {
       ) : (
         <div className="divide-y divide-af-border">
           {visiblePosts.map((p) => (
-            <PostCard key={p.id} post={p} />
+            <div key={p.id} className="px-4 py-3 sm:px-5">
+              {isPawPass && folders.length > 0 && (
+                <div className="mb-2">
+                  <select onChange={(e) => { if (e.target.value) moveBookmarkToFolder(p.id, e.target.value); }} className="af-field text-xs" aria-label="Move to folder">
+                    <option value="">Move to folder…</option>
+                    {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <PostCard post={p} />
+            </div>
           ))}
         </div>
       )}

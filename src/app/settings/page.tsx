@@ -274,14 +274,15 @@ export default function Settings() {
                 username={profileName.username ?? "yourname"}
               />
 
-              <div className="mt-6">
-                <h3 className="text-sm font-semibold text-af-text">Planned benefits (not yet available)</h3>
-                <ul className="mt-2 space-y-1 text-xs text-af-muted">
-                  <li>Extra bookmark folders</li>
-                  <li>Advanced search filters</li>
-                  <li>Analytics dashboard</li>
-                  <li>Monthly boosts</li>
-                  <li>Anniversary badges retained after expiry</li>
+               <div className="mt-6">
+                <h3 className="text-sm font-semibold text-af-text">PawPass benefits</h3>
+                <ul className="mt-2 space-y-1 text-xs text-af-text-2">
+                  <li>Bookmark folders {isPrime ? "(available)" : "(requires PawPass)"}</li>
+                  <li>Advanced search filters {isPrime ? "(available)" : "(requires PawPass)"}</li>
+                  <li>Creator analytics {isPrime ? "(available)" : "(requires PawPass)"}</li>
+                  <li>Monthly Discovery Boosts {isPrime ? "(available)" : "(requires PawPass)"}</li>
+                  <li>Membership recognition and anniversary badges {isPrime ? "(available)" : "(requires PawPass)"}</li>
+                  <li>Animated GIF avatars and banners {isPrime ? "(available)" : "(requires PawPass)"}</li>
                 </ul>
                 <p className="mt-3 text-xs text-af-muted">Payment processing is not yet configured. No charges are made. Upgrade options will appear here when billing is enabled.</p>
               </div>

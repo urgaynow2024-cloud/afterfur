@@ -13,6 +13,7 @@ export default function PawPassPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [boosts, setBoosts] = useState<{ remaining: number; used: number; limit: number } | null>(null);
+  const [folderCount, setFolderCount] = useState<number | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -26,6 +27,9 @@ export default function PawPassPage() {
       if (active) {
         void (supabase as any).rpc("get_boost_allowance").then(({ data }: { data: { remaining: number; used: number; limit: number } | null }) => {
           if (!cancelled && data) setBoosts({ remaining: data.remaining, used: data.used, limit: data.limit });
+        });
+        void (supabase as any).from("bookmark_folders").select("id", { count: "exact", head: true }).eq("user_id", user.id).then(({ count }: { count: number | null }) => {
+          if (!cancelled) setFolderCount(count);
         });
       }
       setLoading(false);
@@ -61,7 +65,9 @@ export default function PawPassPage() {
               <dt className="text-af-muted">Active</dt><dd className="text-af-text">{active ? "Yes" : "No"}</dd>
               <dt className="text-af-muted">Member since</dt><dd className="text-af-text">{status.eligibleSince ? new Date(status.eligibleSince).toLocaleDateString() : "—"}</dd>
               <dt className="text-af-muted">Anniversary</dt><dd className="text-af-text">{status.eligibleSince ? new Date(status.eligibleSince).toLocaleDateString(undefined, { month: "long", day: "numeric" }) : "—"}</dd>
+              <dt className="text-af-muted">Boosts used</dt><dd className="text-af-text">{boosts ? boosts.used : "—"}</dd>
               <dt className="text-af-muted">Boosts remaining</dt><dd className="text-af-text">{boosts ? `${boosts.remaining} / ${boosts.limit}` : "—"}</dd>
+              <dt className="text-af-muted">Renewal</dt><dd className="text-af-text">Monthly</dd>
             </dl>
           ) : (
             <p className="mt-3 text-sm text-af-muted">No PawPass membership connected to this account.</p>
@@ -71,15 +77,15 @@ export default function PawPassPage() {
         <section className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
           <h2 className="text-base font-semibold text-af-text">Benefits</h2>
           <ul className="mt-3 space-y-2 text-sm text-af-text-2">
-            <li>Animated GIF profile pictures and banners {active ? "(unlocked)" : "(locked)"}</li>
-            <li>Increased post character limit {active ? "(unlocked)" : "(locked)"}</li>
-            <li>Increased media upload limit {active ? "(unlocked)" : "(locked)"}</li>
-            <li>Monthly discovery boosts {active ? "(unlocked)" : "(locked)"}</li>
-            <li>Profile and post analytics {active ? "(unlocked)" : "(locked)"}</li>
-            <li>PawPass membership badge and anniversary recognition {active ? "(unlocked)" : "(locked)"}</li>
-            <li>Custom display-name and username styling is provided by AfterFur Prime, a separate membership.</li>
+            <li>Profile customisation and GIF support {active ? "(available)" : "(locked)"}</li>
+            <li>Increased post and media limits {active ? "(available)" : "(locked)"}</li>
+            <li>Bookmark folders: {active ? `${folderCount ?? 0} / 20 used` : "(locked)"}</li>
+            <li>Monthly Discovery Boosts: {active ? `${boosts ? `${boosts.remaining} remaining` : "loading"}` : "(locked)"}</li>
+            <li>Advanced search filters {active ? "(available)" : "(locked)"}</li>
+            <li>Creator analytics {active ? "(available)" : "(locked)"}</li>
+            <li>Membership recognition and anniversary badges {active ? "(available)" : "(locked)"}</li>
           </ul>
-          <p className="mt-4 text-xs text-af-muted">Benefits are enforced according to your verified membership entitlement. Some benefits require additional server-side configuration.</p>
+          <p className="mt-4 text-xs text-af-muted">Boosts renew monthly. Bookmark folders are private to your account. Some benefits require active membership.</p>
         </section>
 
         <div className="flex flex-wrap gap-2">

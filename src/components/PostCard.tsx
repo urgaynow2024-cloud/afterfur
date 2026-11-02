@@ -5,6 +5,8 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { usePostInteractions } from "@/components/PostInteractionProvider";
+import { createClient } from "@/lib/supabase/client";
+import { loadMyMembershipStatus } from "@/lib/pawpass";
 import ReportDialog from "@/components/ReportDialog";
 import { optimisticLikeCount, reconcileLikeCount } from "@/lib/likes";
 import { BadgeList } from "@/components/BadgeList";
@@ -53,7 +55,9 @@ export default function PostCard({
   const [reportOpen, setReportOpen] = useState(false);
   const [countOptimism, setCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
   const [repostCountOptimism, setRepostCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
-  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared" | "cancelled" | "error">("idle");
+  const [isPawPass, setIsPawPass] = useState(false);
+  const [boostStatus, setBoostStatus] = useState<"idle" | "processing" | "boosted" | "none" | "ineligible">("idle");
+  const [boostMsg, setBoostMsg] = useState("");
   const shareTimer = useRef<number | null>(null);
   useEffect(() => () => { if (shareTimer.current !== null) window.clearTimeout(shareTimer.current); }, []);
   const activationTimer = useRef<number | null>(null);
@@ -70,6 +74,19 @@ export default function PostCard({
   const avatar = post.profiles?.avatar_url
     ? <img src={post.profiles.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" />
     : <div className="flex h-full w-full items-center justify-center bg-af-surface-raised text-sm font-semibold text-af-brand-soft">{displayName.slice(0, 1).toUpperCase()}</div>;
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !interactions?.userId) return;
+    let cancelled = false;
+    void loadMyMembershipStatus(supabase).then(({ status }) => {
+      if (cancelled) return;
+      const active = !!status && (status.status === "active" || status.status === "cancel_at_period_end") && !!status.currentPeriodEnd && new Date(status.currentPeriodEnd).getTime() > Date.now();
+      setIsPawPass(active);
+      if (!active) setBoostStatus("ineligible");
+    });
+    return () => { cancelled = true; };
+  }, [interactions?.userId]);
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared" | "cancelled" | "error">("idle");
   const isLiked = interactions?.liked(post.id) ?? false;
   const isBookmarked = interactions?.bookmarked(post.id) ?? false;
   const isReposted = interactions?.reposted(post.id) ?? false;
@@ -192,7 +209,37 @@ export default function PostCard({
               <Image src="/images/reactions/Repost.png" alt="" aria-hidden="true" width={27} height={27} className="h-6 w-6 object-contain" />
               {visibleRepostCount !== null && <span className="text-xs tabular-nums text-af-text-2">{visibleRepostCount}</span>}
             </button>}
-            {bookmarkError && <span role="status" className="basis-full text-xs text-af-danger">Bookmark update failed: {bookmarkError}</span>}
+            {interactions?.userId === post.author_id && (
+              <button
+                type="button"
+                disabled={boostStatus === "processing" || boostStatus === "boosted" || boostStatus === "none" || boostStatus === "ineligible" || !interactions.available}
+                onClick={async () => {
+                  if (!window.confirm("Consume one Monthly Discovery Boost for this post?")) return;
+                  const supabase = createClient();
+                  if (!supabase) return;
+                  setBoostStatus("processing");
+                  setBoostMsg("");
+                  const { data, error } = await (supabase as any).rpc("consume_post_boost", { p_post_id: post.id });
+                  if (error) {
+                    setBoostMsg(error.message);
+                    if (error.message.toLowerCase().includes("no boosts")) setBoostStatus("none");
+                    else if (error.message.toLowerCase().includes("membership")) setBoostStatus("ineligible");
+                    else setBoostStatus("idle");
+                    return;
+                  }
+                  setBoostStatus("boosted");
+                  setBoostMsg(`Boosted. Remaining: ${data?.remaining ?? 0}.`);
+                }}
+                aria-label={`Boost ${displayName}'s post`}
+                className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-af-brand-soft transition-colors hover:bg-af-surface-2 hover:text-af-text disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                <span>
+                  {boostStatus === "processing" ? "Boosting…" : boostStatus === "boosted" ? "Boosted" : boostStatus === "none" ? "No Boosts remaining" : boostStatus === "ineligible" ? "PawPass required" : "Boost"}
+                </span>
+              </button>
+            )}
+            {boostMsg && <span role="status" className="basis-full text-xs text-af-muted">{boostMsg}</span>}
             {repostError && <span role="status" className="basis-full text-xs text-af-danger">Repost update failed: {repostError}</span>}
             <button type="button" onClick={() => { void handleShare(); }} aria-label={`Share ${displayName}'s post`} className="inline-flex min-h-9 items-center rounded-md px-2 transition-colors hover:bg-af-surface-2 hover:text-af-text">
               {shareStatus === "copied" ? "Copied!" : shareStatus === "shared" ? "Shared" : shareStatus === "cancelled" ? "Cancelled" : shareStatus === "error" ? "Failed" : "Share"}
