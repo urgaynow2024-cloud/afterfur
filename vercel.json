@@ -1,4 +1,14 @@
 {
+  "crons": [
+    {
+      "path": "/api/account/deletion-worker",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/account/reminder-worker",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

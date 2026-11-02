@@ -18,6 +18,7 @@ const SETTINGS_SECTIONS = [
   { id: "accessibility", label: "Accessibility" },
   { id: "appearance", label: "Appearance" },
   { id: "membership", label: "Membership and Prime" },
+  { id: "account-data", label: "Account & Data" },
 ] as const;
 
 export default function Settings() {
@@ -39,6 +40,14 @@ export default function Settings() {
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifMsg, setNotifMsg] = useState("");
   const [notifError, setNotifError] = useState("");
+  const [deletionOption, setDeletionOption] = useState<"immediate_24h" | "scheduled_14d" | "scheduled_30d">("immediate_24h");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletionMsg, setDeletionMsg] = useState("");
+  const [deletionError, setDeletionError] = useState("");
+  const [pendingDeletion, setPendingDeletion] = useState<{ id: string; option: string; scheduled_deletion_at: string; status: string } | null>(null);
+  const [exportStatus, setExportStatus] = useState<{ id: string; status: string; download_url?: string } | null>(null);
+  const [requestingExport, setRequestingExport] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +125,22 @@ export default function Settings() {
   if (!user) return <Shell><PageHeader title="Settings" /><EmptyState title="Sign in to manage settings" body="Account settings require authentication." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
 
   const matching = SETTINGS_SECTIONS.filter((s) => s.label.toLowerCase().includes(settingsQuery.toLowerCase()));
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    let cancelled = false;
+    const load = async () => {
+      const { data: del } = await (supabase as any).from("account_deletion_requests").select("id,option,scheduled_deletion_at,status").eq("user_id", user.id);
+      const pending = (del ?? []).filter((d: any) => d.status === "pending").sort((a: any, b: any) => new Date(b.requested_at ?? 0).getTime() - new Date(a.requested_at ?? 0).getTime())[0] ?? null;
+      if (!cancelled && pending) setPendingDeletion(pending as any);
+      const { data: exp } = await (supabase as any).from("data_export_requests").select("id,status").eq("user_id", user.id);
+      const latestExp = (exp ?? []).sort((a: any, b: any) => new Date(b.requested_at ?? 0).getTime() - new Date(a.requested_at ?? 0).getTime())[0] ?? null;
+      if (!cancelled && latestExp) setExportStatus(latestExp as any);
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [user]);
 
   return (
     <Shell>
@@ -297,7 +322,75 @@ export default function Settings() {
                 <Link href="/policies" className="inline-flex min-h-10 items-center justify-center rounded-md border border-af-border-strong px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">All policies</Link>
               </div>
             </section>
-          </main>
+             <section id="account-data" aria-labelledby="account-data-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+               <h2 id="account-data-heading" className="text-base font-semibold text-af-text">Account & data rights</h2>
+               <p className="mt-1 text-sm leading-relaxed text-af-muted">Request a copy of your data or delete your account.</p>
+
+               <div className="mt-4 space-y-3">
+                 <h3 className="text-sm font-semibold text-af-text">Request my data</h3>
+                 <p className="text-xs text-af-muted">Generate a secure, expiring download of your personal account data.</p>
+                 <button type="button" disabled={requestingExport} onClick={async () => {
+                   const supabase = createClient();
+                   if (!supabase || !user) return;
+                   setRequestingExport(true); setDeletionError(""); setDeletionMsg("");
+                   const { data, error } = await (supabase as any).rpc("request_data_export");
+                   if (error) { setDeletionError(error.message); setRequestingExport(false); return; }
+                   const res = await fetch("/api/account/export", { method: "POST", headers: { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } });
+                   const json = await res.json();
+                   if (!res.ok) { setDeletionError(json.error || "Export failed."); setRequestingExport(false); return; }
+                   setExportStatus({ id: json.requestId, status: "completed", download_url: json.downloadUrl });
+                   setDeletionMsg("Export ready. Use the download link below.");
+                   setRequestingExport(false);
+                 }} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{requestingExport ? "Preparing…" : "Request my data"}</button>
+                 {exportStatus?.status === "completed" && exportStatus.download_url && (
+                   <p className="text-xs text-af-muted">Download: <a href={exportStatus.download_url} className="text-af-brand-soft underline">secure link (expires soon)</a></p>
+                 )}
+                 {exportStatus && exportStatus.status !== "completed" && <p className="text-xs text-af-muted">Export status: {exportStatus.status}</p>}
+               </div>
+
+               <div className="mt-6 space-y-3">
+                 <h3 className="text-sm font-semibold text-af-text">Delete my account</h3>
+                 {pendingDeletion ? (
+                   <div className="rounded-xl border border-af-danger/40 bg-af-danger/10 p-4">
+                     <p className="text-sm text-af-danger">Deletion scheduled: {new Date(pendingDeletion.scheduled_deletion_at).toLocaleString()}</p>
+                     <p className="mt-1 text-xs text-af-muted">Option: {pendingDeletion.option}. Status: {pendingDeletion.status}.</p>
+                     <button type="button" disabled={deleting} onClick={async () => {
+                       const supabase = createClient();
+                       if (!supabase || !pendingDeletion) return;
+                       if (!window.confirm("Cancel scheduled account deletion?")) return;
+                       setDeleting(true); setDeletionError(""); setDeletionMsg("");
+                       const { error } = await (supabase as any).rpc("cancel_account_deletion", { p_request_id: pendingDeletion.id });
+                       if (error) setDeletionError(error.message); else { setDeletionMsg("Deletion cancelled."); setPendingDeletion(null); }
+                       setDeleting(false);
+                     }} className="mt-3 min-h-10 rounded-md border border-af-border-strong px-4 text-sm font-medium text-af-text hover:bg-af-surface-2 disabled:opacity-50">{deleting ? "Cancelling…" : "Cancel account deletion"}</button>
+                   </div>
+                 ) : (
+                   <>
+                     <div className="grid gap-2 sm:grid-cols-3">
+                       {(["immediate_24h","scheduled_14d","scheduled_30d"] as const).map((opt) => (
+                         <label key={opt} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-xs ${deletionOption === opt ? "border-af-brand bg-af-brand/10" : "border-af-border"}`}>
+                           <input type="radio" name="deletionOption" checked={deletionOption === opt} onChange={() => setDeletionOption(opt)} />
+                           <span>{opt === "immediate_24h" ? "Delete now (24h grace)" : opt === "scheduled_14d" ? "Delete in 14 days" : "Delete in 30 days"}</span>
+                         </label>
+                       ))}
+                     </div>
+                     <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={confirmDelete} onChange={(e) => setConfirmDelete(e.target.checked)} /> I understand this will permanently delete my account after the grace period.</label>
+                     <button type="button" disabled={!confirmDelete || deleting} onClick={async () => {
+                       const supabase = createClient();
+                       if (!supabase || !user) return;
+                       if (!window.confirm("Submit account deletion request?")) return;
+                       setDeleting(true); setDeletionError(""); setDeletionMsg("");
+                       const { data, error } = await (supabase as any).rpc("request_account_deletion", { p_option: deletionOption });
+                       if (error) setDeletionError(error.message); else { setDeletionMsg("Deletion request created."); setPendingDeletion({ id: data, option: deletionOption, scheduled_deletion_at: new Date(Date.now() + (deletionOption === "immediate_24h" ? 86400000 : deletionOption === "scheduled_14d" ? 1209600000 : 2592000000)).toISOString(), status: "pending" }); setConfirmDelete(false); }
+                       setDeleting(false);
+                     }} className="mt-3 min-h-10 rounded-md bg-af-danger px-4 text-sm font-semibold text-white disabled:opacity-50">{deleting ? "Submitting…" : "Delete my account"}</button>
+                   </>
+                 )}
+                 {deletionError && <p role="alert" className="mt-3 text-sm text-af-danger">{deletionError}</p>}
+                 {deletionMsg && <p role="status" className="mt-3 text-sm text-af-text-2">{deletionMsg}</p>}
+               </div>
+             </section>
+           </main>
         </div>
       </div>
     </Shell>
