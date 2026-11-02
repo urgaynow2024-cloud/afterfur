@@ -127,7 +127,7 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
       {error && <p role="alert" className="mt-3 rounded-md border border-af-danger/40 bg-af-danger/10 px-3 py-2 text-sm text-af-danger">{error}</p>}
       {msg && <p role="status" className="mt-3 rounded-md border border-af-border bg-af-surface-2 px-3 py-2 text-sm text-af-text-2">{msg}</p>}
 
-      <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mt-5 space-y-6">
         <div className="space-y-6 min-w-0">
           <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5">
             <h3 className="text-sm font-semibold text-af-text">Display name font</h3>
@@ -156,7 +156,7 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
             <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-af-text">Display name effect</h3>
               <p className="mt-1 text-xs text-af-muted">Styling applied to your display name.</p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {EFFECTS.map((effect) => {
                   const selected = selectedDisplayEffect === effect.id;
                   return (
@@ -166,10 +166,10 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
                       role="radio"
                       aria-checked={selected}
                       onClick={() => { setSelectedDisplayEffect(effect.id); setDraft((prev) => ({ ...prev, displayNameEffect: effect.id })); }}
-                      className={`rounded-lg border px-3 py-3 text-xs transition-colors flex flex-col items-center gap-1.5 ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border hover:bg-af-surface-2"} af-effect-${effect.id} ${reducedMotion && (effect.id === "glitch" || effect.id === "aurora") ? "af-effect-none" : ""}`}
+                      className={`flex min-h-[96px] flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border px-4 py-4 text-center transition-colors ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border hover:bg-af-surface-2"} af-effect-${effect.id} ${reducedMotion && (effect.id === "glitch" || effect.id === "aurora") ? "af-effect-none" : ""}`}
                     >
-                      <span className={`${effect.id === "glitch" ? "" : ""} leading-none`} data-glitch={displayName}>{displayName || username}</span>
-                      <span className={selected ? "text-af-brand" : "text-af-text-2"}>{effect.label}</span>
+                      <span className="max-w-full break-words leading-none" data-glitch={displayName}>{displayName || username}</span>
+                      <span className={`break-words text-xs ${selected ? "text-af-brand" : "text-af-text-2"}`}>{effect.label}</span>
                     </button>
                   );
                 })}
@@ -178,7 +178,7 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
             <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-af-text">Username effect</h3>
               <p className="mt-1 text-xs text-af-muted">Styling applied to your @username.</p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {EFFECTS.map((effect) => {
                   const selected = selectedUsernameEffect === effect.id;
                   return (
@@ -188,10 +188,10 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
                       role="radio"
                       aria-checked={selected}
                       onClick={() => { setSelectedUsernameEffect(effect.id); setDraft((prev) => ({ ...prev, usernameEffect: effect.id })); }}
-                      className={`rounded-lg border px-3 py-3 text-xs transition-colors flex flex-col items-center gap-1.5 ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border hover:bg-af-surface-2"} af-effect-${effect.id} ${reducedMotion && (effect.id === "glitch" || effect.id === "aurora") ? "af-effect-none" : ""}`}
+                      className={`flex min-h-[96px] flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border px-4 py-4 text-center transition-colors ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border hover:bg-af-surface-2"} af-effect-${effect.id} ${reducedMotion && (effect.id === "glitch" || effect.id === "aurora") ? "af-effect-none" : ""}`}
                     >
-                      <span className={`@${username} leading-none`} data-glitch={`@${username}`}>{`@${username}`}</span>
-                      <span className={selected ? "text-af-brand" : "text-af-text-2"}>{effect.label}</span>
+                      <span className="max-w-full break-words leading-none" data-glitch={`@${username}`}>{`@${username}`}</span>
+                      <span className={`break-words text-xs ${selected ? "text-af-brand" : "text-af-text-2"}`}>{effect.label}</span>
                     </button>
                   );
                 })}
@@ -374,46 +374,44 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
           </div>
         </div>
 
-        <aside className="xl:sticky xl:top-20 self-start">
-          <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5 space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-af-text">Preview</h3>
-              <p className="mt-1 text-xs text-af-muted">Live preview of how your name will appear on your profile.</p>
-            </div>
-            <div className="flex items-center justify-center rounded-lg border border-af-border bg-af-surface p-6 min-h-[120px]">
-              <StyledNamePreview
-                displayName={displayName}
-                username={username}
-                accent={draft.accent ?? "#8b5cf6"}
-                font={selectedFont}
-                displayNameEffect={selectedDisplayEffect}
-                usernameEffect={selectedUsernameEffect}
-                gradientStart={draft.gradientStart}
-                gradientEnd={draft.gradientEnd}
-                reducedMotion={reducedMotion}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={!hasChanges || saving || !colourInputValid}
-                onClick={handleReset}
-                className="min-h-10 rounded-md border border-af-border px-4 text-xs font-semibold text-af-text-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-af-surface-2"
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                disabled={!hasChanges || saving || !colourInputValid}
-                onClick={handleSave}
-                className="min-h-10 rounded-md bg-af-brand px-4 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-af-brand-hover"
-              >
-                {saving ? "Saving…" : "Save customisation"}
-              </button>
-            </div>
-            {!hasChanges && <span className="text-xs text-af-muted">No unsaved changes</span>}
+        <section className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-af-text">Preview</h3>
+            <p className="mt-1 text-xs text-af-muted">Live preview of how your name will appear on your profile.</p>
           </div>
-        </aside>
+          <div className="flex items-center justify-center rounded-lg border border-af-border bg-af-surface p-6 min-h-[120px]">
+            <StyledNamePreview
+              displayName={displayName}
+              username={username}
+              accent={draft.accent ?? "#8b5cf6"}
+              font={selectedFont}
+              displayNameEffect={selectedDisplayEffect}
+              usernameEffect={selectedUsernameEffect}
+              gradientStart={draft.gradientStart}
+              gradientEnd={draft.gradientEnd}
+              reducedMotion={reducedMotion}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!hasChanges || saving || !colourInputValid}
+              onClick={handleReset}
+              className="min-h-10 rounded-md border border-af-border px-4 text-xs font-semibold text-af-text-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-af-surface-2"
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              disabled={!hasChanges || saving || !colourInputValid}
+              onClick={handleSave}
+              className="min-h-10 rounded-md bg-af-brand px-4 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-af-brand-hover"
+            >
+              {saving ? "Saving…" : "Save customisation"}
+            </button>
+          </div>
+          {!hasChanges && <span className="text-xs text-af-muted">No unsaved changes</span>}
+        </section>
       </div>
     </section>
   );

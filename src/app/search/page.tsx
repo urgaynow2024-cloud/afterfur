@@ -1,9 +1,10 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { createClient } from "@/lib/supabase/client";
 import PostCard from "@/components/PostCard";
 import { useAuth } from "@/components/AuthProvider";
+import { loadMyMembershipStatus } from "@/lib/pawpass";
 import Link from "next/link";
 import { mergeByIdPage, pageRange } from "@/lib/search";
 import { BadgeList } from "@/components/BadgeList";
@@ -19,9 +20,28 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMorePosts, setHasMorePosts] = useState(false);
+  const [mediaOnly, setMediaOnly] = useState(false);
+  const [contentType, setContentType] = useState<"all" | "media" | "text">("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [creator, setCreator] = useState("");
+  const [classification, setClassification] = useState("all");
   const [searched, setSearched] = useState(false);
+  const [isPawPass, setIsPawPass] = useState(false);
   const [error, setError] = useState("");
   const searchRequest = useRef(0);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    let cancelled = false;
+    void loadMyMembershipStatus(supabase).then(({ status }) => {
+      if (cancelled) return;
+      const active = !!status && (status.status === "active" || status.status === "cancel_at_period_end") && !!status.currentPeriodEnd && new Date(status.currentPeriodEnd).getTime() > Date.now();
+      setIsPawPass(active);
+    });
+    return () => { cancelled = true; };
+  }, [user]);
 
   async function deletePost(postId: string) {
     const supabase = createClient();
@@ -53,8 +73,20 @@ export default function Search() {
     const escapedTerm = term.replace(/[\\%_]/g, "\\$&");
     const pattern = `%${escapedTerm}%`;
     try {
+    let postQuery = supabase.from("posts").select("*").ilike("content", pattern).order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
+    if (isPawPass) {
+      if (mediaOnly || contentType === "media") postQuery = postQuery.not("media_urls", "is", null);
+      if (contentType === "text") postQuery = postQuery.is("media_urls", null);
+      if (classification !== "all") postQuery = postQuery.eq("classification", classification);
+      if (dateFrom) postQuery = postQuery.gte("created_at", new Date(dateFrom).toISOString());
+      if (dateTo) postQuery = postQuery.lte("created_at", new Date(dateTo + "T23:59:59").toISOString());
+      if (creator.trim()) {
+        // filter by creator username via subquery not supported; skip server-side, filter after profiles loaded
+      }
+    }
+    const filteredPostQuery = postQuery;
     const [{ data, error }, { data: usernames, error: usernameError }, { data: displayNames, error: displayError }] = await Promise.all([
-      supabase.from("posts").select("*").ilike("content", pattern).order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to),
+      filteredPostQuery,
       loadMore ? Promise.resolve({ data: [], error: null }) : supabase.from("profiles").select("id,username,display_name,avatar_url").ilike("username", pattern).limit(20),
       loadMore ? Promise.resolve({ data: [], error: null }) : supabase.from("profiles").select("id,username,display_name,avatar_url").ilike("display_name", pattern).limit(20),
     ]);
@@ -82,6 +114,10 @@ export default function Search() {
         const isBlocked = false;
         if (isPrivate && post.author_id !== user?.id) return false;
         if (isBlocked) return false;
+        if (isPawPass && creator.trim()) {
+          const name = (prof?.username || prof?.display_name || "").toLowerCase();
+          if (!name.includes(creator.trim().toLowerCase())) return false;
+        }
         return true;
       }).map((post) => ({ ...post, profiles: profileMap.get(post.author_id) || null }));
       setResults((current) => mergeByIdPage(current, visiblePosts, loadMore));
@@ -107,6 +143,42 @@ export default function Search() {
             <input id="post-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search posts" className="min-h-11 w-full bg-transparent text-sm text-af-text placeholder:text-af-muted focus:outline-none" />
           </div>
           <button type="submit" disabled={loading || !q.trim()} className="min-h-11 rounded-xl bg-af-brand px-5 text-sm font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Searching…" : "Search"}</button>
+          {isPawPass && (
+            <div className="mt-3 grid gap-3 rounded-xl border border-af-border bg-af-surface/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex flex-col gap-1 text-xs text-af-text-2">
+                Content type
+                <select value={contentType} onChange={(e) => setContentType(e.target.value as "all" | "media" | "text")} className="af-field text-sm">
+                  <option value="all">All</option>
+                  <option value="media">With media</option>
+                  <option value="text">Text only</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-af-text-2">
+                Classification
+                <select value={classification} onChange={(e) => setClassification(e.target.value)} className="af-field text-sm">
+                  <option value="all">All</option>
+                  <option value="SFW">SFW</option>
+                  <option value="NSFW">NSFW</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-af-text-2">
+                From date
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="af-field text-sm" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-af-text-2">
+                To date
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="af-field text-sm" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-af-text-2 sm:col-span-2">
+                Creator
+                <input type="text" value={creator} onChange={(e) => setCreator(e.target.value)} placeholder="Username or display name" className="af-field text-sm" />
+              </label>
+              <label className="inline-flex items-center gap-2 text-xs text-af-text-2 sm:col-span-2">
+                <input type="checkbox" checked={mediaOnly} onChange={(e) => setMediaOnly(e.target.checked)} className="h-4 w-4 rounded border-af-border" />
+                Media only
+              </label>
+            </div>
+          )}
         </form>
       </div>
       {loading ? (

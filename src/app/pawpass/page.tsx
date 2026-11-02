@@ -10,8 +10,9 @@ import Link from "next/link";
 export default function PawPassPage() {
   const { user } = useAuth();
   const [status, setStatus] = useState<MembershipStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [boosts, setBoosts] = useState<{ remaining: number; used: number; limit: number } | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -21,6 +22,12 @@ export default function PawPassPage() {
       if (cancelled) return;
       if (e) setError(e);
       else setStatus(s);
+      const active = !!s && (s.status === "active" || s.status === "cancel_at_period_end") && !!s.currentPeriodEnd && new Date(s.currentPeriodEnd).getTime() > Date.now();
+      if (active) {
+        void (supabase as any).rpc("get_boost_allowance").then(({ data }: { data: { remaining: number; used: number; limit: number } | null }) => {
+          if (!cancelled && data) setBoosts({ remaining: data.remaining, used: data.used, limit: data.limit });
+        });
+      }
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -52,8 +59,9 @@ export default function PawPassPage() {
               <dt className="text-af-muted">Status</dt><dd className="text-af-text">{status.status}</dd>
               <dt className="text-af-muted">Source</dt><dd className="text-af-text">{status.source}{status.isTest ? " (test)" : ""}</dd>
               <dt className="text-af-muted">Active</dt><dd className="text-af-text">{active ? "Yes" : "No"}</dd>
-              <dt className="text-af-muted">Period end</dt><dd className="text-af-text">{status.currentPeriodEnd ? new Date(status.currentPeriodEnd).toLocaleDateString() : "—"}</dd>
-              <dt className="text-af-muted">Boosts used</dt><dd className="text-af-text">0</dd>
+              <dt className="text-af-muted">Member since</dt><dd className="text-af-text">{status.eligibleSince ? new Date(status.eligibleSince).toLocaleDateString() : "—"}</dd>
+              <dt className="text-af-muted">Anniversary</dt><dd className="text-af-text">{status.eligibleSince ? new Date(status.eligibleSince).toLocaleDateString(undefined, { month: "long", day: "numeric" }) : "—"}</dd>
+              <dt className="text-af-muted">Boosts remaining</dt><dd className="text-af-text">{boosts ? `${boosts.remaining} / ${boosts.limit}` : "—"}</dd>
             </dl>
           ) : (
             <p className="mt-3 text-sm text-af-muted">No PawPass membership connected to this account.</p>
