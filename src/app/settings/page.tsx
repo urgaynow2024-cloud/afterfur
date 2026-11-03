@@ -43,6 +43,7 @@ export default function Settings() {
   const [notifError, setNotifError] = useState("");
   const [blockedAccounts, setBlockedAccounts] = useState<{ id: string; username: string; display_name: string | null; avatar_url: string | null }[]>([]);
   const [blockedLoading, setBlockedLoading] = useState(false);
+  const [blockedOpen, setBlockedOpen] = useState(false);
   const [deletionOption, setDeletionOption] = useState<"immediate_24h" | "scheduled_14d" | "scheduled_30d">("immediate_24h");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -160,7 +161,7 @@ export default function Settings() {
     };
     void load();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, blockedOpen]);
 
   return (
     <Shell>
@@ -225,33 +226,39 @@ export default function Settings() {
               </div>
             </section>
 
-                         <section id="blocked-accounts" aria-labelledby="blocked-accounts-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
-               <h2 id="blocked-accounts-heading" className="text-base font-semibold text-af-text">Blocked accounts</h2>
-               <p className="mt-1 text-sm leading-relaxed text-af-muted">Manage accounts you have blocked.</p>
-               {blockedLoading ? (
-                 <p className="mt-4 text-sm text-af-muted">Loading…</p>
-               ) : blockedAccounts.length === 0 ? (
-                 <p className="mt-4 text-sm text-af-muted">No blocked accounts.</p>
-               ) : (
-                 <ul className="mt-4 space-y-2">
-                   {blockedAccounts.map((p) => (
-                     <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-af-border bg-af-surface-2 p-3">
-                       <div className="flex items-center gap-3">
-                         {p.avatar_url ? <img src={p.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-af-surface-raised text-sm font-bold text-af-brand-soft">{(p.display_name || p.username).slice(0,1).toUpperCase()}</div>}
-                         <div>
-                           <p className="text-sm font-medium text-af-text">{p.display_name || p.username}</p>
-                           <p className="text-xs text-af-muted">@{p.username}</p>
-                         </div>
-                       </div>
-                       <button type="button" onClick={async () => {
-                         const supabase = createClient();
-                         if (!supabase || !user) return;
-                         const { error } = await (supabase as any).from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", p.id);
-                         if (!error) setBlockedAccounts((list) => list.filter((x) => x.id !== p.id));
-                       }} className="min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Unblock</button>
-                     </li>
-                   ))}
-                 </ul>
+             <section id="blocked-accounts" aria-labelledby="blocked-accounts-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+               <div className="flex items-center justify-between gap-3">
+                 <div>
+                   <h2 id="blocked-accounts-heading" className="text-base font-semibold text-af-text">Blocked accounts</h2>
+                   <p className="mt-1 text-sm leading-relaxed text-af-muted">{blockedAccounts.length} blocked</p>
+                 </div>
+                 <button type="button" onClick={() => setBlockedOpen((v) => !v)} className="min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">
+                   {blockedOpen ? "Hide" : "Show"}
+                 </button>
+               </div>
+               {blockedOpen && (
+                 <div className="mt-4">
+                   {blockedLoading ? (
+                     <p className="text-sm text-af-muted">Loading…</p>
+                   ) : blockedAccounts.length === 0 ? (
+                     <p className="text-sm text-af-muted">You haven't blocked anyone.</p>
+                   ) : (
+                     <ul className="space-y-2">
+                       {blockedAccounts.map((p) => (
+                         <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-af-border bg-af-surface-2 p-3">
+                           <div className="flex items-center gap-3">
+                             {p.avatar_url ? <img src={p.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-af-surface-raised text-sm font-bold text-af-brand-soft">{(p.display_name || p.username).slice(0,1).toUpperCase()}</div>}
+                             <div>
+                               <p className="text-sm font-medium text-af-text">{p.display_name || p.username}</p>
+                               <p className="text-xs text-af-muted">@{p.username}</p>
+                             </div>
+                           </div>
+                           <button type="button" onClick={() => { if (!window.confirm("Unblock this user?")) return; const supabase = createClient(); if (!supabase || !user) return; void (supabase as any).from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", p.id).then(() => setBlockedAccounts((list) => list.filter((x) => x.id !== p.id))); }} className="min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Unblock</button>
+                         </li>
+                       ))}
+                     </ul>
+                   )}
+                 </div>
                )}
              </section>
 
