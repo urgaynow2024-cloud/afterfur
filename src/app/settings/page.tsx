@@ -122,10 +122,6 @@ export default function Settings() {
   // eslint-disable-next-line react-hooks/purity
   const isPrime = membershipState.status !== null && (membershipState.status.status === "active" || membershipState.status.status === "cancel_at_period_end") && !!membershipState.status.currentPeriodEnd && new Date(membershipState.status.currentPeriodEnd).getTime() > Date.now();
 
-  if (!user) return <Shell><PageHeader title="Settings" /><EmptyState title="Sign in to manage settings" body="Account settings require authentication." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
-
-  const matching = SETTINGS_SECTIONS.filter((s) => s.label.toLowerCase().includes(settingsQuery.toLowerCase()));
-
   useEffect(() => {
     const supabase = createClient();
     if (!supabase || !user) return;
@@ -141,6 +137,10 @@ export default function Settings() {
     void load();
     return () => { cancelled = true; };
   }, [user]);
+
+  if (!user) return <Shell><PageHeader title="Settings" /><EmptyState title="Sign in to manage settings" body="Account settings require authentication." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
+
+  const matching = SETTINGS_SECTIONS.filter((s) => s.label.toLowerCase().includes(settingsQuery.toLowerCase()));
 
   return (
     <Shell>
@@ -342,9 +342,10 @@ export default function Settings() {
                    setDeletionMsg("Export ready. Use the download link below.");
                    setRequestingExport(false);
                  }} className="min-h-10 rounded-md bg-af-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{requestingExport ? "Preparing…" : "Request my data"}</button>
-                 {exportStatus?.status === "completed" && exportStatus.download_url && (
+                 {exportStatus?.download_url && (
                    <p className="text-xs text-af-muted">Download: <a href={exportStatus.download_url} className="text-af-brand-soft underline">secure link (expires soon)</a></p>
                  )}
+                 {exportStatus?.status === "completed" && !exportStatus.download_url && <p className="text-xs text-af-danger">Export completed but download link is unavailable. Request a new export.</p>}
                  {exportStatus && exportStatus.status !== "completed" && <p className="text-xs text-af-muted">Export status: {exportStatus.status}</p>}
                </div>
 
