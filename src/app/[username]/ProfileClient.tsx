@@ -30,6 +30,8 @@ export default function ProfileClient() {
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
   const followBusyRef = useRef(false);
   const [followError, setFollowError] = useState("");
   const [listType, setListType] = useState<'followers' | 'following' | null>(null);
@@ -61,11 +63,14 @@ export default function ProfileClient() {
       if (followersError || followingError) setError((followersError || followingError)?.message || "Could not load follow counts.");
       setCounts({ followers: followers ?? 0, following: following ?? 0 });
 
-      if (user && user.id !== prof.id) {
-        const { data: existing } = await supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("following_id", prof.id).maybeSingle();
-        if (cancelled) return;
-        setIsFollowing(!!existing);
-      }
+         if (user && user.id !== prof.id) {
+           const { data: existing } = await supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("following_id", prof.id).maybeSingle();
+           if (cancelled) return;
+           setIsFollowing(!!existing);
+           const { data: blk } = await (supabase as any).from("blocks").select("blocker_id").eq("blocker_id", user.id).eq("blocked_id", prof.id).maybeSingle();
+           if (cancelled) return;
+           setIsBlocked(!!blk);
+         }
 
       const { data: ps, error: postsError } = await supabase.from("posts").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
       if (cancelled) return;
@@ -153,6 +158,29 @@ export default function ProfileClient() {
       followBusyRef.current = false;
       setFollowBusy(false);
     }
+  }
+  async function doBlock() {
+    if (!user || !profile || user.id === profile.id || blockBusy) return;
+    if (!window.confirm("Block this user? They won't be able to interact with you.")) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    setBlockBusy(true);
+    try {
+      const { error } = await (supabase as any).from("blocks").insert({ blocker_id: user.id, blocked_id: profile.id });
+      if (error) { setFollowError(error.message); return; }
+      setIsBlocked(true);
+    } finally { setBlockBusy(false); }
+  }
+  async function doUnblock() {
+    if (!user || !profile || blockBusy) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    setBlockBusy(true);
+    try {
+      const { error } = await (supabase as any).from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", profile.id);
+      if (error) { setFollowError(error.message); return; }
+      setIsBlocked(false);
+    } finally { setBlockBusy(false); }
   }
 
   if (loading) {
@@ -264,9 +292,16 @@ export default function ProfileClient() {
                 {followBusy ? "..." : isFollowing ? "Following" : "Follow"}
               </button>
             )}
-            {user && !isOwn && (
-              <button type="button" onClick={() => setReportUserOpen(true)} className="min-h-10 rounded-full border border-af-border px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">Report</button>
-            )}
+               {user && !isOwn && (
+                 <>
+                   <button type="button" onClick={() => setReportUserOpen(true)} className="min-h-10 rounded-full border border-af-border px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">Report</button>
+                   {!isBlocked ? (
+                     <button type="button" onClick={doBlock} disabled={blockBusy} className="min-h-10 rounded-full border border-af-border px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">{blockBusy ? "Blocking…" : "Block"}</button>
+                   ) : (
+                     <button type="button" onClick={doUnblock} disabled={blockBusy} className="min-h-10 rounded-full border border-af-border px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">{blockBusy ? "Unblocking…" : "Unblock"}</button>
+                   )}
+                 </>
+               )}
           </div>
         </div>
         {followError && <p role="alert" className="mt-3 text-sm text-af-danger">Follow update failed: {followError}</p>}

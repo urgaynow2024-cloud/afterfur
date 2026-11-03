@@ -14,6 +14,7 @@ const SETTINGS_SECTIONS = [
   { id: "account", label: "Account" },
   { id: "security", label: "Security" },
   { id: "privacy", label: "Privacy" },
+  { id: "blocked-accounts", label: "Blocked accounts" },
   { id: "notifications", label: "Notifications" },
   { id: "accessibility", label: "Accessibility" },
   { id: "appearance", label: "Appearance" },
@@ -40,6 +41,8 @@ export default function Settings() {
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifMsg, setNotifMsg] = useState("");
   const [notifError, setNotifError] = useState("");
+  const [blockedAccounts, setBlockedAccounts] = useState<{ id: string; username: string; display_name: string | null; avatar_url: string | null }[]>([]);
+  const [blockedLoading, setBlockedLoading] = useState(false);
   const [deletionOption, setDeletionOption] = useState<"immediate_24h" | "scheduled_14d" | "scheduled_30d">("immediate_24h");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -142,6 +145,23 @@ export default function Settings() {
 
   const matching = SETTINGS_SECTIONS.filter((s) => s.label.toLowerCase().includes(settingsQuery.toLowerCase()));
 
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    let cancelled = false;
+    setBlockedLoading(true);
+    const load = async () => {
+      const { data: blocks } = await (supabase as any).from("blocks").select("blocked_id").eq("blocker_id", user.id);
+      const ids = (blocks ?? []).map((b: { blocked_id: string }) => b.blocked_id);
+      if (ids.length === 0) { setBlockedAccounts([]); setBlockedLoading(false); return; }
+      const { data: profiles } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", ids);
+      if (!cancelled) setBlockedAccounts((profiles ?? []) as any);
+      setBlockedLoading(false);
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [user]);
+
   return (
     <Shell>
       <PageHeader title="Settings" />
@@ -205,7 +225,37 @@ export default function Settings() {
               </div>
             </section>
 
-            <section id="notifications" aria-labelledby="notifications-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+                         <section id="blocked-accounts" aria-labelledby="blocked-accounts-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+               <h2 id="blocked-accounts-heading" className="text-base font-semibold text-af-text">Blocked accounts</h2>
+               <p className="mt-1 text-sm leading-relaxed text-af-muted">Manage accounts you have blocked.</p>
+               {blockedLoading ? (
+                 <p className="mt-4 text-sm text-af-muted">Loading…</p>
+               ) : blockedAccounts.length === 0 ? (
+                 <p className="mt-4 text-sm text-af-muted">No blocked accounts.</p>
+               ) : (
+                 <ul className="mt-4 space-y-2">
+                   {blockedAccounts.map((p) => (
+                     <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-af-border bg-af-surface-2 p-3">
+                       <div className="flex items-center gap-3">
+                         {p.avatar_url ? <img src={p.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-af-surface-raised text-sm font-bold text-af-brand-soft">{(p.display_name || p.username).slice(0,1).toUpperCase()}</div>}
+                         <div>
+                           <p className="text-sm font-medium text-af-text">{p.display_name || p.username}</p>
+                           <p className="text-xs text-af-muted">@{p.username}</p>
+                         </div>
+                       </div>
+                       <button type="button" onClick={async () => {
+                         const supabase = createClient();
+                         if (!supabase || !user) return;
+                         const { error } = await (supabase as any).from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", p.id);
+                         if (!error) setBlockedAccounts((list) => list.filter((x) => x.id !== p.id));
+                       }} className="min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Unblock</button>
+                     </li>
+                   ))}
+                 </ul>
+               )}
+             </section>
+
+             <section id="notifications" aria-labelledby="notifications-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
               <h2 id="notifications-heading" className="text-base font-semibold text-af-text">Notifications</h2>
               <p className="mt-1 text-sm leading-relaxed text-af-muted">Notification preferences are saved to your account. Enforcement depends on existing database triggers.</p>
               {notifError && <p role="alert" className="mt-3 rounded-md border border-af-danger/40 bg-af-danger/10 px-3 py-2 text-sm text-af-danger">{notifError}</p>}
