@@ -51,10 +51,30 @@ export default function ProfileClient() {
       const supabase = createClient();
       if (!supabase) { setError("Supabase not configured."); setLoading(false); return; }
       try {
-      const { data: prof, error: profileError } = await supabase.from("profiles").select("*").eq("username", username).maybeSingle();
+      const res = await fetch(`/api/profile/${encodeURIComponent(username)}`, { cache: "no-store" });
       if (cancelled) return;
-      if (profileError) { setError(profileError.message); setLoading(false); return; }
-      if (!prof) { setError("Profile not found."); setLoading(false); return; }
+      if (res.status === 403) {
+        setError("This profile is private.");
+        setLoading(false);
+        return;
+      }
+      if (res.status === 404) {
+        setError("Profile not found.");
+        setLoading(false);
+        return;
+      }
+      if (!res.ok) {
+        setError("Could not load this profile.");
+        setLoading(false);
+        return;
+      }
+      const json = await res.json();
+      const prof = json?.profile;
+      if (!prof) {
+        setError("Profile not found.");
+        setLoading(false);
+        return;
+      }
       setProfile(prof as Profile);
 
       const { count: followers, error: followersError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", prof.id);
@@ -208,8 +228,12 @@ export default function ProfileClient() {
   async function deletePost(postId: string) {
     const supabase = createClient();
     if (!supabase || !user) return;
-    const { error } = await supabase.from("posts").delete().eq("id", postId).eq("author_id", user.id);
-    if (error) { setError(error.message); return; }
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json?.error || "Could not delete post.");
+      return;
+    }
     setPosts((ps) => ps.filter((p) => p.id !== postId));
     setReplies((rs) => rs.filter((r) => r.id !== postId));
     setLikes((ls) => ls.filter((l) => l.id !== postId));
@@ -226,17 +250,23 @@ export default function ProfileClient() {
   async function saveEdit(event: React.FormEvent) {
     event.preventDefault();
     const content = editDraft.trim();
-    const supabase = createClient();
-    if (!editingPost || !user || !supabase || !content || content.length > 600 || editSubmittingRef.current) return;
+    if (!editingPost || !user || !content || content.length > 600 || editSubmittingRef.current) return;
     editSubmittingRef.current = true;
     setEditSubmitting(true); setEditError("");
-    const { data, error: updateError } = await supabase.from("posts").update({ content, edited_at: new Date().toISOString() }).eq("id", editingPost.id).eq("author_id", user.id).select("*").single();
-    if (updateError || !data) {
-      setEditError(updateError?.message ?? "The post was not updated. Your changes are still here.");
+    const res = await fetch(`/api/posts/${encodeURIComponent(editingPost.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setEditError(json?.error || "The post was not updated. Your changes are still here.");
       editSubmittingRef.current = false;
       setEditSubmitting(false);
       return;
     }
+    const json = await res.json();
+    const data = json?.post || json;
     const updated = { ...editingPost, ...(data as Post) };
     setPosts((current) => current.map((p) => p.id === editingPost.id ? updated : p));
     setReplies((current) => current.map((p) => p.id === editingPost.id ? updated : p));

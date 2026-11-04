@@ -197,8 +197,12 @@ function PostPageInner() {
   async function deletePost(postId: string) {
     const supabase = createClient();
     if (!supabase || !user) return;
-    const { error: deleteError } = await supabase.from("posts").delete().eq("id", postId).eq("author_id", user.id);
-    if (deleteError) { setError(deleteError.message); return; }
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json?.error || "Could not delete post.");
+      return;
+    }
     router.push(post?.profiles?.username ? `/${post.profiles.username}` : "/");
   }
 
@@ -212,17 +216,23 @@ function PostPageInner() {
   async function saveEdit(event: React.FormEvent) {
     event.preventDefault();
     const content = editDraft.trim();
-    const supabase = createClient();
-    if (!editingPost || !user || !supabase || !content || content.length > 600 || editSubmittingRef.current) return;
+    if (!editingPost || !user || !content || content.length > 600 || editSubmittingRef.current) return;
     editSubmittingRef.current = true;
     setEditSubmitting(true); setEditError("");
-    const { data, error: updateError } = await supabase.from("posts").update({ content, edited_at: new Date().toISOString() }).eq("id", editingPost.id).eq("author_id", user.id).select("*").single();
-    if (updateError || !data) {
-      setEditError(updateError?.message ?? "The post was not updated. Your changes are still here.");
+    const res = await fetch(`/api/posts/${encodeURIComponent(editingPost.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setEditError(json?.error || "The post was not updated. Your changes are still here.");
       editSubmittingRef.current = false;
       setEditSubmitting(false);
       return;
     }
+    const json = await res.json();
+    const data = json?.post || json;
     setPost({ ...editingPost, ...(data as Post) });
     setEditingPost(null);
     setEditDraft("");
@@ -244,15 +254,21 @@ function PostPageInner() {
 
   async function saveEditReply(replyId: string) {
     const content = editReplyDraft.trim();
-    const supabase = createClient();
-    if (!user || !supabase || !content || content.length > 300 || editReplySubmitting) return;
+    if (!user || !content || content.length > 300 || editReplySubmitting) return;
     setEditReplySubmitting(true);
-    const { data, error: updateError } = await supabase.from("replies").update({ content, edited_at: new Date().toISOString() }).eq("id", replyId).eq("author_id", user.id).select("*").single();
-    if (updateError || !data) {
-      setError(updateError?.message ?? "Reply not updated. Your changes are still here.");
+    const res = await fetch(`/api/replies/${encodeURIComponent(replyId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json?.error || "Reply not updated. Your changes are still here.");
       setEditReplySubmitting(false);
       return;
     }
+    const json = await res.json();
+    const data = json?.reply || json;
     setReplies((current) => current.map((r) => r.id === replyId ? { ...r, content: (data as Reply).content, edited_at: (data as { edited_at?: string | null }).edited_at ?? r.edited_at } : r));
     setEditingReplyId(null);
     setEditReplyDraft("");
@@ -262,9 +278,10 @@ function PostPageInner() {
   async function deleteReply(replyId: string) {
     const supabase = createClient();
     if (!supabase || !user) return;
-    const { error: deleteError } = await supabase.from("replies").delete().eq("id", replyId).eq("author_id", user.id);
-    if (deleteError) {
-      setError(deleteError.message);
+    const res = await fetch(`/api/replies/${encodeURIComponent(replyId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json?.error || "Could not delete reply.");
       setDeleteReplyId(null);
       return;
     }
@@ -292,8 +309,16 @@ function PostPageInner() {
     setError("");
     let inserted = false;
     try {
-      const { error: insertError } = await supabase.from("replies").insert({ post_id: id, author_id: user.id, content: text, parent_reply_id: replyingTo });
-      if (insertError) { setError(insertError.message); return; }
+      const res = await fetch(`/api/posts/${encodeURIComponent(id)}/replies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text, parent_reply_id: replyingTo }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setError(json?.error || "Could not publish the reply.");
+        return;
+      }
       inserted = true;
       setDraft("");
       setReplyingTo(null);

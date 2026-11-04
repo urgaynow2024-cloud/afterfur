@@ -9,6 +9,7 @@ import { loadMyMembershipStatus, claimFoundingPrime, loadFoundingStatus, loadFou
 
 import ProfileCustomisationStudio from "@/components/settings/ProfileCustomisationStudio";
 import { parseProfileCustomisation, type ProfileCustomisation } from "@/lib/profileCustomisation";
+import { getIncomingFollowRequests, approveFollowRequest, rejectFollowRequest, type IncomingFollowRequest } from "@/lib/followRequests";
 
 const SETTINGS_SECTIONS = [
   { id: "account", label: "Account" },
@@ -41,9 +42,18 @@ export default function Settings() {
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifMsg, setNotifMsg] = useState("");
   const [notifError, setNotifError] = useState("");
-  const [blockedAccounts, setBlockedAccounts] = useState<{ id: string; username: string; display_name: string | null; avatar_url: string | null }[]>([]);
-  const [blockedLoading, setBlockedLoading] = useState(false);
-  const [blockedOpen, setBlockedOpen] = useState(false);
+const [blockedOpen, setBlockedOpen] = useState(false);
+const [blockedError, setBlockedError] = useState("");
+const [blockedLoading, setBlockedLoading] = useState(false);
+const [unblockingIds, setUnblockingIds] = useState<Set<string>>(new Set());
+const [blockedReload, setBlockedReload] = useState(0);
+const [incomingRequests, setIncomingRequests] = useState<IncomingFollowRequest[]>([]);
+const [incomingLoading, setIncomingLoading] = useState(false);
+const [incomingError, setIncomingError] = useState("");
+const [incomingActionIds, setIncomingActionIds] = useState<Set<string>>(new Set());
+const [incomingMsg, setIncomingMsg] = useState("");
+const [blockedMsg, setBlockedMsg] = useState("");
+const [blockedAccounts, setBlockedAccounts] = useState<{ id: string; username: string; display_name: string | null; avatar_url: string | null }[]>([]);
   const [deletionOption, setDeletionOption] = useState<"immediate_24h" | "scheduled_14d" | "scheduled_30d">("immediate_24h");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -142,26 +152,47 @@ export default function Settings() {
     return () => { cancelled = true; };
   }, [user]);
 
-  if (!user) return <Shell><PageHeader title="Settings" /><EmptyState title="Sign in to manage settings" body="Account settings require authentication." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
-
-  const matching = SETTINGS_SECTIONS.filter((s) => s.label.toLowerCase().includes(settingsQuery.toLowerCase()));
-
   useEffect(() => {
     const supabase = createClient();
     if (!supabase || !user) return;
     let cancelled = false;
     setBlockedLoading(true);
+    setBlockedError("");
     const load = async () => {
-      const { data: blocks } = await (supabase as any).from("blocks").select("blocked_id").eq("blocker_id", user.id);
-      const ids = (blocks ?? []).map((b: { blocked_id: string }) => b.blocked_id);
-      if (ids.length === 0) { setBlockedAccounts([]); setBlockedLoading(false); return; }
-      const { data: profiles } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", ids);
-      if (!cancelled) setBlockedAccounts((profiles ?? []) as any);
-      setBlockedLoading(false);
+      try {
+        const { data: blocks, error: blocksError } = await (supabase as any).from("blocks").select("blocked_id").eq("blocker_id", user.id);
+        if (blocksError) { if (!cancelled) { setBlockedError(blocksError.message); setBlockedLoading(false); } return; }
+        const ids = (blocks ?? []).map((b: { blocked_id: string }) => b.blocked_id);
+        if (ids.length === 0) { if (!cancelled) { setBlockedAccounts([]); setBlockedLoading(false); } return; }
+        const { data: profiles, error: profilesError } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", ids);
+        if (profilesError) { if (!cancelled) { setBlockedError(profilesError.message); setBlockedLoading(false); } return; }
+        if (!cancelled) setBlockedAccounts((profiles ?? []) as any);
+      } catch (e) {
+        if (!cancelled) setBlockedError((e as Error)?.message || "Failed to load blocked accounts.");
+      }
+      if (!cancelled) setBlockedLoading(false);
     };
     void load();
     return () => { cancelled = true; };
-  }, [user, blockedOpen]);
+  }, [user, blockedOpen, blockedReload]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    let cancelled = false;
+    setIncomingLoading(true);
+    setIncomingError("");
+    void getIncomingFollowRequests(supabase).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) setIncomingError(error); else setIncomingRequests(data);
+      setIncomingLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  if (!user) return <Shell><PageHeader title="Settings" /><EmptyState title="Sign in to manage settings" body="Account settings require authentication." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
+
+  const matching = SETTINGS_SECTIONS.filter((s) => s.label.toLowerCase().includes(settingsQuery.toLowerCase()));
 
   return (
     <Shell>
@@ -206,7 +237,57 @@ export default function Settings() {
               </div>
             </section>
 
-            <section id="privacy" aria-labelledby="privacy-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+             <section id="incoming-follow-requests" aria-labelledby="incoming-follow-requests-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
+               <h2 id="incoming-follow-requests-heading" className="text-base font-semibold text-af-text">Incoming follow requests</h2>
+               <p className="mt-1 text-sm leading-relaxed text-af-muted">Approve or reject requests to follow your private account.</p>
+               {incomingMsg && <p role="status" className="mt-2 text-sm text-af-text-2">{incomingMsg}</p>}
+               {incomingError && <p role="alert" className="mt-2 text-sm text-af-danger">{incomingError}</p>}
+               {incomingLoading ? (
+                 <p className="mt-3 text-sm text-af-muted">Loading…</p>
+               ) : incomingRequests.length === 0 ? (
+                 <p className="mt-3 text-sm text-af-muted">No pending requests.</p>
+               ) : (
+                 <ul className="mt-3 space-y-2">
+                   {incomingRequests.map((r) => (
+                     <li key={r.followerId} className="flex items-center justify-between gap-3 rounded-xl border border-af-border bg-af-surface-2 p-3">
+                       <div className="flex items-center gap-3">
+                         {r.avatarUrl ? <img src={r.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-af-surface-raised text-sm font-bold text-af-brand-soft">{(r.displayName || r.username || "?").slice(0,1).toUpperCase()}</div>}
+                         <div>
+                           <p className="text-sm font-medium text-af-text">{r.displayName || r.username}</p>
+                           <p className="text-xs text-af-muted">@{r.username}</p>
+                         </div>
+                       </div>
+                       <div className="flex gap-2">
+                         <button type="button" disabled={incomingActionIds.has(r.followerId)} onClick={async () => {
+                           const supabase = createClient(); if (!supabase || !user) return;
+                           if (incomingActionIds.has(r.followerId)) return;
+                           setIncomingActionIds((s) => new Set(s).add(r.followerId));
+                           setIncomingMsg(""); setIncomingError("");
+                           const res = await approveFollowRequest(supabase, r.followerId);
+                           setIncomingActionIds((s) => { const n = new Set(s); n.delete(r.followerId); return n; });
+                           if (!res.ok) { setIncomingError(res.error || "Failed to approve."); return; }
+                           setIncomingRequests((list) => list.filter((x) => x.followerId !== r.followerId));
+                           setIncomingMsg("Request approved.");
+                         }} className="min-h-9 rounded-md bg-af-brand px-3 text-xs font-semibold text-white disabled:opacity-50">Approve</button>
+                         <button type="button" disabled={incomingActionIds.has(r.followerId)} onClick={async () => {
+                           const supabase = createClient(); if (!supabase || !user) return;
+                           if (incomingActionIds.has(r.followerId)) return;
+                           setIncomingActionIds((s) => new Set(s).add(r.followerId));
+                           setIncomingMsg(""); setIncomingError("");
+                           const res = await rejectFollowRequest(supabase, r.followerId);
+                           setIncomingActionIds((s) => { const n = new Set(s); n.delete(r.followerId); return n; });
+                           if (!res.ok) { setIncomingError(res.error || "Failed to reject."); return; }
+                           setIncomingRequests((list) => list.filter((x) => x.followerId !== r.followerId));
+                           setIncomingMsg("Request rejected.");
+                         }} className="min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 disabled:opacity-50">Reject</button>
+                       </div>
+                     </li>
+                   ))}
+                 </ul>
+               )}
+             </section>
+
+             <section id="privacy" aria-labelledby="privacy-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
               <h2 id="privacy-heading" className="text-base font-semibold text-af-text">Privacy and safety</h2>
               <p className="mt-1 text-sm leading-relaxed text-af-muted">Privacy controls are documented in the Privacy Policy. Blocking and visibility enforcement are not yet implemented.</p>
               <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} /> Private account</label>
@@ -238,11 +319,16 @@ export default function Settings() {
                </div>
                {blockedOpen && (
                  <div className="mt-4">
-                   {blockedLoading ? (
-                     <p className="text-sm text-af-muted">Loading…</p>
-                   ) : blockedAccounts.length === 0 ? (
-                     <p className="text-sm text-af-muted">You haven't blocked anyone.</p>
-                   ) : (
+                    {blockedLoading ? (
+                      <p className="text-sm text-af-muted">Loading…</p>
+                    ) : blockedError ? (
+                      <div>
+                        <p className="text-sm text-af-danger">{blockedError}</p>
+                        <button type="button" onClick={() => setBlockedReload((n) => n + 1)} className="mt-2 min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Retry</button>
+                      </div>
+                    ) : blockedAccounts.length === 0 ? (
+                      <p className="text-sm text-af-muted">You haven't blocked anyone.</p>
+                    ) : (
                      <ul className="space-y-2">
                        {blockedAccounts.map((p) => (
                          <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-af-border bg-af-surface-2 p-3">
@@ -253,7 +339,20 @@ export default function Settings() {
                                <p className="text-xs text-af-muted">@{p.username}</p>
                              </div>
                            </div>
-                           <button type="button" onClick={() => { if (!window.confirm("Unblock this user?")) return; const supabase = createClient(); if (!supabase || !user) return; void (supabase as any).from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", p.id).then(() => setBlockedAccounts((list) => list.filter((x) => x.id !== p.id))); }} className="min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2">Unblock</button>
+                            <button type="button" disabled={unblockingIds.has(p.id)} onClick={async () => {
+                              if (!window.confirm("Unblock this user?")) return;
+                              const supabase = createClient();
+                              if (!supabase || !user) return;
+                              if (unblockingIds.has(p.id)) return;
+                              setUnblockingIds((s) => new Set(s).add(p.id));
+                              setBlockedError("");
+                              setBlockedMsg("");
+                              const { error } = await (supabase as any).from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", p.id);
+                              setUnblockingIds((s) => { const n = new Set(s); n.delete(p.id); return n; });
+                              if (error) { setBlockedError(error.message || "Failed to unblock."); return; }
+                              setBlockedAccounts((list) => list.filter((x) => x.id !== p.id));
+                              setBlockedMsg("User unblocked.");
+                            }} className="min-h-9 rounded-md border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 disabled:opacity-50">{unblockingIds.has(p.id) ? "Unblocking…" : "Unblock"}</button>
                          </li>
                        ))}
                      </ul>

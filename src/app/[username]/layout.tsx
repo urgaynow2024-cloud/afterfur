@@ -7,7 +7,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const fetchProfile = cache(async (username: string) => {
-  const url = `${supabaseUrl}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id,username,display_name,bio,avatar_url`;
+  const url = `${supabaseUrl}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id,username,display_name,bio,avatar_url,is_private`;
   const res = await fetch(url, {
     headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
     next: { revalidate: 300 }
@@ -36,6 +36,9 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   const profile = await fetchProfile(username);
   if (!profile) {
     return { title: "Profile not found | AfterFur", description: "This AfterFur profile is unavailable." };
+  }
+  if ((profile as any).is_private) {
+    return { title: "Private profile | AfterFur", description: "This profile is private." };
   }
   const [posts, followers, following] = await Promise.all([
     fetchCount("posts", "author_id", profile.id),

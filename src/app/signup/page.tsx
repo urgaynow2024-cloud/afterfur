@@ -83,6 +83,9 @@ export default function SignUp() {
         return;
       }
 
+      const signupStartedAt = new Date().toISOString();
+      const projectRef = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1] || "unknown";
+
       const signUpResult = await withTimeout(
         Promise.resolve(supabase.auth.signUp({
           email: emailClean,
@@ -98,10 +101,24 @@ export default function SignUp() {
 
       const authError = signUpResult.error;
       const authData = signUpResult.data;
+      const user = authData?.user ?? null;
+      const session = authData?.session ?? null;
+      const identities = (user as { identities?: unknown[] } | null)?.identities;
+
+      console.info("signup:diagnostic", {
+        timestamp: signupStartedAt,
+        projectRef,
+        hasUser: !!user,
+        hasUserId: !!user?.id,
+        identitiesEmpty: Array.isArray(identities) ? identities.length === 0 : null,
+        hasSession: !!session,
+        hasError: !!authError,
+        errorCode: (authError as { code?: string })?.code ?? null,
+        errorMessage: authError?.message ?? null,
+      });
 
       if (authError) {
         const msg = authError.message || "Sign up failed.";
-        // If user already exists, don't claim new account creation failed
         if (msg.toLowerCase().includes("already registered") || msg.toLowerCase().includes("user already")) {
           setError("An account with this email may already exist. Try signing in instead.");
         } else {
@@ -111,11 +128,17 @@ export default function SignUp() {
         return;
       }
 
-      const userId = authData?.user?.id;
-      const session = authData?.session;
+      const userId = user?.id;
+
+      // Duplicate-account detection: Supabase returns a user with empty identities for an already-registered email.
+      if (userId && Array.isArray(identities) && identities.length === 0) {
+        console.info("signup:diagnostic", { timestamp: new Date().toISOString(), projectRef, duplicateAccountSuspected: true });
+        setError("An account with this email may already exist. Try signing in instead.");
+        setState("error");
+        return;
+      }
 
       if (userId && session) {
-        // Create profile if it doesn't exist
         try {
             const { error: profileError } = await withTimeout(
               Promise.resolve(supabase.from("profiles").insert({ id: userId, username: usernameClean, display_name: displayName.trim(), terms_accepted_version: "0.4", terms_accepted_at: new Date().toISOString() })) as PromiseLike<ProfileInsertResponse>,
@@ -123,16 +146,13 @@ export default function SignUp() {
               "Profile creation timed out."
             );
             if (profileError) {
-              // If duplicate (trigger or race), that's okay - continue
               if (!profileError.message?.toLowerCase().includes("duplicate") && !profileError.code?.includes("23505")) {
-                // Partial success: auth account created but profile failed
                 setError("Account created but profile setup failed. You can sign in and complete your profile.");
                 setState("error");
                 return;
               }
             }
         } catch (profileErr: unknown) {
-          // Don't block on profile creation timeout if auth succeeded with session
           console.error("Profile creation issue:", profileErr);
         }
         setState("success");
@@ -141,13 +161,11 @@ export default function SignUp() {
       }
 
       if (userId && !session) {
-        // Email confirmation required. The database trigger creates the profile after confirmation.
         setInfo("Account created. Check your email for a confirmation link.");
         setState("confirm-email");
         return;
       }
 
-      // Fallback
       setInfo("Check your email to confirm your account.");
       setState("confirm-email");
     } catch (err: unknown) {

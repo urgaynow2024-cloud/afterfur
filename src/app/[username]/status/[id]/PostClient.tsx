@@ -23,32 +23,31 @@ export default function PostClient() {
     const run = async () => {
       const supabase = createClient();
       if (!supabase) { setError("Supabase not configured."); setLoading(false); return; }
-      const { data: p, error: pe } = await supabase.from("posts").select("*").eq("id", id).single();
-      if (pe) { setError("Post not found."); setLoading(false); return; }
-      if (typeof p.created_at !== "string") { setError("Post not found."); setLoading(false); return; }
+      const res = await fetch(`/api/post/${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (res.status === 403) {
+        setError("Post not found.");
+        setLoading(false);
+        return;
+      }
+      if (res.status === 404) {
+        setError("Post not found.");
+        setLoading(false);
+        return;
+      }
+      if (!res.ok) {
+        setError("Post not found.");
+        setLoading(false);
+        return;
+      }
+      const json = await res.json();
+      const p = json?.post;
+      if (!p) {
+        setError("Post not found.");
+        setLoading(false);
+        return;
+      }
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", p.author_id).maybeSingle();
       if (!prof || prof.username !== username) { setError("Post not found."); setLoading(false); return; }
-
-      const isPrivate = !!(prof as any).is_private;
-      const isOwner = user?.id === prof.id;
-      if (isPrivate && !isOwner) {
-        if (!user) {
-          setError("Post not found.");
-          setLoading(false);
-          return;
-        }
-        const { data: rel } = await supabase
-          .from("follows")
-          .select("status")
-          .eq("follower_id", user.id)
-          .eq("following_id", prof.id)
-          .maybeSingle();
-        if ((rel as any)?.status !== "accepted") {
-          setError("Post not found.");
-          setLoading(false);
-          return;
-        }
-      }
 
       setPost({ ...p, created_at: p.created_at, profiles: prof });
       setLoading(false);

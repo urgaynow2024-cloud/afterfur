@@ -52,9 +52,11 @@ export default function Explore() {
       const isPrivate = !!(prof as any)?.is_private;
       const isFollowing = followingIds.has(post.author_id);
       const isBlocked = blockedSet.has(post.author_id);
-      if (isPrivate && !isFollowing && post.author_id !== user?.id) return false;
       if (isBlocked) return false;
-      return true;
+      if (!isPrivate) return true;
+      if (post.author_id === user?.id) return true;
+      if (isFollowing) return true;
+      return false;
     }).map((post) => ({ ...post, profiles: authorMap.get(post.author_id) ?? null }));
     setPosts(visiblePosts);
     setHasMorePosts(foundPosts.length === 12);

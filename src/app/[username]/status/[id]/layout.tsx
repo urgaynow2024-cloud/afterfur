@@ -34,12 +34,15 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     limit: "1",
   });
   if (!post) return { title: "Post not found | AfterFur", description: "This AfterFur post is unavailable." };
-  const [profile] = await fetchPublicRows<ProfileMetadataRow>("profiles", {
-    select: "username,display_name",
+  const [profile] = await fetchPublicRows<ProfileMetadataRow & { is_private?: boolean }>("profiles", {
+    select: "username,display_name,is_private",
     id: `eq.${post.author_id}`,
     limit: "1",
   });
   if (!profile || profile.username !== username) return { title: "Post not found | AfterFur", description: "This AfterFur post is unavailable." };
+  if ((profile as any).is_private) {
+    return { title: "Private post | AfterFur", description: "This post is unavailable." };
+  }
   const title = `${profile.display_name || profile.username} on AfterFur`;
   const description = String(post.content || "").slice(0, 200) || "View this post on AfterFur.";
   const url = `https://afterfur.site/${profile.username}/status/${post.id}`;

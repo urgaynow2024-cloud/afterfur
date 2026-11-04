@@ -85,10 +85,10 @@ export default function Search() {
       }
     }
     const filteredPostQuery = postQuery;
-    const [{ data, error }, { data: usernames, error: usernameError }, { data: displayNames, error: displayError }] = await Promise.all([
-      filteredPostQuery,
-      loadMore ? Promise.resolve({ data: [], error: null }) : supabase.from("profiles").select("id,username,display_name,avatar_url").ilike("username", pattern).limit(20),
-      loadMore ? Promise.resolve({ data: [], error: null }) : supabase.from("profiles").select("id,username,display_name,avatar_url").ilike("display_name", pattern).limit(20),
+      const [{ data, error }, { data: usernames, error: usernameError }, { data: displayNames, error: displayError }] = await Promise.all([
+        filteredPostQuery,
+        loadMore ? Promise.resolve({ data: [], error: null }) : supabase.from("profiles").select("id,username,display_name,avatar_url,is_private").ilike("username", pattern).limit(20),
+        loadMore ? Promise.resolve({ data: [], error: null }) : supabase.from("profiles").select("id,username,display_name,avatar_url,is_private").ilike("display_name", pattern).limit(20),
     ]);
     if (requestId !== searchRequest.current) return;
     if (error || usernameError || displayError) setError((error || usernameError || displayError)?.message ?? "Search failed.");
@@ -119,8 +119,13 @@ export default function Search() {
           if (!name.includes(creator.trim().toLowerCase())) return false;
         }
         return true;
-      }).map((post) => ({ ...post, profiles: profileMap.get(post.author_id) || null }));
-      setResults((current) => mergeByIdPage(current, visiblePosts, loadMore));
+        }).map((post) => {
+          const prof:any = profileMap.get(post.author_id);
+          const isPrivate=!!prof?.is_private;
+          if(isPrivate){ if(user?.id===post.author_id) return {...post, profiles: prof}; return null; }
+          return {...post, profiles: prof || null};
+        }).filter(Boolean) as Post[];
+      setResults((current) => mergeByIdPage(current, visiblePosts as Post[], loadMore));
     }
     } catch {
       if (requestId === searchRequest.current) setError("Search could not reach the server. Please try again.");

@@ -1,0 +1,134 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Shell, PageHeader, EmptyState } from "@/components/Shell";
+import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/lib/supabase/client";
+import { canFollow } from "@/lib/follow";
+import { useParams } from "next/navigation";
+import PostCard from "@/components/PostCard";
+import PostText from "@/components/PostText";
+import Link from "next/link";
+import { BadgeList } from "@/components/BadgeList";
+import ReportDialog from "@/components/ReportDialog";
+import { parseProfileCustomisation, displayNameStyle, usernameStyle } from "@/lib/profileCustomisation";
+
+type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; profile_customisation?: Record<string, unknown> | null; created_at: string };
+type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
+type ProfileSummary = { id: string; username: string; display_name: string | null; avatar_url: string | null };
+
+export default function ProfileClient() {
+  const { username } = useParams<{ username: string }>();
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState<"posts" | "replies" | "media" | "likes">("posts");
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [replies, setReplies] = useState<Post[]>([]);
+  const [likes, setLikes] = useState<Post[]>([]);
+  const [counts, setCounts] = useState({ followers: 0, following: 0 });
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const followBusyRef = useRef(false);
+  const [followError, setFollowError] = useState("");
+  const [listType, setListType] = useState<'followers' | 'following' | null>(null);
+  const [listProfiles, setListProfiles] = useState<ProfileSummary[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState('');
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState("");
+  const editSubmittingRef = useRef(false);
+  const [reportUserOpen, setReportUserOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const supabase = createClient();
+      if (!supabase) { setError("Supabase not configured."); setLoading(false); return; }
+      try {
+        const res = await fetch(`/api/profile/${encodeURIComponent(username)}`, { cache: "no-store" });
+        if (cancelled) return;
+        if (res.status === 403) {
+          setError("This profile is private.");
+          setLoading(false);
+          return;
+        }
+        if (res.status === 404) {
+          setError("Profile not found.");
+          setLoading(false);
+          return;
+        }
+        if (!res.ok) {
+          setError("Could not load this profile.");
+          setLoading(false);
+          return;
+        }
+        const json = await res.json();
+        const prof = json?.profile;
+        if (!prof) {
+          setError("Profile not found.");
+          setLoading(false);
+          return;
+        }
+        setProfile(prof as Profile);
+
+        const { count: followers, error: followersError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", prof.id);
+        const { count: following, error: followingError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", prof.id);
+        if (cancelled) return;
+        if (followersError || followingError) setError((followersError || followingError)?.message || "Could not load follow counts.");
+        setCounts({ followers: followers ?? 0, following: following ?? 0 });
+
+        if (user && user.id !== prof.id) {
+          const { data: existing } = await supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("following_id", prof.id).maybeSingle();
+          if (cancelled) return;
+          setIsFollowing(!!existing);
+          const { data: blk } = await (supabase as any).from("blocks").select("blocker_id").eq("blocker_id", user.id).eq("blocked_id", prof.id).maybeSingle();
+          if (cancelled) return;
+          setIsBlocked(!!blk);
+        }
+
+        const { data: ps, error: postsError } = await supabase.from("posts").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+        if (cancelled) return;
+        if (postsError) { setError(postsError.message); setLoading(false); return; }
+        const mappedPosts = ((ps ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: prof }));
+        setPosts(mappedPosts as Post[]);
+
+        const { data: rs, error: repliesError } = await supabase.from("replies").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+        if (cancelled) return;
+        if (repliesError) { setError(repliesError.message); setLoading(false); return; }
+        const mappedReplies = ((rs ?? []) as { id: string; content: string; created_at: string; author_id: string }[]).map((r) => ({ id: r.id, content: r.content, created_at: r.created_at, author_id: r.author_id, media_urls: null, profiles: prof }));
+        setReplies(mappedReplies as Post[]);
+
+        const { data: likedRows, error: likesError } = await supabase.from("likes").select("post_id").eq("user_id", prof.id);
+        if (cancelled) return;
+        if (likesError && user?.id === prof.id) { setError(likesError.message); setLoading(false); return; }
+        const likedIds = ((likedRows ?? []) as { post_id: string }[]).map((r) => r.post_id);
+        if (likedIds.length) {
+          const { data: likedPosts, error: likedPostsError } = await supabase.from("posts").select("*").in("id", likedIds);
+          if (cancelled) return;
+          if (likedPostsError && user?.id === prof.id) { setError(likedPostsError.message); setLoading(false); return; }
+          const mappedLikes = ((likedPosts ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: null }));
+          setLikes(mappedLikes as Post[]);
+        } else {
+          setLikes([]);
+        }
+
+        setLoading(false);
+      } catch {
+        if (cancelled) return;
+        setError("Could not load this profile. Check your connection and retry.");
+        setLoading(false);
+      }
+    };
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError("");
+      void run();
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [username, user]);
