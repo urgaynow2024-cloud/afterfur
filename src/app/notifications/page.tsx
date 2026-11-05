@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { publicPostUrl, publicProfileUrl } from "@/lib/follow";
 
-type NotificationRow = { id: string; user_id: string; type: string; payload: { actor_id?: string; post_id?: string; message?: string; system?: boolean; badge_id?: string } | null; read: boolean; created_at: string };
+type NotificationRow = { id: string; user_id: string; type: string; payload: { actor_id?: string; post_id?: string; conversation_id?: string; message?: string; system?: boolean; badge_id?: string } | null; read: boolean; created_at: string };
 type ActorProfile = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 type NotificationPost = { id: string; content: string };
 
@@ -54,6 +54,23 @@ export default function Notifications() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !user) return;
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload: any) => {
+        const n = payload.new as NotificationRow;
+        setItems((prev) => [n, ...prev]);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload: any) => {
+        const n = payload.new as NotificationRow;
+        setItems((prev) => prev.map((x) => x.id === n.id ? n : x));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   async function markRead(id: string) {
     const supabase = createClient();
     if (!supabase || marking) return;
@@ -93,6 +110,7 @@ export default function Notifications() {
     if (n.type === "reply") return `${name} replied to your post`;
     if (n.type === "repost") return `${name} reposted your post`;
     if (n.type === "mention") return `${name} mentioned you`;
+    if (n.type === "message") return `${name} sent you a message`;
     return `${name} interacted with you`;
   }
 
@@ -131,9 +149,10 @@ export default function Notifications() {
             {visible.map((n) => {
               const actorId = n.payload?.actor_id;
               const postId = n.payload?.post_id;
+              const conversationId = n.payload?.conversation_id;
               const actor = actorId ? profiles[actorId] : undefined;
               const post = postId ? posts[postId] : undefined;
-              const href = postId ? actor ? publicPostUrl(actor.username, postId) : `/posts/${encodeURIComponent(postId)}` : actor ? publicProfileUrl(actor.username) : null;
+              const href = postId ? actor ? publicPostUrl(actor.username, postId) : `/posts/${encodeURIComponent(postId)}` : conversationId ? `/messages` : actor ? publicProfileUrl(actor.username) : null;
               return (
                 <div key={n.id} className={`flex gap-3 px-4 py-4 transition-colors sm:px-6 ${n.read ? "bg-transparent" : "bg-af-brand/8"}`}>
                   <Link href={actor ? `/${encodeURIComponent(actor.username)}` : "/profile"} aria-label={actor ? `View ${actor.display_name || actor.username}'s profile` : "View profile"} className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">

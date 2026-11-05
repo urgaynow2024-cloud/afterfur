@@ -118,10 +118,11 @@ const [blockedAccounts, setBlockedAccounts] = useState<{ id: string; username: s
           }
         }
       });
-      void supabase.from("profiles").select("display_name, username, profile_customisation").eq("id", user.id).maybeSingle().then(({ data }) => {
+      void supabase.from("profiles").select("display_name, username, profile_customisation, is_private").eq("id", user.id).maybeSingle().then(({ data }) => {
         if (cancelled) return;
         if (data) {
           setProfileName({ display_name: data.display_name ?? null, username: data.username ?? null });
+          setIsPrivate(!!data.is_private);
           if (data.profile_customisation && typeof data.profile_customisation === "object") {
             setCustomisation(parseProfileCustomisation(data.profile_customisation));
           }
@@ -289,7 +290,7 @@ const [blockedAccounts, setBlockedAccounts] = useState<{ id: string; username: s
 
              <section id="privacy" aria-labelledby="privacy-heading" className="rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
               <h2 id="privacy-heading" className="text-base font-semibold text-af-text">Privacy and safety</h2>
-              <p className="mt-1 text-sm leading-relaxed text-af-muted">Privacy controls are documented in the Privacy Policy. Blocking and visibility enforcement are not yet implemented.</p>
+              <p className="mt-1 text-sm leading-relaxed text-af-muted">When your account is private, only you and your approved followers can view your profile and posts. Public accounts are visible to everyone.</p>
               <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} /> Private account</label>
               <button type="button" disabled={privacySaving} onClick={async () => {
                 const supabase = createClient();

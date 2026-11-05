@@ -74,6 +74,10 @@ export async function approveFollowRequest(supabase: SupabaseClient, followerId:
 
   if (error) return { ok: false, error: error.message };
   if (!data || data.length === 0) return { ok: false, error: "Request not found or already processed." };
+  try {
+    const { createFollowAcceptedNotification } = await import("@/lib/notifications.server");
+    await createFollowAcceptedNotification({ followerId, followingId: userId });
+  } catch {}
   return { ok: true, error: null };
 }
 

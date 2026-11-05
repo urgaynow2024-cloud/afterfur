@@ -171,6 +171,12 @@ export default function ProfileClient() {
       if (error) { setFollowError(error.message); return; }
       setIsFollowing(true);
       setCounts((c) => ({ ...c, followers: c.followers + 1 }));
+      try {
+        const prof = profile as any;
+        const isPrivate = !!prof.is_private;
+        const { createFollowNotification } = await import("@/lib/notifications.server");
+        await createFollowNotification({ followerId: user.id, followingId: profile.id, isRequest: isPrivate });
+      } catch {}
     }
     } catch {
       setFollowError("Could not update your follow. Check your connection and try again.");

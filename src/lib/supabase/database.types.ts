@@ -63,6 +63,33 @@ type MessageRow = {
   created_at: string | null;
 };
 
+type MessageReadRow = {
+  id: string;
+  conversation_id: string;
+  message_id: string;
+  user_id: string;
+  read_at: string | null;
+};
+
+type MessageAttachmentRow = {
+  id: string;
+  message_id: string;
+  conversation_id: string;
+  uploader_id: string;
+  storage_path: string;
+  bucket_id: string;
+  media_type: string | null;
+  file_size: number | null;
+  created_at: string | null;
+};
+
+type ConversationMuteRow = {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  muted_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -78,6 +105,9 @@ export type Database = {
       conversations: Table<{ id: string; created_at: string | null }, { id?: string; created_at?: string | null }, { id?: string; created_at?: string | null }>;
       conversation_participants: Table<{ conversation_id: string; user_id: string }, { conversation_id: string; user_id: string }, { conversation_id?: string; user_id?: string }>;
       messages: Table<MessageRow, Pick<MessageRow, "content"> & Partial<Omit<MessageRow, "id" | "content">>, Partial<Omit<MessageRow, "id">>>;
+      message_reads: Table<MessageReadRow, Pick<MessageReadRow, "conversation_id" | "message_id" | "user_id"> & Partial<Omit<MessageReadRow, "id" | "conversation_id" | "message_id" | "user_id">>, Partial<Omit<MessageReadRow, "id">>>;
+      message_attachments: Table<MessageAttachmentRow, Pick<MessageAttachmentRow, "message_id" | "conversation_id" | "uploader_id" | "storage_path" | "media_type" | "file_size"> & Partial<Omit<MessageAttachmentRow, "id" | "message_id" | "conversation_id" | "uploader_id" | "storage_path" | "media_type" | "file_size">>, Partial<Omit<MessageAttachmentRow, "id">>>;
+      conversation_mutes: Table<ConversationMuteRow, Pick<ConversationMuteRow, "conversation_id" | "user_id"> & Partial<Omit<ConversationMuteRow, "id" | "conversation_id" | "user_id">>, Partial<Omit<ConversationMuteRow, "id">>>;
       reports: Table<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; description: string | null; status: string; reviewed_by: string | null; reviewed_at: string | null; created_at: string | null }, { reporter_id: string; target_type: string; target_id: string; reason: string; description?: string | null }, { id?: string; status?: string; reviewed_by?: string | null; reviewed_at?: string | null }>;
       badge_registry: Table<{ id: string; category: string; display_name: string; display_order: number; is_public: boolean }, { id: string; category: string; display_name: string; display_order: number; is_public?: boolean }, Partial<{ category: string; display_name: string; display_order: number; is_public: boolean }>>;
       staff_badge_assignments: Table<{ user_id: string; badge_id: string; assigned_by: string; assigned_at: string }, { user_id: string; badge_id: string; assigned_by: string; assigned_at?: string }, never>;
@@ -98,6 +128,7 @@ export type Database = {
       mark_notification_read: { Args: { p_notification_id: string }; Returns: undefined };
       mark_all_notifications_read: { Args: Record<PropertyKey, never>; Returns: undefined };
       get_latest_conversation_messages: { Args: { p_conversation_ids: string[] }; Returns: MessageRow[] };
+      mark_messages_read: { Args: { p_conversation_id: string; p_message_ids: string[] }; Returns: undefined };
       submit_report: { Args: { p_target_type: string; p_target_id: string; p_reason: string; p_description: string | null }; Returns: string };
       get_public_badges: { Args: { p_user_ids: string[] }; Returns: { user_id: string; badge_id: string }[] };
       search_staff_badge_targets: { Args: { p_query: string }; Returns: { user_id: string; username: string; display_name: string | null }[] };

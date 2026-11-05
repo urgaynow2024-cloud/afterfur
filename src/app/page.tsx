@@ -280,6 +280,10 @@ export default function Home() {
     setDraft("");
     setMediaFile(null);
     setMediaPreview(null);
+    try {
+      const { createMentionNotifications } = await import("@/lib/mentions.server");
+      await createMentionNotifications({ authorId: user.id, postId: (result as any).data?.id, content: text || "" });
+    } catch {}
     submittingRef.current = false;
     setSubmitting(false);
   }

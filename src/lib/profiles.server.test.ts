@@ -169,4 +169,117 @@ describe("getProfileForViewer", () => {
     expect((result.profile as any)?.email).toBeUndefined();
     expect((result.profile as any)?.phone).toBeUndefined();
   });
+
+  it("allows logged-out visitor to view a public profile", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "bob", display_name: "Bob", bio: null, avatar_url: null, is_private: false };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    canViewProfileMock.mockReturnValueOnce(true);
+
+    const result = await getProfileForViewer({ username: "bob", viewerId: null });
+
+    expect(result.profile?.id).toBe("owner-1");
+    expect(result.error).toBeNull();
+    expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ isPrivate: false, viewerId: null }));
+  });
+
+  it("allows another authenticated user to view a public profile", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "bob", display_name: "Bob", bio: null, avatar_url: null, is_private: false };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    blocksMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    followsMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    canViewProfileMock.mockReturnValueOnce(true);
+
+    const result = await getProfileForViewer({ username: "bob", viewerId: "viewer-1" });
+
+    expect(result.profile?.id).toBe("owner-1");
+    expect(result.error).toBeNull();
+    expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ isPrivate: false, viewerId: "viewer-1", blocked: false }));
+  });
+
+  it("denies unauthenticated access to a private profile", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "carol", display_name: "Carol", bio: null, avatar_url: null, is_private: true };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    canViewProfileMock.mockReturnValueOnce(false);
+
+    const result = await getProfileForViewer({ username: "carol", viewerId: null });
+
+    expect(result.profile).toBeNull();
+    expect(result.error).toBe("forbidden");
+    expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ isPrivate: true, viewerId: null }));
+  });
+
+  it("allows owner to view their own private profile", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "carol", display_name: "Carol", bio: null, avatar_url: null, is_private: true };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    blocksMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    canViewProfileMock.mockReturnValueOnce(true);
+
+    const result = await getProfileForViewer({ username: "carol", viewerId: "owner-1" });
+
+    expect(result.profile?.id).toBe("owner-1");
+    expect(result.error).toBeNull();
+    expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ viewerId: "owner-1", ownerId: "owner-1" }));
+  });
+
+  it("allows approved follower to view a private profile", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "carol", display_name: "Carol", bio: null, avatar_url: null, is_private: true };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    blocksMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    followsMaybeSingle.mockResolvedValueOnce({ data: { status: "accepted" }, error: null });
+    canViewProfileMock.mockReturnValueOnce(true);
+
+    const result = await getProfileForViewer({ username: "carol", viewerId: "follower-1" });
+
+    expect(result.profile?.id).toBe("owner-1");
+    expect(result.error).toBeNull();
+    expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ followStatus: "accepted" }));
+  });
+
+  it("treats NULL is_private as public", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "dave", display_name: "Dave", bio: null, avatar_url: null, is_private: null };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    canViewProfileMock.mockReturnValueOnce(true);
+
+    const result = await getProfileForViewer({ username: "dave", viewerId: null });
+
+    expect(result.profile?.id).toBe("owner-1");
+    expect(result.error).toBeNull();
+    expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ isPrivate: false }));
+  });
+
+  it("denies access to a private profile when follow status is none", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "carol", display_name: "Carol", bio: null, avatar_url: null, is_private: true };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    blocksMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    followsMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    canViewProfileMock.mockReturnValueOnce(false);
+
+    const result = await getProfileForViewer({ username: "carol", viewerId: "stranger-1" });
+
+    expect(result.profile).toBeNull();
+    expect(result.error).toBe("forbidden");
+  });
+
+  it("denies access when the profile is private and the viewer is blocked", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "carol", display_name: "Carol", bio: null, avatar_url: null, is_private: false };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    blocksMaybeSingle.mockResolvedValueOnce({ data: { blocker_id: "viewer-1" }, error: null });
+    followsMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    canViewProfileMock.mockReturnValueOnce(false);
+
+    const result = await getProfileForViewer({ username: "carol", viewerId: "viewer-1" });
+
+    expect(result.profile).toBeNull();
+    expect(result.error).toBe("forbidden");
+    expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ blocked: true }));
+  });
 });
+

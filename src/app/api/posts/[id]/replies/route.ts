@@ -41,6 +41,10 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+    try {
+      const { createMentionNotifications } = await import("@/lib/mentions.server");
+      await createMentionNotifications({ authorId: viewerId, postId, replyId: (data as any).id, content });
+    } catch {}
     return NextResponse.json({ reply: data }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });

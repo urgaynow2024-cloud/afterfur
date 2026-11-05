@@ -322,6 +322,10 @@ function PostPageInner() {
       inserted = true;
       setDraft("");
       setReplyingTo(null);
+      try {
+        const { createMentionNotifications } = await import("@/lib/mentions.server");
+        await createMentionNotifications({ authorId: user.id, postId: id, content: text });
+      } catch {}
       if (post?.author_id && post.author_id !== user.id) {
         try {
           const { error: notificationError } = await supabase.rpc("create_post_notification", { p_recipient_id: post.author_id, p_post_id: id, p_type: "reply" });
