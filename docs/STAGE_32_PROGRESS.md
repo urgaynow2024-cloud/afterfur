@@ -180,7 +180,28 @@ cp .env.staging.example .env.staging.local
 
 ---
 
-## 6. Verification Results
+## 6. Vercel Hobby Cron Compatibility
+
+### Change: `vercel.json` — deletion-worker schedule
+
+| Field | Before | After |
+|-------|--------|-------|
+| `/api/account/deletion-worker` schedule | `0 * * * *` (hourly) | `0 9 * * *` (daily 09:00 UTC) |
+| `/api/account/reminder-worker` schedule | `0 9 * * *` (daily 09:00 UTC) | `0 9 * * *` (unchanged) |
+
+**Reason:** Vercel Hobby allows cron jobs to run no more than once per day. The deletion-worker was configured hourly, violating this limit. Both workers now run daily at 09:00 UTC.
+
+**Safety:** Neither worker's implementation, authentication, deletion logic, or reminder logic was changed. Deletions are scheduled events tolerant of a daily processing window, so moving from hourly to daily causes no operational problems.
+
+### Verification
+
+- `vercel.json` validated as valid JSON
+- Both cron jobs confirmed at `0 9 * * *` (daily, 09:00 UTC)
+- No worker implementation files modified
+
+---
+
+## 7. Verification Results
 
 - TypeScript: `tsc --noEmit` clean (after clearing `.next/types` cache)
 - Tests: 332 passed across 33 files
