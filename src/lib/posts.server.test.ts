@@ -12,7 +12,7 @@ const blocksMaybeSingle = vi.fn();
 const followsMaybeSingle = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
-  createServerClient: () => ({
+  createServerClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) },
     from: (table: string) => {
       if (table === "posts") {
         return {

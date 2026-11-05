@@ -92,13 +92,17 @@ export default function ProfileClient() {
            setIsBlocked(!!blk);
          }
 
-      const { data: ps, error: postsError } = await supabase.from("posts").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+      let pq = supabase.from("posts").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+      if (user?.id !== prof.id) pq = pq.or("moderation_status.is.null,moderation_status.eq.visible");
+      const { data: ps, error: postsError } = await pq;
       if (cancelled) return;
       if (postsError) { setError(postsError.message); setLoading(false); return; }
       const mappedPosts = ((ps ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: prof }));
       setPosts(mappedPosts as Post[]);
 
-      const { data: rs, error: repliesError } = await supabase.from("replies").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+      let rq = supabase.from("replies").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+      if (user?.id !== prof.id) rq = rq.or("moderation_status.is.null,moderation_status.eq.visible");
+      const { data: rs, error: repliesError } = await rq;
       if (cancelled) return;
       if (repliesError) { setError(repliesError.message); setLoading(false); return; }
       const mappedReplies = ((rs ?? []) as { id: string; content: string; created_at: string; author_id: string }[]).map((r) => ({ id: r.id, content: r.content, created_at: r.created_at, author_id: r.author_id, media_urls: null, profiles: prof }));

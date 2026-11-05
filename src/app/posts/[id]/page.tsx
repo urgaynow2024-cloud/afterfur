@@ -178,7 +178,7 @@ function PostPageInner() {
     profMap = new Map((profs ?? []).map((x: { id: string; username: string; display_name: string | null; avatar_url: string | null }) => [x.id, x]));
     setPost({ ...p, profiles: profMap.get(p.author_id) || null } as Post);
 
-    const { data: r, error: replyError } = await supabase.from("replies").select("*").eq("post_id", id).order("created_at", { ascending: true }).limit(500);
+    const { data: r, error: replyError } = await supabase.from("replies").select("*").eq("post_id", id).or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: true }).limit(500);
     if (replyError) { setError(replyError.message); setLoading(false); return; }
     const validReplies = (r ?? []).filter((reply) => reply.author_id && reply.post_id && reply.created_at);
     const rIds = [...new Set(validReplies.flatMap((reply) => reply.author_id ? [reply.author_id] : []))];

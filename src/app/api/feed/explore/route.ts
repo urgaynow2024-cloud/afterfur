@@ -12,15 +12,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ posts: [] });
     }
     let viewerId: string | null = null;
-    const { data } = await (supabase as any).auth.getUser();
-    viewerId = data.user?.id ?? null;
+    const { data: userData } = await (supabase as any).auth.getUser();
+    viewerId = userData.user?.id ?? null;
+    const meta = (userData.user as any)?.app_metadata ?? {};
+    let staff = meta.afterfur_staff_admin === true || meta.afterfur_staff_admin === "true";
+    if (!staff && viewerId) {
+      const { data: role } = await (supabase as any).from("moderator_roles").select("role").eq("user_id", viewerId).maybeSingle();
+      staff = Boolean((role as any)?.role);
+    }
 
-    const { data: postRows } = await (supabase as any)
+    let q = (supabase as any)
       .from("posts")
       .select("*")
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + limit - 1);
+    if (!staff) q = q.or("moderation_status.is.null,moderation_status.eq.visible");
+    const { data: postRows } = await q;
 
     const posts = postRows || [];
     const authorIds = [...new Set((posts as any[]).map((p: any) => p.author_id).filter(Boolean))];

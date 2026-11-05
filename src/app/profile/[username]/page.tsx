@@ -32,7 +32,7 @@ function PublicProfileInner() {
       if (!p) { setError("User not found."); setLoading(false); return; }
       setProfile(p as Profile);
       setIsSelf(user?.id === p.id);
-      const { data: ps } = await supabase.from("posts").select("*").eq("author_id", p.id).order("created_at", { ascending: false });
+      const { data: ps } = await supabase.from("posts").select("*").eq("author_id", p.id).or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false });
       const mapped = ((ps ?? []) as Omit<PublicPost, "profiles">[]).map((post) => ({
         ...post,
         profiles: p as NonNullable<PublicPost["profiles"]>,

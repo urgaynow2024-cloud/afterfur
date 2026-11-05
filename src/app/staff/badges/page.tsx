@@ -70,9 +70,13 @@ export default function StaffBadgesPage() {
     if (!supabase) return;
     setPendingBadge(badgeId); setError(""); setMessage("");
     try {
-      const { error: manageError } = await supabase.rpc("manage_staff_badge", { p_target_id: selected.user_id, p_badge_id: badgeId, p_action: action });
+      const { data, error: manageError } = await supabase.rpc("manage_staff_badge", { p_target_id: selected.user_id, p_badge_id: badgeId, p_action: action });
       if (manageError) { setError(manageError.message); return; }
-      setMessage(action === "grant" ? "Badge granted." : "Badge revoked.");
+      if (data === false) {
+        setMessage(action === "grant" ? "Badge is already active for this user." : "Badge is not currently active for this user.");
+      } else {
+        setMessage(action === "grant" ? "Badge granted." : "Badge revoked.");
+      }
       await selectTarget(selected);
     } catch { setError("Badge update failed."); }
     finally { setPendingBadge(null); setConfirmRevoke(null); }

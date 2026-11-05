@@ -73,7 +73,7 @@ export default function Search() {
     const escapedTerm = term.replace(/[\\%_]/g, "\\$&");
     const pattern = `%${escapedTerm}%`;
     try {
-    let postQuery = supabase.from("posts").select("*").ilike("content", pattern).order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
+    let postQuery = supabase.from("posts").select("*").ilike("content", pattern).or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
     if (isPawPass) {
       if (mediaOnly || contentType === "media") postQuery = postQuery.not("media_urls", "is", null);
       if (contentType === "text") postQuery = postQuery.is("media_urls", null);

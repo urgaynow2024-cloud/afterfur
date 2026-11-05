@@ -98,3 +98,48 @@ describe('ad creator badge', () => {
     expect(badge?.mark).toBe('🌙');
   });
 });
+
+describe("manual badge re-award lifecycle (regression)", () => {
+  const admin = { afterfur_staff_admin: true };
+
+  it("awards a badge successfully", () => {
+    expect(changeStaffBadge([], "admin", "member", "creator_featured", "grant", admin)).toEqual({ assignments: ["creator_featured"], error: null });
+  });
+
+  it("removes a badge successfully without affecting other badges", () => {
+    const removed = changeStaffBadge(["creator_featured", "access_age_verified"], "admin", "member", "creator_featured", "revoke", admin);
+    expect(removed.error).toBeNull();
+    expect(removed.assignments).toEqual(["access_age_verified"]);
+  });
+
+  it("re-awards the same badge successfully after removal", () => {
+    const granted = changeStaffBadge([], "admin", "member", "creator_featured", "grant", admin);
+    const revoked = changeStaffBadge(granted.assignments, "admin", "member", "creator_featured", "revoke", admin);
+    expect(revoked.assignments).not.toContain("creator_featured");
+    const reAwarded = changeStaffBadge(revoked.assignments, "admin", "member", "creator_featured", "revoke", admin);
+    // revoking a non-active badge is a no-op guard in client helper
+    expect(reAwarded.error).toBe("not_active");
+    const reGranted = changeStaffBadge(revoked.assignments, "admin", "member", "creator_featured", "grant", admin);
+    expect(reGranted).toEqual({ assignments: ["creator_featured"], error: null });
+  });
+
+  it("prevents duplicate active assignments", () => {
+    const once = changeStaffBadge([], "admin", "member", "creator_featured", "grant", admin);
+    const twice = changeStaffBadge(once.assignments, "admin", "member", "creator_featured", "grant", admin);
+    expect(twice.error).toBe("duplicate_active");
+    expect(twice.assignments).toEqual(["creator_featured"]);
+  });
+
+  it("preserves correct badge display after re-awarding (no duplicates, stable knownBadges)", () => {
+    const awarded = changeStaffBadge([], "admin", "member", "ad_creator", "grant", admin);
+    const revoked = changeStaffBadge(awarded.assignments, "admin", "member", "ad_creator", "revoke", admin);
+    const reAwarded = changeStaffBadge(revoked.assignments, "admin", "member", "ad_creator", "grant", admin);
+    expect(reAwarded.assignments.filter((id) => id === "ad_creator")).toHaveLength(1);
+    expect(knownBadges(reAwarded.assignments).map((b) => b.id)).toContain("ad_creator");
+  });
+
+  it("supports expanded manual badges (not only legacy staff role IDs)", () => {
+    expect(changeStaffBadge([], "admin", "member", "community_helper", "grant", admin).error).toBeNull();
+    expect(changeStaffBadge([], "admin", "member", "web_designer", "grant", admin).error).toBeNull();
+  });
+});

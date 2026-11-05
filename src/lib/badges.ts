@@ -78,6 +78,7 @@ export const WEB_DESIGNER_BADGE: BadgeDefinition = {
   mark: "🎨",
 };
 export const MANUAL_BADGE_IDS = ["staff_founder", "staff_moderator", "staff_developer", "staff_tester", "access_age_verified", "access_approved", "creator_featured", "achievement_event_winner", "community_helper", "web_designer", "ad_creator"] as const;
+export type ManualBadgeId = (typeof MANUAL_BADGE_IDS)[number];
 export const BADGE_REGISTRY: BadgeDefinition[] = [...STAFF_BADGES, WEB_DESIGNER_BADGE, PAWPASS_MEMBER_BADGE, PAWPASS_PRIME_BADGE, ...PAWPASS_BADGES, ...PAWPASS_YEAR_BADGES, ...MILESTONE_BADGES, ...TRUST_BADGES, ...CREATOR_BADGES, ...COMMUNITY_BADGES, ...ACHIEVEMENT_BADGES, ...MEMBERSHIP_EXTRA_BADGES];
 export const MANAGEABLE_BADGES: BadgeDefinition[] = BADGE_REGISTRY.filter((badge) => (MANUAL_BADGE_IDS as readonly string[]).includes(badge.id));
 const badgeById = new Map(BADGE_REGISTRY.map((badge) => [badge.id, badge]));
@@ -147,11 +148,16 @@ export function canManageStaffBadge(actorId: string | null, targetId: string, ap
 export function changeStaffBadge(
   current: readonly string[], actorId: string | null, targetId: string, badgeId: string,
   action: "grant" | "revoke", appMetadata: Record<string, unknown> | null | undefined,
-): { assignments: string[]; error: "forbidden" | "invalid_badge" | null } {
-  if (!STAFF_BADGE_IDS.includes(badgeId as (typeof STAFF_BADGE_IDS)[number])) return { assignments: [...current], error: "invalid_badge" };
+): { assignments: string[]; error: "forbidden" | "invalid_badge" | "duplicate_active" | "not_active" | null } {
+  if (!(MANUAL_BADGE_IDS as readonly string[]).includes(badgeId)) return { assignments: [...current], error: "invalid_badge" };
   if (!canManageStaffBadge(actorId, targetId, appMetadata)) return { assignments: [...current], error: "forbidden" };
   const next = new Set(current);
-  if (action === "grant") next.add(badgeId);
-  else next.delete(badgeId);
+  if (action === "grant") {
+    if (next.has(badgeId)) return { assignments: [...current], error: "duplicate_active" };
+    next.add(badgeId);
+  } else {
+    if (!next.has(badgeId)) return { assignments: [...current], error: "not_active" };
+    next.delete(badgeId);
+  }
   return { assignments: [...next], error: null };
 }

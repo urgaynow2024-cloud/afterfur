@@ -31,7 +31,7 @@ export default function Profile() {
         setLoading(false);
         return;
       }
-      const { data: ps } = await supabase.from("posts").select("*").eq("author_id", user.id).order("created_at", { ascending: false });
+      const { data: ps } = await supabase.from("posts").select("*").eq("author_id", user.id).or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false });
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
       let profileData = prof;
       if (!profileData) {
@@ -58,7 +58,7 @@ export default function Profile() {
         setReposts([]);
       }
 
-      const { data: rp } = await supabase.from("replies").select("*").eq("author_id", user.id).order("created_at", { ascending: false });
+      const { data: rp } = await supabase.from("replies").select("*").eq("author_id", user.id).or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false });
       const mappedReplies = ((rp ?? []) as ReplyRow[]).map((r) => ({ id: r.id, content: r.content, created_at: r.created_at, author_id: r.author_id, profiles: profileData as Profile }));
       setReplies(mappedReplies as Post[]);
       const { count: f1 } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id);

@@ -23,6 +23,7 @@ export function middleware(request: NextRequest) {
     path.startsWith("/notifications") ||
     path.startsWith("/bookmarks") ||
     path.startsWith("/staff") ||
+    path.startsWith("/moderator") ||
     path.startsWith("/account-security") ||
     path.startsWith("/auth")
   ) {

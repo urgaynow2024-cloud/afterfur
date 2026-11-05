@@ -31,7 +31,7 @@ export default function Explore() {
     try {
     const [{ data: creatorRows, error: creatorError }, { data: postRows, error: postError }] = await Promise.all([
       supabase.from("profiles").select("id,username,display_name,avatar_url,bio").order("created_at", { ascending: false }).limit(12),
-      supabase.from("posts").select("*").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 11),
+      supabase.from("posts").select("*").or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 11),
     ]);
     if (creatorError || postError) { setError((creatorError || postError)?.message ?? "Explore could not load."); setLoading(false); return; }
     const foundPosts = (postRows ?? []) as Post[];
@@ -101,7 +101,7 @@ export default function Explore() {
     try {
       const offset = posts.length;
       const [from, to] = pageRange(offset, 12);
-      const { data, error: queryError } = await supabase.from("posts").select("*").order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
+      const { data, error: queryError } = await supabase.from("posts").select("*").or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
       if (queryError) { setPostsError(queryError.message); return; }
       const page = (data ?? []) as Post[];
       const authorIds = [...new Set(page.map((post) => post.author_id))];

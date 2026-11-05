@@ -111,6 +111,15 @@ export default function Notifications() {
     if (n.type === "repost") return `${name} reposted your post`;
     if (n.type === "mention") return `${name} mentioned you`;
     if (n.type === "message") return `${name} sent you a message`;
+    if (n.type === "appeal_decision") {
+      const p = (n.payload ?? {}) as Record<string, unknown>;
+      const status = p.status;
+      const rm = typeof p.response_message === "string" ? p.response_message.trim() : "";
+      const msg = rm ? ` ${rm}` : "";
+      if (status === "accepted") return `Your appeal was accepted.${msg}`;
+      if (status === "rejected") return `Your appeal was rejected.${msg}`;
+      return `Your appeal was reviewed.${msg}`;
+    }
     return `${name} interacted with you`;
   }
 

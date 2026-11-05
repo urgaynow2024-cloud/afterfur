@@ -4,6 +4,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import Settings from "@/app/settings/page";
 
 const rpc = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/followRequests", () => ({ getIncomingFollowRequests: vi.fn(async () => []), getPendingFollowRequestCount: vi.fn(async () => 0) }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     from: () => ({

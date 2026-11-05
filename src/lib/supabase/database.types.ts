@@ -44,6 +44,10 @@ type PostRow = {
   created_at: string | null;
   edited_at: string | null;
   media_urls: string[] | null;
+  moderation_status?: string | null;
+  moderated_at?: string | null;
+  moderated_by?: string | null;
+  moderation_reason?: string | null;
 };
 
 type ReplyRow = {
@@ -53,6 +57,10 @@ type ReplyRow = {
   content: string;
   created_at: string | null;
   parent_reply_id: string | null;
+  moderation_status?: string | null;
+  moderated_at?: string | null;
+  moderated_by?: string | null;
+  moderation_reason?: string | null;
 };
 
 type MessageRow = {
@@ -90,6 +98,55 @@ type ConversationMuteRow = {
   muted_at: string | null;
 };
 
+type ModeratorRoleRow = {
+  id: string;
+  user_id: string;
+  role: string;
+  assigned_by: string | null;
+  assigned_at: string | null;
+  reason: string | null;
+};
+
+type ModerationAuditLogRow = {
+  id: string;
+  actor_id: string;
+  target_type: string;
+  target_id: string;
+  action: string;
+  details: Json | null;
+  before_state: Json | null;
+  after_state: Json | null;
+  created_at: string | null;
+};
+
+type UserEnforcementRow = {
+  id: string;
+  user_id: string;
+  type: string;
+  reason: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_by: string;
+  created_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  revoked_reason: string | null;
+};
+
+type AppealRow = {
+  id: string;
+  user_id: string;
+  report_id: string | null;
+  enforcement_type: string | null;
+  enforcement_id: string | null;
+  reason: string;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  response_message: string | null;
+  created_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -108,6 +165,10 @@ export type Database = {
       message_reads: Table<MessageReadRow, Pick<MessageReadRow, "conversation_id" | "message_id" | "user_id"> & Partial<Omit<MessageReadRow, "id" | "conversation_id" | "message_id" | "user_id">>, Partial<Omit<MessageReadRow, "id">>>;
       message_attachments: Table<MessageAttachmentRow, Pick<MessageAttachmentRow, "message_id" | "conversation_id" | "uploader_id" | "storage_path" | "media_type" | "file_size"> & Partial<Omit<MessageAttachmentRow, "id" | "message_id" | "conversation_id" | "uploader_id" | "storage_path" | "media_type" | "file_size">>, Partial<Omit<MessageAttachmentRow, "id">>>;
       conversation_mutes: Table<ConversationMuteRow, Pick<ConversationMuteRow, "conversation_id" | "user_id"> & Partial<Omit<ConversationMuteRow, "id" | "conversation_id" | "user_id">>, Partial<Omit<ConversationMuteRow, "id">>>;
+      moderator_roles: Table<ModeratorRoleRow, Pick<ModeratorRoleRow, "user_id" | "role" | "reason"> & Partial<Omit<ModeratorRoleRow, "id" | "user_id" | "role">>, Partial<Omit<ModeratorRoleRow, "id">>>;
+      moderation_audit_log: Table<ModerationAuditLogRow, Pick<ModerationAuditLogRow, "actor_id" | "target_type" | "target_id" | "action" | "details" | "before_state" | "after_state"> & Partial<Omit<ModerationAuditLogRow, "id">>, Partial<Omit<ModerationAuditLogRow, "id">>>;
+      user_enforcements: Table<UserEnforcementRow, Pick<UserEnforcementRow, "user_id" | "type" | "reason" | "starts_at" | "ends_at" | "created_by"> & Partial<Omit<UserEnforcementRow, "id" | "user_id" | "type" | "reason" | "starts_at" | "ends_at" | "created_by">>, Partial<Omit<UserEnforcementRow, "id">>>;
+      appeals: Table<AppealRow, Pick<AppealRow, "user_id" | "reason" | "report_id" | "enforcement_type" | "enforcement_id"> & Partial<Omit<AppealRow, "id" | "user_id" | "reason">>, Partial<Omit<AppealRow, "id">>>;
       reports: Table<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; description: string | null; status: string; reviewed_by: string | null; reviewed_at: string | null; created_at: string | null }, { reporter_id: string; target_type: string; target_id: string; reason: string; description?: string | null }, { id?: string; status?: string; reviewed_by?: string | null; reviewed_at?: string | null }>;
       badge_registry: Table<{ id: string; category: string; display_name: string; display_order: number; is_public: boolean }, { id: string; category: string; display_name: string; display_order: number; is_public?: boolean }, Partial<{ category: string; display_name: string; display_order: number; is_public: boolean }>>;
       staff_badge_assignments: Table<{ user_id: string; badge_id: string; assigned_by: string; assigned_at: string }, { user_id: string; badge_id: string; assigned_by: string; assigned_at?: string }, never>;
@@ -151,6 +212,8 @@ export type Database = {
       get_my_ui_preferences: { Args: Record<PropertyKey, never>; Returns: Json };
       update_ui_preferences: { Args: { p_preferences: Json }; Returns: boolean };
       update_profile_customisation: { Args: { p_config: Json }; Returns: boolean };
+      has_moderator_role: { Args: { p_user_id: string; p_min_role: string }; Returns: boolean };
+      record_moderation_action: { Args: { p_actor_id: string; p_target_type: string; p_target_id: string; p_action: string; p_details: Json | null; p_before_state: Json | null; p_after_state: Json | null }; Returns: string };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
