@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import EmojiPicker from "@/components/EmojiPicker";
+import { clearTransientAccountState, ACCOUNT_SWITCH_EVENT } from "@/lib/accountSessions";
 import { submitAndPublishPost } from "@/lib/feed";
 
 type CreatedPost = {
   id: string;
   content: string;
-  classification: string;
+  classification: string | null;
   created_at: string;
   author_id: string;
   media_urls: string[] | null;
@@ -129,7 +130,23 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
       }
     }
     const result = await submitAndPublishPost<CreatedPost>(
-      () => supabase.from("posts").insert({ author_id: user.id, content: text.trim(), media_urls: mediaUrls }).select("*").single(),
+      async () => {
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: text.trim(),
+            media_urls: mediaUrls,
+            classification: "SFW",
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          return { data: null, error: err.error || "Could not create post." };
+        }
+        const json = await res.json();
+        return { data: json.post ?? null, error: null };
+      },
       (post) => window.dispatchEvent(new CustomEvent("afterfur:post-created", { detail: {
         ...post,
         profiles: profile ? {

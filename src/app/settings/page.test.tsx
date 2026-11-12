@@ -7,6 +7,7 @@ const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/followRequests", () => ({ getIncomingFollowRequests: vi.fn(async () => []), getPendingFollowRequestCount: vi.fn(async () => 0) }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
+    auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }), getSession: async () => ({ data: { session: null } }), getUser: async () => ({ data: { user: null } }) },
     from: () => ({
       select: () => ({
         eq: () => ({

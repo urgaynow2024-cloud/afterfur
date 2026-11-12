@@ -8,6 +8,8 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/serverAuth";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 type ReadReceiptBody = {
   conversationId?: unknown;
@@ -16,11 +18,15 @@ type ReadReceiptBody = {
 
 export async function POST(request: Request) {
   try {
+    const user = await getVerifiedUser(request);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: user.id, ip: getClientIp(request) }), "/api/messages/read-receipts", 60, 60);
+    if (!rl.allowed) return rl.response;
+
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const userId = userData.user.id;
+    const userId = user.id;
 
     let body: ReadReceiptBody;
     try {
@@ -47,12 +53,8 @@ export async function POST(request: Request) {
       .eq("user_id", userId)
       .limit(1);
 
-    if (membershipError) {
-      return NextResponse.json({ error: membershipError.message }, { status: 500 });
-    }
-    if ((membership ?? []).length === 0) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
+    if (membershipError) return NextResponse.json({ error: membershipError.message }, { status: 500 });
+    if ((membership ?? []).length === 0) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
     const { error: rpcError } = await supabase.rpc("mark_messages_read", {
       p_conversation_id: conversationId,

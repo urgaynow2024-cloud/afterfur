@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/serverAuth";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const user = await getVerifiedUser(request);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: user.id, ip: getClientIp(request) }), "/api/messages/requests/[id]", 20, 60);
+    if (!rl.allowed) return rl.response;
+
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const userId = userData.user.id;
+    const userId = user.id;
+
     const body = await request.json();
     const action = body.action;
 

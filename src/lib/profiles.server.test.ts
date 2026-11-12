@@ -10,15 +10,17 @@ const profileMaybeSingle = vi.fn();
 const blocksMaybeSingle = vi.fn();
 const followsMaybeSingle = vi.fn();
 
+const profileIlike = vi.fn(() => ({ maybeSingle: profileMaybeSingle }));
+const profileEq = vi.fn(() => ({ maybeSingle: profileMaybeSingle }));
+
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => ({
     from: (table: string) => {
       if (table === "profiles") {
         return {
           select: () => ({
-            eq: () => ({
-              maybeSingle: profileMaybeSingle,
-            }),
+            eq: profileEq,
+            ilike: profileIlike,
           }),
         };
       }
@@ -53,8 +55,22 @@ describe("getProfileForViewer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     profileMaybeSingle.mockReset();
+    profileIlike.mockClear();
+    profileEq.mockClear();
     blocksMaybeSingle.mockReset();
     followsMaybeSingle.mockReset();
+  });
+
+  it("looks up profiles case-insensitively", async () => {
+    const { getProfileForViewer } = await import("@/lib/profiles.server");
+    const profile = { id: "owner-1", username: "BlueyBarks", display_name: "Bluey", bio: null, avatar_url: null, is_private: false };
+    profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
+    canViewProfileMock.mockReturnValueOnce(true);
+
+    const result = await getProfileForViewer({ username: "blueybarks", viewerId: null });
+
+    expect(result.error).toBeNull();
+    expect(profileIlike).toHaveBeenCalledWith("username", "blueybarks");
   });
 
   it("returns forbidden when unauthorized viewer cannot access a private profile", async () => {
@@ -157,15 +173,28 @@ describe("getProfileForViewer", () => {
     expect(canViewProfileMock).toHaveBeenCalledWith(expect.objectContaining({ blocked: true }));
   });
 
-  it("returns only safe profile fields and does not leak private metadata", async () => {
+  it("returns the full stored profile row for authorized viewers without leaking auth-only fields", async () => {
     const { getProfileForViewer } = await import("@/lib/profiles.server");
-    const profile = { id: "owner-1", username: "alice", display_name: "Alice", bio: "hi", avatar_url: null, is_private: false };
+    const profile = {
+      id: "owner-1",
+      username: "alice",
+      display_name: "Alice",
+      bio: "hi",
+      avatar_url: "https://cdn/avatar.png",
+      banner_url: "https://cdn/banner.png",
+      website: "https://example.com",
+      location: "Den",
+      profile_customisation: { accent: "#fff" },
+      created_at: "2026-01-01T00:00:00Z",
+      is_private: false,
+    };
     profileMaybeSingle.mockResolvedValueOnce({ data: profile, error: null });
     canViewProfileMock.mockReturnValueOnce(true);
 
     const result = await getProfileForViewer({ username: "alice", viewerId: null });
 
-    expect(result.profile).toEqual({ id: "owner-1", username: "alice", display_name: "Alice", bio: "hi", avatar_url: null, is_private: false });
+    expect(result.error).toBeNull();
+    expect(result.profile).toMatchObject(profile);
     expect((result.profile as any)?.email).toBeUndefined();
     expect((result.profile as any)?.phone).toBeUndefined();
   });

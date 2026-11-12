@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/moderation/staff
  *   List staff members (moderator_roles) with safe profile fields.
  *   Requires administrator role. Handles unapplied migration 0033 gracefully.
@@ -19,6 +19,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireModeratorRole, recordModerationAction } from "@/lib/moderation";
+import { staffBadgeIdForRole, StaffBadgeId, type ModeratorRole } from "@/lib/badges";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 type SupabaseLikeError = { code?: string; message?: string; details?: string; hint?: string } | null | undefined;
 
@@ -44,6 +46,89 @@ function badRequest(message: string) {
   return NextResponse.json({ error: "bad_request", message }, { status: 400 });
 }
 
+/**
+ * Synchronise a staff badge with a moderator role change.
+ *
+ * Non-blocking: the role change is committed first. If badge sync fails, the
+ * caller can retry via PATCH with action "sync_badge". Returns a result that
+ * the caller can surface to the administrator.
+ */
+async function syncStaffBadge({
+  supabase,
+  actorId,
+  targetUserId,
+  prevRole,
+  nextRole,
+}: {
+  supabase: ReturnType<typeof createServerClient> | null;
+  actorId: string;
+  targetUserId: string;
+  prevRole: ModeratorRole | null;
+  nextRole: ModeratorRole | null;
+}): Promise<{
+  synced: boolean;
+  badge_id: StaffBadgeId | null;
+  action: "grant" | "revoke" | null;
+  error: string | null;
+}> {
+  if (!supabase) {
+    return { synced: false, badge_id: null, action: null, error: "Supabase not configured." };
+  }
+
+  const prevBadge = staffBadgeIdForRole(prevRole);
+  const nextBadge = staffBadgeIdForRole(nextRole);
+
+  // No badge change needed when both roles map to the same badge (or neither).
+  if (prevBadge === nextBadge) {
+    return { synced: true, badge_id: nextBadge, action: null, error: null };
+  }
+
+  const rpc = (supabase as any).rpc.bind(supabase);
+
+  // Revoke the previous role's badge, if any.
+  if (prevBadge) {
+    const { error: revokeError } = await rpc("sync_staff_role_badge", {
+      p_actor_id: actorId,
+      p_target_id: targetUserId,
+      p_badge_id: prevBadge,
+      p_action: "revoke",
+    });
+    if (revokeError) {
+      return {
+        synced: false,
+        badge_id: nextBadge,
+        action: "revoke",
+        error: `Failed to revoke previous badge: ${revokeError.message}`,
+      };
+    }
+  }
+
+  // Grant the new role's badge, if any.
+  if (nextBadge) {
+    const { error: grantError } = await rpc("sync_staff_role_badge", {
+      p_actor_id: actorId,
+      p_target_id: targetUserId,
+      p_badge_id: nextBadge,
+      p_action: "grant",
+    });
+    if (grantError) {
+      return {
+        synced: false,
+        badge_id: prevBadge,
+        action: "grant",
+        error: `Failed to award badge: ${grantError.message}`,
+      };
+    }
+  }
+
+  return {
+    synced: true,
+    badge_id: nextBadge,
+    action: nextBadge ? "grant" : "revoke",
+    error: null,
+  };
+}
+
 const VALID_ROLES = ["moderator", "senior_moderator", "administrator"] as const;
 type StaffRole = (typeof VALID_ROLES)[number];
 
@@ -54,6 +139,8 @@ function isValidRole(role: unknown): role is StaffRole {
 export async function GET(request: Request) {
   try {
     const ctx = await requireModeratorRole("administrator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/staff", 60, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -136,6 +223,9 @@ export async function POST(request: Request) {
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId!, ip: getClientIp(request) }), "/api/moderation/staff", 20, 60);
+    if (!rl.allowed) return rl.response;
+
     const body = await request.json().catch(() => ({}));
     const { targetUserId, role, reason } = body as { targetUserId?: string; role?: string; reason?: string };
 
@@ -194,16 +284,48 @@ export async function POST(request: Request) {
       return safeDbError(roleError, { error: "failed_to_assign_staff", status: 400 });
     }
 
+    // Synchronise the staff badge for the newly appointed role. This is
+    // non-blocking: the role is already committed. A failed badge sync is
+    // reported in the response so the administrator can retry.
+    const badgeResult = await syncStaffBadge({
+      supabase,
+      actorId: ctx.userId!,
+      targetUserId,
+      prevRole: null,
+      nextRole: role,
+    });
+
     await recordModerationAction({
       actorId: ctx.userId!,
       targetType: "staff_role",
       targetId: targetUserId,
       action: "assign_staff_role",
-      details: { role, reason: reason.trim(), target_username: (targetProfile as any).username ?? null },
-      afterState: { role, assigned_at: (roleRow as any).assigned_at ?? null },
+      details: {
+        role,
+        reason: reason.trim(),
+        target_username: (targetProfile as any).username ?? null,
+        badge: badgeResult.badge_id ?? null,
+        badge_synced: badgeResult.synced,
+        badge_error: badgeResult.error ?? null,
+      },
+      afterState: {
+        role,
+        assigned_at: (roleRow as any).assigned_at ?? null,
+        badge: badgeResult.badge_id ?? null,
+        badge_synced: badgeResult.synced,
+      },
     });
 
-    return NextResponse.json({ ok: true, staff: roleRow }, { status: 201 });
+    return NextResponse.json({
+      ok: true,
+      staff: roleRow,
+      badge: {
+        synced: badgeResult.synced,
+        badge_id: badgeResult.badge_id ?? null,
+        action: badgeResult.action ?? null,
+        error: badgeResult.error ?? null,
+      },
+    }, { status: 201 });
   } catch (err: any) {
     if (err?.status === 401) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     if (err?.status === 403) return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -216,6 +338,9 @@ export async function PATCH(request: Request) {
     const ctx = await requireModeratorRole("administrator", request);
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId!, ip: getClientIp(request) }), "/api/moderation/staff", 20, 60);
+    if (!rl.allowed) return rl.response;
 
     const body = await request.json().catch(() => ({}));
     const { targetUserId, role, reason, action } = body as { targetUserId?: string; role?: string; reason?: string; action?: string };
@@ -233,21 +358,79 @@ export async function PATCH(request: Request) {
     if (existingErr) return safeDbError(existingErr, { error: "failed_to_update_staff", status: 500 });
     if (!existing) return NextResponse.json({ error: "staff_not_found", message: "Staff role not found for this account." }, { status: 404 });
 
+    // Retry-only endpoint: synchronise the badge for the current role without
+    // changing anything in moderator_roles. Used when a previous badge sync
+    // failed and the administrator wants to retry.
+    if (action === "sync_badge") {
+      const currentRole = (existing as any).role as ModeratorRole | null;
+      const badgeResult = await syncStaffBadge({
+        supabase,
+        actorId: ctx.userId!,
+        targetUserId,
+        prevRole: null,
+        nextRole: currentRole,
+      });
+      await recordModerationAction({
+        actorId: ctx.userId!,
+        targetType: "staff_role",
+        targetId: targetUserId,
+        action: "sync_staff_badge",
+        details: {
+          role: currentRole,
+          badge: badgeResult.badge_id ?? null,
+          badge_synced: badgeResult.synced,
+          badge_error: badgeResult.error ?? null,
+        },
+        afterState: { role: currentRole, badge: badgeResult.badge_id ?? null, badge_synced: badgeResult.synced },
+      });
+      return NextResponse.json({
+        ok: badgeResult.synced,
+        badge: {
+          synced: badgeResult.synced,
+          badge_id: badgeResult.badge_id ?? null,
+          action: badgeResult.action ?? null,
+          error: badgeResult.error ?? null,
+        },
+      });
+    }
+
     const isRemove = action === "remove" || role === null || typeof role === "undefined";
     if (isRemove) {
       const { error: deleteError } = await supabase.from("moderator_roles").delete().eq("user_id", targetUserId);
       if (deleteError) return safeDbError(deleteError, { error: "failed_to_remove_staff", status: 400 });
+
+      // Revoke the staff badge for the removed role (non-blocking).
+      const badgeResult = await syncStaffBadge({
+        supabase,
+        actorId: ctx.userId!,
+        targetUserId,
+        prevRole: (existing as any).role as ModeratorRole | null,
+        nextRole: null,
+      });
 
       await recordModerationAction({
         actorId: ctx.userId!,
         targetType: "staff_role",
         targetId: targetUserId,
         action: "remove_staff_role",
-        details: { reason: typeof reason === "string" ? reason.trim() || null : null },
+        details: {
+          reason: typeof reason === "string" ? reason.trim() || null : null,
+          badge: badgeResult.badge_id ?? null,
+          badge_synced: badgeResult.synced,
+          badge_error: badgeResult.error ?? null,
+        },
         beforeState: { role: (existing as any).role },
-        afterState: { role: null },
+        afterState: { role: null, badge: badgeResult.badge_id ?? null, badge_synced: badgeResult.synced },
       });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({
+        ok: true,
+        badge: {
+          synced: badgeResult.synced,
+          badge_id: badgeResult.badge_id ?? null,
+          action: badgeResult.action ?? null,
+          error: badgeResult.error ?? null,
+        },
+      });
     }
 
     if (!isValidRole(role)) return badRequest("Invalid role.");
@@ -267,17 +450,42 @@ export async function PATCH(request: Request) {
       .single();
     if (roleError) return safeDbError(roleError, { error: "failed_to_update_staff", status: 400 });
 
+    // Synchronise the staff badge for the role change (non-blocking).
+    const badgeResult = await syncStaffBadge({
+      supabase,
+      actorId: ctx.userId!,
+      targetUserId,
+      prevRole: (existing as any).role as ModeratorRole | null,
+      nextRole: role,
+    });
+
     await recordModerationAction({
       actorId: ctx.userId!,
       targetType: "staff_role",
       targetId: targetUserId,
       action: "update_staff_role",
-      details: { from_role: (existing as any).role, to_role: role, reason: reason.trim() },
+      details: {
+        from_role: (existing as any).role,
+        to_role: role,
+        reason: reason.trim(),
+        badge: badgeResult.badge_id ?? null,
+        badge_synced: badgeResult.synced,
+        badge_error: badgeResult.error ?? null,
+      },
       beforeState: { role: (existing as any).role },
-      afterState: { role },
+      afterState: { role, badge: badgeResult.badge_id ?? null, badge_synced: badgeResult.synced },
     });
 
-    return NextResponse.json({ ok: true, staff: roleRow });
+    return NextResponse.json({
+      ok: true,
+      staff: roleRow,
+      badge: {
+        synced: badgeResult.synced,
+        badge_id: badgeResult.badge_id ?? null,
+        action: badgeResult.action ?? null,
+        error: badgeResult.error ?? null,
+      },
+    });
   } catch (err: any) {
     if (err?.status === 401) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     if (err?.status === 403) return NextResponse.json({ error: "forbidden" }, { status: 403 });

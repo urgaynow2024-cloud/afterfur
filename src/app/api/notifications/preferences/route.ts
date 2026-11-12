@@ -1,13 +1,17 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/serverAuth";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const userId = userData.user.id;
+    const user = await getVerifiedUser(request);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const rl = await rateLimit(getRateLimitKey({ userId: user.id, ip: getClientIp(request) }), "/api/notifications/preferences", 60, 60);
+    if (!rl.allowed) return rl.response!;
+    const userId = user.id;
     const { data } = await (supabase as any).from("notification_preferences").select("*").eq("user_id", userId).maybeSingle();
     const prefs = {
       likes: data?.likes ?? true,
@@ -27,9 +31,11 @@ export async function PUT(request: Request) {
   try {
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const userId = userData.user.id;
+    const user = await getVerifiedUser(request);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const rl = await rateLimit(getRateLimitKey({ userId: user.id, ip: getClientIp(request) }), "/api/notifications/preferences", 30, 60);
+    if (!rl.allowed) return rl.response!;
+    const userId = user.id;
     const body = await request.json();
     const prefs = {
       user_id: userId,

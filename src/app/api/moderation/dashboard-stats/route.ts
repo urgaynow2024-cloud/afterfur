@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireModeratorRole } from "@/lib/moderation";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 type SupabaseLikeError = { code?: string; message?: string; details?: string; hint?: string } | null | undefined;
 
@@ -22,8 +23,8 @@ const MIGRATION_REQUIRED_MESSAGE =
 function isMissingRelationError(error: SupabaseLikeError): boolean {
   if (!error) return false;
   const code = String(error.code ?? "").toUpperCase();
-  // Postgres undefined_table / PostgREST relation-not-found cases.
   if (code === "42P01" || code === "PGRST205" || code === "PGRST204") return true;
+  // Inspect safe metadata only for migration detection; never expose raw backend details.
   const hay = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
   return (
     hay.includes("does not exist") &&
@@ -38,14 +39,11 @@ function dbFailureResponse(error: SupabaseLikeError, context: string) {
         error: "migration_required",
         code: "migration_required",
         message: MIGRATION_REQUIRED_MESSAGE,
-        // Safe, non-sensitive context only (no raw DB message/credentials).
         missing: context,
       },
       { status: 503 }
     );
   }
-  // Log a sanitized server-side marker only in non-production contexts if desired;
-  // never include credentials/raw DB details in the response.
   return NextResponse.json(
     { error: "dashboard_stats_unavailable", message: "Failed to load dashboard statistics." },
     { status: 500 }
@@ -54,7 +52,9 @@ function dbFailureResponse(error: SupabaseLikeError, context: string) {
 
 export async function GET(request: Request) {
   try {
-    await requireModeratorRole("moderator", request);
+    const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/dashboard-stats", 120, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

@@ -1,8 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/rateLimit", () => ({
+  rateLimit: vi.fn(async () => ({ allowed: true })),
+  getClientIp: () => "127.0.0.1",
+  getRateLimitKey: (o: any) => (o?.userId ? `user:${o.userId}` : `ip:${o?.ip || "unknown"}`),
+}));
+
 const ME = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
-const OTHER = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12";
 const CONVERSATION_ID = "conv-1";
+
+let authUser: any = { id: ME, email: "me@example.com", app_metadata: {}, user_metadata: {} };
+vi.mock("@/lib/serverAuth", () => ({
+  verifyRequestAuth: vi.fn(async () => authUser ? { ok: true, mode: "bearer", user: authUser } : { ok: false, mode: "anonymous", reason: "no_bearer" }),
+  getVerifiedUser: vi.fn(async () => authUser),
+}));
 
 function makeChain(rows: any[] | null, singleRow: any | null = null) {
   let filtered: any[] = rows ?? (singleRow ? [singleRow] : []);
@@ -33,10 +44,10 @@ function makeChain(rows: any[] | null, singleRow: any | null = null) {
   return chain;
 }
 
-function makeSupabase(user: { id: string } | null, db: Record<string, any> = {}) {
+function makeSupabase(_user: { id: string } | null, db: Record<string, any> = {}) {
   return {
     auth: {
-      getUser: async () => ({ data: { user }, error: user ? null : new Error("no user") }),
+      getUser: async () => ({ data: { user: authUser }, error: authUser ? null : new Error("no user") }),
     },
     from: (table: string) => makeChain(db[table] ?? null, db[table + "_single"] ?? null),
     rpc: async (_name: string, _args: any) => ({ data: null, error: null }),
@@ -50,12 +61,13 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 async function runReadReceiptsRoute(body: unknown, user: { id: string } | null = { id: ME }, db: Record<string, any> = {}) {
+  authUser = user ? { ...user, app_metadata: {}, user_metadata: {} } : null;
   current.supabase = makeSupabase(user, db);
   current.db = db;
   const { POST } = await import("@/app/api/messages/read-receipts/route");
   const req = new Request("http://localhost/api/messages/read-receipts", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(user ? { authorization: "Bearer test" } : {}) },
     body: JSON.stringify(body),
   });
   return POST(req as Request);
@@ -64,32 +76,32 @@ async function runReadReceiptsRoute(body: unknown, user: { id: string } | null =
 describe("read-receipts route", () => {
   it("rejects unauthenticated access", async () => {
     const res = await runReadReceiptsRoute({ conversationId: CONVERSATION_ID, messageIds: ["m1"] }, null);
-    expect(res.status).toBe(401);
+    expect(res!.status).toBe(401);
   });
 
   it("rejects missing conversationId", async () => {
     const res = await runReadReceiptsRoute({ messageIds: ["m1"] }, { id: ME });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("rejects empty messageIds", async () => {
     const res = await runReadReceiptsRoute({ conversationId: CONVERSATION_ID, messageIds: [] }, { id: ME });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("denies non-member", async () => {
     const res = await runReadReceiptsRoute({ conversationId: CONVERSATION_ID, messageIds: ["m1"] }, { id: ME }, {
       conversation_participants_single: null,
     });
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("marks messages as read for a member", async () => {
     const res = await runReadReceiptsRoute({ conversationId: CONVERSATION_ID, messageIds: ["m1", "m2"] }, { id: ME }, {
       conversation_participants_single: { user_id: ME, conversation_id: CONVERSATION_ID },
     });
-    expect(res.status).toBe(200);
-    const json = await res.json();
+    expect(res!.status).toBe(200);
+    const json = await res!.json();
     expect(json.ok).toBe(true);
   });
 });

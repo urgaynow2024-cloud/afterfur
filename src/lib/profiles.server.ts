@@ -1,15 +1,23 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { canViewProfile, type ProfileVisibilityInput } from "@/lib/profilePrivacy";
 
+export type ProfileForViewer = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  banner_url: string | null;
+  website: string | null;
+  location: string | null;
+  is_private: boolean | null;
+  profile_customisation?: Record<string, unknown> | null;
+  created_at: string | null;
+  [key: string]: unknown;
+};
+
 export type GetProfileForViewerResult = {
-  profile: {
-    id: string;
-    username: string;
-    display_name: string | null;
-    bio: string | null;
-    avatar_url: string | null;
-    is_private: boolean;
-  } | null;
+  profile: ProfileForViewer | null;
   error: "no-server-client" | "not-found" | "forbidden" | string | null;
 };
 
@@ -22,11 +30,30 @@ export async function getProfileForViewer(opts: {
     return { profile: null, error: "no-server-client" };
   }
 
+  // Return the full profile row (existing saved fields/settings) so the client can
+  // render all previously stored profile data. Authorization is enforced below;
+  // do not drop columns as a substitute for access control.
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id,username,display_name,bio,avatar_url,is_private")
-    .eq("username", opts.username)
+    .select("*")
+    .ilike("username", opts.username)
     .maybeSingle();
+
+  // TEMP DIAG (safe): profile visibility inputs/decision. No tokens/secrets.
+  try {
+    console.info("[profile-visibility][diag] lookup", {
+      requestedUsername: opts.username,
+      viewerIdPresent: Boolean(opts.viewerId),
+      viewerId: opts.viewerId,
+      profileFound: Boolean(profile),
+      profileIdPresent: Boolean((profile as any)?.id),
+      ownerId: (profile as any)?.id ?? null,
+      storedUsername: (profile as any)?.username ?? null,
+      is_private: (profile as any)?.is_private ?? null,
+      is_private_type: profile ? typeof (profile as any).is_private : null,
+      lookupError: profileError?.message ?? null,
+    });
+  } catch {}
 
   if (profileError || !profile) {
     return { profile: null, error: profileError?.message ?? "not-found" };
@@ -65,12 +92,29 @@ export async function getProfileForViewer(opts: {
   }
 
   const allowed = canViewProfile({
-    isPrivate: !!profile.is_private,
+    isPrivate: profile.is_private === true,
     ownerId: profile.id,
     viewerId: opts.viewerId,
     followStatus,
     blocked,
   });
+
+  try {
+    console.info("[profile-visibility][diag] decision", {
+      requestedUsername: opts.username,
+      ownerId: profile.id ?? null,
+      viewerId: opts.viewerId,
+      viewerAuthenticated: Boolean(opts.viewerId),
+      is_private: profile.is_private ?? null,
+      is_private_type: typeof profile.is_private,
+      blocked,
+      followStatus,
+      allowed,
+      reason: !allowed
+        ? (blocked ? "blocked" : (profile.is_private === true ? "private_no_access" : "denied_other"))
+        : (opts.viewerId && profile.id && opts.viewerId === profile.id ? "owner" : (profile.is_private === true ? "accepted_follower_or_owner" : "public")),
+    });
+  } catch {}
 
   if (!allowed) {
     return { profile: null, error: "forbidden" };

@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
@@ -9,6 +9,12 @@ const mockOrder = vi.fn();
 const mockRange = vi.fn();
 const mockGte = vi.fn();
 const mockLimit = vi.fn();
+
+vi.mock("@/lib/rateLimit", () => ({
+  rateLimit: vi.fn(async () => ({ allowed: true })),
+  getClientIp: () => "127.0.0.1",
+  getRateLimitKey: (o: any) => (o?.userId ? `user:${o.userId}` : `ip:${o?.ip || "unknown"}`),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => ({

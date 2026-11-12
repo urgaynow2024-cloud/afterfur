@@ -15,6 +15,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireModeratorRole, recordModerationAction } from "@/lib/moderation";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
@@ -22,7 +23,9 @@ function badRequest(message: string) {
 
 export async function GET(request: Request) {
   try {
-    await requireModeratorRole("moderator", request);
+    const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/reports", 60, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -55,7 +58,7 @@ export async function GET(request: Request) {
     const { data, error, count } = await q;
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "internal_error" }, { status: 500 });
     }
 
     const reports = ((data ?? []) as any[]).map((row) => {
@@ -92,6 +95,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId!, ip: getClientIp(request) }), "/api/moderation/reports", 30, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -128,7 +133,7 @@ export async function POST(request: Request) {
       .eq("id", reportId);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      return NextResponse.json({ error: "internal_error" }, { status: 400 });
     }
 
     await recordModerationAction({
@@ -150,6 +155,8 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId!, ip: getClientIp(request) }), "/api/moderation/reports", 30, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -193,7 +200,7 @@ export async function PATCH(request: Request) {
       .eq("id", reportId);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      return NextResponse.json({ error: "internal_error" }, { status: 400 });
     }
 
     await recordModerationAction({

@@ -9,6 +9,8 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/serverAuth";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 import { validateMediaFile } from "@/lib/media";
 
 type AttachmentBody = {
@@ -28,11 +30,15 @@ function badRequest(message: string, status = 400) {
 
 export async function POST(request: Request) {
   try {
+    const user = await getVerifiedUser(request);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: user.id, ip: getClientIp(request) }), "/api/messages/attachments", 20, 60);
+    if (!rl.allowed) return rl.response;
+
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const userId = userData.user.id;
+    const userId = user.id;
 
     let body: AttachmentBody;
     try {
@@ -67,7 +73,7 @@ export async function POST(request: Request) {
       .limit(1);
 
     if (membershipError) {
-      return NextResponse.json({ error: membershipError.message }, { status: 500 });
+      return NextResponse.json({ error: "internal_error" }, { status: 500 });
     }
     if ((membership ?? []).length === 0) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -82,7 +88,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (messageError) {
-      return NextResponse.json({ error: messageError.message }, { status: 500 });
+      return NextResponse.json({ error: "internal_error" }, { status: 500 });
     }
     if (!message) {
       return NextResponse.json({ error: "message_not_found" }, { status: 404 });
@@ -127,7 +133,7 @@ export async function POST(request: Request) {
       .select("id, message_id, conversation_id, storage_path, bucket_id, media_type, file_size, created_at")
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) return NextResponse.json({ error: "attachment_create_failed" }, { status: 400 });
 
     return NextResponse.json({ attachment: data }, { status: 201 });
   } catch {

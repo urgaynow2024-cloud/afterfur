@@ -13,7 +13,7 @@ import Link from "next/link";
 type Post = {
   id: string;
   content: string;
-  classification: string;
+  classification?: string | null;
   created_at: string;
   author_id: string;
   media_urls?: string[] | null;
@@ -261,7 +261,23 @@ export default function Home() {
       }
     }
     const result = await submitAndPublishPost(
-      () => supabase.from("posts").insert({ author_id: user.id, content: text || "", media_urls: mediaUrls }).select("*").single(),
+      async () => {
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: text || "",
+            media_urls: mediaUrls,
+            classification: "SFW",
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          return { data: null, error: err.error || "Could not create post." };
+        }
+        const json = await res.json();
+        return { data: json.post ?? null, error: null };
+      },
       (post: Post) => setPosts((current) => addPostToFeed(current, {
         ...post,
         profiles: currentUserProfile ? {
@@ -289,11 +305,11 @@ export default function Home() {
   }
 
   async function deletePost(postId: string) {
-    const supabase = createClient();
-    if (!supabase || !user) return;
-    const { error } = await supabase.from("posts").delete().eq("id", postId).eq("author_id", user.id);
-    if (error) {
-      setError(error.message);
+    if (!user) return;
+    const res = await fetch("/api/posts/" + postId, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setError(err.error || "Could not delete post.");
       return;
     }
     setPosts((ps) => ps.filter((p) => p.id !== postId));
@@ -311,15 +327,21 @@ export default function Home() {
   async function saveEdit(event: React.FormEvent) {
     event.preventDefault();
     const content = editDraft.trim();
-    const supabase = createClient();
-    if (!editingPost || !user || !supabase || !content || content.length > max || editSubmitting) return;
+    if (!editingPost || !user || !content || content.length > max || editSubmitting) return;
     setEditSubmitting(true); setEditError("");
-    const { data, error: updateError } = await supabase.from("posts").update({ content, edited_at: new Date().toISOString() }).eq("id", editingPost.id).eq("author_id", user.id).select("*").single();
-    if (updateError || !data) {
-      setEditError(updateError?.message ?? "The post was not updated. Your changes are still here.");
+    const res = await fetch("/api/posts/" + editingPost.id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, edited_at: new Date().toISOString() }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setEditError(err.error || "The post was not updated. Your changes are still here.");
       setEditSubmitting(false);
       return;
     }
+    const json = await res.json();
+    const data = json.post;
     setPosts((current) => current.map((post) => post.id === editingPost.id ? { ...post, ...(data as Post) } : post));
     setEditingPost(null);
     setEditDraft("");

@@ -1,0 +1,1 @@
+﻿-- AfterFur Database Audit V2 - read-only, one result set

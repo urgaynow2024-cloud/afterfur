@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/moderation/appeals
  *   List appeals with optional status filter, pagination.
  *   Requires moderator role or above.
@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireModeratorRole, recordModerationAction } from "@/lib/moderation";
 import { getVerifiedUser } from "@/lib/serverAuth";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
@@ -38,7 +39,9 @@ async function notifyAppealDecision(supabase: ReturnType<typeof createServerClie
 
 export async function GET(request: Request) {
   try {
-    await requireModeratorRole("moderator", request);
+    const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/appeals", 60, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -60,7 +63,7 @@ export async function GET(request: Request) {
     q = q.range(offset, offset + pageSize - 1);
 
     const { data, error, count } = await q;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: "internal_error" }, { status: 500 });
 
     const appeals = ((data ?? []) as any[]).map((row) => {
       const userProfile = row.profiles;
@@ -98,6 +101,9 @@ export async function POST(request: Request) {
     if (!authUser?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const userId = authUser.id;
 
+    const rl = await rateLimit(getRateLimitKey({ userId, ip: getClientIp(request) }), "/api/moderation/appeals", 10, 60);
+    if (!rl.allowed) return rl.response;
+
     const body = await request.json();
     const { reportId, enforcementType, enforcementId, reason } = body;
 
@@ -132,7 +138,7 @@ export async function POST(request: Request) {
       .select("id, user_id, status, created_at")
       .single();
 
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 400 });
+    if (insertError) return NextResponse.json({ error: "internal_error" }, { status: 400 });
 
     await recordModerationAction({
       actorId: userId,
@@ -156,6 +162,9 @@ export async function PATCH(request: Request) {
     const ctx = await requireModeratorRole("moderator", request);
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId!, ip: getClientIp(request) }), "/api/moderation/appeals", 30, 60);
+    if (!rl.allowed) return rl.response;
 
     const body = await request.json();
     const { appealId, status: newStatus, responseMessage } = body;
@@ -183,7 +192,7 @@ export async function PATCH(request: Request) {
       })
       .eq("id", appealId);
 
-    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
+    if (updateError) return NextResponse.json({ error: "internal_error" }, { status: 400 });
 
     await recordModerationAction({
       actorId: ctx.userId!,

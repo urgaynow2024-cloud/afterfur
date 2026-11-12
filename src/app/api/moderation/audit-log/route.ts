@@ -8,10 +8,13 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireModeratorRole } from "@/lib/moderation";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/audit-log", 60, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -41,7 +44,7 @@ export async function GET(request: Request) {
     const { data, error, count } = await q;
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "internal_error" }, { status: 500 });
     }
 
     const entries = ((data ?? []) as any[]).map((row) => {
@@ -61,19 +64,10 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({
-      entries,
-      page,
-      pageSize,
-      total: count ?? 0,
-    });
+    return NextResponse.json({ entries, page, pageSize, total: count ?? 0 });
   } catch (err: any) {
-    if (err.status === 401) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-    if (err.status === 403) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
+    if (err.status === 401) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    if (err.status === 403) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }

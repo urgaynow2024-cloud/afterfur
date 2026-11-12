@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/moderation/content
  *   List recent content for moderation queue OR fetch a specific item.
  *   Query: target_type + target_id for single item; type=post|reply&page&pageSize for list.
@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireModeratorRole, recordModerationAction } from "@/lib/moderation";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
@@ -19,7 +20,9 @@ function badRequest(message: string) {
 
 export async function GET(request: Request) {
   try {
-    await requireModeratorRole("moderator", request);
+    const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/content", 60, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -64,7 +67,7 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .range(offset, offset + pageSize - 1);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: "internal_error" }, { status: 500 });
 
     const rows = (data ?? []) as any[];
     const authorIds = [...new Set(rows.map((r) => r.author_id).filter(Boolean))];
@@ -92,6 +95,9 @@ export async function POST(request: Request) {
     const ctx = await requireModeratorRole("moderator", request);
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId!, ip: getClientIp(request) }), "/api/moderation/content", 30, 60);
+    if (!rl.allowed) return rl.response;
 
     const body = await request.json();
     const { targetType, targetId, action, reason } = body;
@@ -132,11 +138,11 @@ export async function POST(request: Request) {
         targetType,
         targetId,
         action: `content_${action}_audit_only`,
-        details: { reason: reason.trim(), error: updateError.message, note: "Apply migration 0034_moderation_content_status.sql to persist moderation_status." },
+        details: { reason: reason.trim(), note: "Apply migration 0034_moderation_content_status.sql to persist moderation_status." },
         beforeState,
         afterState: { moderation_status: nextStatus, reason: reason.trim() },
       });
-      return NextResponse.json({ error: "content_status_update_failed", detail: updateError.message, hint: "Apply migration 0034_moderation_content_status.sql" }, { status: 400 });
+      return NextResponse.json({ error: "content_status_update_failed", message: "Could not update content status. Apply required moderation migrations." }, { status: 400 });
     }
 
     await recordModerationAction({

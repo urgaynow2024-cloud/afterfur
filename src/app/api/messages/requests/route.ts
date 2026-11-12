@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/serverAuth";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const user = await getVerifiedUser(request);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: user.id, ip: getClientIp(request) }), "/api/messages/requests", 60, 60);
+    if (!rl.allowed) return rl.response;
+
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const userId = userData.user.id;
+    const userId = user.id;
 
     const { data: incoming } = await supabase
       .from("message_requests")
@@ -19,13 +25,13 @@ export async function GET() {
       .select("id,from_user_id,to_user_id,status,created_at")
       .eq("from_user_id", userId);
 
-    const userIds = [...new Set([...(incoming||[]).map((r:any)=>r.from_user_id), ...(outgoing||[]).map((r:any)=>r.to_user_id)])];
+    const userIds = [...new Set([...(incoming || []).map((r: any) => r.from_user_id), ...(outgoing || []).map((r: any) => r.to_user_id)])];
     const { data: profiles } = userIds.length ? await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", userIds) : { data: [] };
-    const pmap = new Map((profiles||[]).map((p:any)=>[p.id,p]));
+    const pmap = new Map((profiles || []).map((p: any) => [p.id, p]));
 
     return NextResponse.json({
-      incoming: (incoming||[]).map((r:any)=>({...r, profile: pmap.get(r.from_user_id)})),
-      outgoing: (outgoing||[]).map((r:any)=>({...r, profile: pmap.get(r.to_user_id)})),
+      incoming: (incoming || []).map((r: any) => ({ ...r, profile: pmap.get(r.from_user_id) })),
+      outgoing: (outgoing || []).map((r: any) => ({ ...r, profile: pmap.get(r.to_user_id) })),
     });
   } catch {
     return NextResponse.json({ incoming: [], outgoing: [] });
@@ -34,22 +40,27 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getVerifiedUser(request);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+    const rl = await rateLimit(getRateLimitKey({ userId: user.id, ip: getClientIp(request) }), "/api/messages/requests", 10, 60);
+    if (!rl.allowed) return rl.response;
+
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const userId = userData.user.id;
+    const userId = user.id;
+
     const body = await request.json();
     const toUserId = body.toUserId;
     if (!toUserId || toUserId === userId) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
     const { data: b1 } = await supabase.from("blocks").select("blocker_id").eq("blocker_id", userId).eq("blocked_id", toUserId).limit(1);
-    if ((b1||[]).length) return NextResponse.json({ error: "blocked" }, { status: 403 });
+    if ((b1 || []).length) return NextResponse.json({ error: "blocked" }, { status: 403 });
     const { data: b2 } = await supabase.from("blocks").select("blocker_id").eq("blocker_id", toUserId).eq("blocked_id", userId).limit(1);
-    if ((b2||[]).length) return NextResponse.json({ error: "blocked" }, { status: 403 });
+    if ((b2 || []).length) return NextResponse.json({ error: "blocked" }, { status: 403 });
 
     const { data: existing } = await supabase.from("message_requests").select("id,status").or(`and(from_user_id.eq.${userId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${userId})`).limit(1);
-    if ((existing||[]).length) return NextResponse.json({ error: "exists" }, { status: 409 });
+    if ((existing || []).length) return NextResponse.json({ error: "exists" }, { status: 409 });
 
     const { data, error } = await (supabase as any).from("message_requests").insert({ from_user_id: userId, to_user_id: toUserId, status: "pending" }).select("*").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

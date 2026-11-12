@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
+  const rl = await rateLimit(getRateLimitKey({ ip: getClientIp(request) }), "/api/account/deletion-worker", 10, 60);
+  if (!rl.allowed) return rl.response!;
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,7 +22,6 @@ export async function POST(request: Request) {
 
   const results: { id: string; status: string; error?: string }[] = [];
   for (const req of requests ?? []) {
-    // Atomic transition to processing
     const { data: claimed, error: claimError } = await (supabase as any)
       .from("account_deletion_requests")
       .update({ status: "processing", processing_started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -34,8 +36,6 @@ export async function POST(request: Request) {
     }
 
     try {
-      // Delete user-owned data (best-effort, idempotent-ish).
-      // Clean up user-owned storage objects (idempotent).
       for (const bucket of ["avatars", "banners", "media", "media_private", "afterfur-media", "account_exports"]) {
         const { data: files } = await (supabase as any).storage.from(bucket).list(req.user_id, { limit: 1000 });
         if (files?.length) {
@@ -51,7 +51,6 @@ export async function POST(request: Request) {
       await (supabase as any).from("notifications").delete().eq("user_id", req.user_id);
       await (supabase as any).from("profiles").delete().eq("id", req.user_id);
 
-      // Delete auth user
       await supabase.auth.admin.deleteUser(req.user_id);
 
       await (supabase as any)

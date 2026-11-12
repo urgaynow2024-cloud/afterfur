@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getEmailProvider } from "@/lib/email";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
+  const rl = await rateLimit(getRateLimitKey({ ip: getClientIp(request) }), "/api/account/reminder-worker", 10, 60);
+  if (!rl.allowed) return rl.response!;
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,7 +30,6 @@ export async function POST(request: Request) {
 
   const results: { id: string; status: string; error?: string }[] = [];
   for (const req of requests ?? []) {
-    // Atomic claim
     const { data: claimed, error: claimError } = await (supabase as any)
       .from("account_deletion_requests")
       .update({ reminder_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -57,7 +59,6 @@ export async function POST(request: Request) {
     });
 
     if (!result.ok) {
-      // Revert claim so it can retry
       await (supabase as any).from("account_deletion_requests").update({ reminder_sent_at: null, updated_at: new Date().toISOString() }).eq("id", req.id);
       results.push({ id: req.id, status: "failed", error: result.error });
     } else {

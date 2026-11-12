@@ -12,12 +12,15 @@ import { optimisticLikeCount, reconcileLikeCount } from "@/lib/likes";
 import { BadgeList } from "@/components/BadgeList";
 import PostText from "@/components/PostText";
 import { parseProfileCustomisation, displayNameStyle as computeDisplayNameStyle, usernameStyle as computeUsernameStyle } from "@/lib/profileCustomisation";
+import { RevealableMedia } from "@/components/RevealableMedia";
+import { useResolvedMediaUrls } from "@/lib/media-url-state";
 
 export type PostData = {
   id: string;
   content: string;
   created_at: string;
   author_id: string;
+  classification?: string | null;
   media_urls?: string[] | null;
   profiles?: { username: string; display_name: string | null; avatar_url: string | null; profile_customisation?: Record<string, unknown> | null } | null;
 };
@@ -99,6 +102,11 @@ export default function PostCard({
   const likeError = interactions?.errorFor("likes", post.id);
   const bookmarkError = interactions?.errorFor("bookmarks", post.id);
   const repostError = interactions?.errorFor("reposts", post.id);
+
+  // Resolve private storage paths through the authorized signed-URL route.
+  // Public URLs (legacy public bucket) pass through unchanged.
+  const mediaUrls = post.media_urls ?? [];
+  const { items: resolvedMediaItems, loading: mediaLoading } = useResolvedMediaUrls(mediaUrls);
   const visibleLikeCount = likeCount !== null
     ? countOptimism?.postId === post.id && countOptimism.base === likeCount ? countOptimism.value : likeCount
     : null;
@@ -186,12 +194,27 @@ export default function PostCard({
           <Link href={postHref} className="mt-2 block rounded-sm">
             <PostText content={post.content} />
           </Link>
-          {post.media_urls && post.media_urls.length > 0 && (
-            <div className={`mt-3 overflow-hidden rounded-2xl border border-af-border bg-black/30 ${post.media_urls.length > 1 ? "grid grid-cols-2 gap-px" : ""}`}>
-              {post.media_urls.length === 1 ? (
-                isVideo(post.media_urls[0]) ? <video src={post.media_urls[0]} controls playsInline preload="metadata" className="max-h-[min(70vh,640px)] w-full object-contain" /> : <img src={post.media_urls[0]} alt="Post attachment" loading="lazy" className="max-h-[min(70vh,640px)] w-full object-contain" />
+          {mediaUrls.length > 0 && (
+            <div className={`mt-3 overflow-hidden rounded-2xl border border-af-border bg-black/30 ${mediaUrls.length > 1 ? "grid grid-cols-2 gap-px" : ""}`}>
+              {mediaUrls.length === 1 ? (
+                <RevealableMedia
+                  url={resolvedMediaItems[0]?.resolved ?? resolvedMediaItems[0]?.original ?? mediaUrls[0]}
+                  isNsfw={(post.classification ?? "SFW") === "NSFW"}
+                  alt="Post attachment"
+                  className="max-h-[min(70vh,640px)] w-full object-contain"
+                  videoClassName="max-h-[min(70vh,640px)] w-full object-contain"
+                />
               ) : (
-                post.media_urls.slice(0, 4).map((u, i) => isVideo(u) ? <video key={u + i} src={u} controls playsInline preload="metadata" aria-label={`Post video ${i + 1}`} className="aspect-square w-full bg-black object-contain" /> : <img key={u + i} src={u} alt={`Post attachment ${i + 1}`} loading="lazy" className="aspect-square w-full bg-black/20 object-contain" />)
+                resolvedMediaItems.slice(0, 4).map((item, i) => (
+                  <RevealableMedia
+                    key={item.original + i}
+                    url={item.resolved ?? item.original}
+                    isNsfw={(post.classification ?? "SFW") === "NSFW"}
+                    alt={`Post attachment ${i + 1}`}
+                    className="aspect-square w-full object-contain"
+                    videoClassName="aspect-square w-full bg-black object-contain"
+                  />
+                ))
               )}
             </div>
           )}

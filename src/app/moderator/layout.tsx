@@ -5,6 +5,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Shell } from "@/components/Shell";
+import { clearModerationMeCache, fetchModerationMe, hasModerationNavAccess } from "@/lib/moderationClient";
+import { useAuth } from "@/components/AuthProvider";
+import { ACCOUNT_SWITCH_EVENT } from "@/lib/accountSessions";
 
 const NAV = [
   { href: "/moderator/dashboard", label: "Dashboard" },
@@ -19,40 +22,39 @@ const NAV = [
 
 export default function ModeratorLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, loading, session } = useAuth();
   const [state, setState] = useState<"loading" | "ok" | "denied" | "unauthorized">("loading");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Wait for active-account auth/session restoration before making authorization request.
+      if (loading) { if (!cancelled) setState("loading"); return; }
+      if (!user) { if (!cancelled) setState("unauthorized"); return; }
       const supabase = createClient();
       if (!supabase) { if (!cancelled) setState("denied"); return; }
-
-      // Get a verified session token for server-side authorization. The server is
-      // authoritative (trusted app_metadata.afterfur_staff_admin / moderator_roles).
-      let { data: sessionData } = await supabase.auth.getSession();
-      let token = sessionData?.session?.access_token;
+      let token = session?.access_token ?? null;
       if (!token) {
-        // Try refresh in case a valid session exists but access token is stale/missing.
-        try { const r = await supabase.auth.refreshSession(); token = r.data.session?.access_token; } catch {}
+        const { data: sessionData } = await supabase.auth.getSession();
+        token = sessionData?.session?.access_token ?? null;
+      }
+      if (!token) {
+        try { const r = await supabase.auth.refreshSession(); token = r.data.session?.access_token ?? null; } catch {}
       }
       if (!token) { if (!cancelled) setState("unauthorized"); return; }
-
-      try {
-        const res = await fetch("/api/moderation/me", {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        if (cancelled) return;
-        if (res.ok) { setState("ok"); return; }
-        if (res.status === 401) { setState("unauthorized"); return; }
-        // 403/other: deny (server-side check failed).
-        setState("denied");
-      } catch {
-        if (!cancelled) setState("denied");
+      const me = await fetchModerationMe(token, { force: true });
+      if (cancelled) return;
+      if (!me) { setState("denied"); return; }
+      if (me.ok === false && !hasModerationNavAccess(me)) {
+        setState(me.role === null || me.role === undefined ? "denied" : "denied");
+        return;
       }
+      setState(hasModerationNavAccess(me) ? "ok" : "denied");
     })();
-    return () => { cancelled = true; };
-  }, []);
+    const onSwitch = () => { clearModerationMeCache(); };
+    if (typeof window !== "undefined") window.addEventListener(ACCOUNT_SWITCH_EVENT, onSwitch);
+    return () => { cancelled = true; if (typeof window !== "undefined") window.removeEventListener(ACCOUNT_SWITCH_EVENT, onSwitch); };
+  }, [loading, user?.id, session?.access_token]);
 
   if (state === "loading") {
     return (

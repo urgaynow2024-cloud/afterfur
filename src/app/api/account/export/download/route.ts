@@ -1,8 +1,13 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { createHash } from "crypto";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function GET(request: Request) {
+  // Token is a high-entropy secret; rate limit by IP to prevent brute force.
+  const rl = await rateLimit(getRateLimitKey({ ip: getClientIp(request) }), "/api/account/export/download", 30, 60);
+  if (!rl.allowed) return rl.response!;
+
   const url = new URL(request.url);
   const rawToken = url.searchParams.get("token");
   if (!rawToken) return NextResponse.json({ error: "Missing token" }, { status: 400 });
@@ -22,7 +27,6 @@ export async function GET(request: Request) {
   if (req.download_count > 0) return NextResponse.json({ error: "Token already used" }, { status: 410 });
   if (req.download_expires_at && new Date(req.download_expires_at).getTime() < Date.now()) return NextResponse.json({ error: "Token expired" }, { status: 410 });
 
-  // Atomically increment download_count
   const { data: updated, error: updateError } = await (service as any)
     .from("data_export_requests")
     .update({ download_count: req.download_count + 1 })

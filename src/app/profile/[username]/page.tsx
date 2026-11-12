@@ -30,6 +30,20 @@ function PublicProfileInner() {
       if (!supabase) { setError("Supabase not configured."); setLoading(false); return; }
       const { data: p } = await supabase.from("profiles").select("*").ilike("username", username).maybeSingle();
       if (!p) { setError("User not found."); setLoading(false); return; }
+      // Enforce privacy client-side in case RLS does not gate direct reads in this context.
+      if (p.is_private === true) {
+        const viewerIsOwner = !!user && user.id === p.id;
+        let canView = viewerIsOwner;
+        if (!canView && user) {
+          const { data: f } = await supabase.from("follows").select("status").eq("follower_id", user.id).eq("following_id", p.id).maybeSingle();
+          canView = f?.status === "accepted";
+        }
+        if (!canView) {
+          setError("private");
+          setLoading(false);
+          return;
+        }
+      }
       setProfile(p as Profile);
       setIsSelf(user?.id === p.id);
       const { data: ps } = await supabase.from("posts").select("*").eq("author_id", p.id).or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false });
@@ -66,6 +80,7 @@ function PublicProfileInner() {
   }
 
   if (loading) return <Shell><PageHeader title="Profile" /><div className="p-8 text-center text-sm text-af-muted">Loading…</div></Shell>;
+  if (error === "private") return <Shell><PageHeader title="Profile" /><EmptyState title="Private profile" body="This profile is private. Follow the user to request access." /></Shell>;
   if (error || !profile) return <Shell><PageHeader title="Profile" /><EmptyState title="User not found" body={error || "This profile may not exist."} /></Shell>;
 
   return (

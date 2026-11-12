@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/serverAuth";
 import * as postsServer from "@/lib/posts.server";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function GET(request: Request) {
   try {
@@ -10,13 +12,12 @@ export async function GET(request: Request) {
     const cursorId = searchParams.get("cursorId");
     const cursor = cursorCreatedAt && cursorId ? { created_at: cursorCreatedAt, id: cursorId } : null;
 
-    const supabase = createServerClient();
-    let viewerId: string | null = null;
-    if (supabase) {
-      const { data } = await (supabase as any).auth.getUser();
-      viewerId = data.user?.id ?? null;
-    }
+    const user = await getVerifiedUser(request);
+    const viewerId = user?.id ?? null;
+    const rl = await rateLimit(getRateLimitKey({ userId: viewerId, ip: getClientIp(request) }), "/api/feed/home", 120, 60);
+    if (!rl.allowed) return rl.response!;
 
+    const supabase = createServerClient();
     const fn = (postsServer as any).getFeedPostsForViewer;
     if (typeof fn !== "function") {
       return NextResponse.json({ posts: [] });

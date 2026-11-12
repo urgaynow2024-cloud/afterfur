@@ -40,7 +40,7 @@ type PostRow = {
   id: string;
   author_id: string;
   content: string;
-  classification: string;
+  classification: string | null;
   created_at: string | null;
   edited_at: string | null;
   media_urls: string[] | null;
@@ -212,6 +212,7 @@ export type Database = {
       get_my_ui_preferences: { Args: Record<PropertyKey, never>; Returns: Json };
       update_ui_preferences: { Args: { p_preferences: Json }; Returns: boolean };
       update_profile_customisation: { Args: { p_config: Json }; Returns: boolean };
+      has_ad_badge: { Args: { p_user_id: string }; Returns: boolean };
       has_moderator_role: { Args: { p_user_id: string; p_min_role: string }; Returns: boolean };
       record_moderation_action: { Args: { p_actor_id: string; p_target_type: string; p_target_id: string; p_action: string; p_details: Json | null; p_before_state: Json | null; p_after_state: Json | null }; Returns: string };
     };

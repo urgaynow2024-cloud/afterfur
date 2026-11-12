@@ -54,6 +54,7 @@ export default function StaffPage() {
   const [actorId, setActorId] = useState<string | null>(null);
   const [actorIsAdmin, setActorIsAdmin] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [badgeSync, setBadgeSync] = useState<Record<string, { synced: boolean; badgeId: string | null; action: string | null; error: string | null; pending: boolean }>>({});
 
   const [addOpen, setAddOpen] = useState(false);
   const [userQuery, setUserQuery] = useState("");
@@ -75,6 +76,48 @@ export default function StaffPage() {
   const showToast = (kind: "success" | "error", message: string) => {
     setToast({ kind, message });
     window.setTimeout(() => setToast((t) => (t?.message === message ? null : t)), 4500);
+  };
+
+  const retryBadgeSync = async (targetUserId: string, currentRole: string) => {
+    setBadgeSync((current) => ({ ...current, [targetUserId]: { ...current[targetUserId], pending: true } }));
+    try {
+      const res = await fetch("/api/moderation/staff", {
+        method: "PATCH",
+        headers: await authHeaders(true),
+        body: JSON.stringify({ targetUserId, action: "sync_badge", role: currentRole }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setBadgeSync((current) => ({
+          ...current,
+          [targetUserId]: {
+            synced: Boolean(data?.badge?.synced),
+            badgeId: data?.badge?.badge_id ?? null,
+            action: data?.badge?.action ?? null,
+            error: data?.badge?.error ?? null,
+            pending: false,
+          },
+        }));
+        if (data?.badge?.synced) {
+          showToast("success", "Staff badge synchronized.");
+        } else {
+          showToast("error", data?.badge?.error || "Badge synchronization failed.");
+        }
+      } else {
+        setBadgeSync((current) => ({
+          ...current,
+          [targetUserId]: { ...current[targetUserId], pending: false, error: data?.message || "Retry failed." },
+        }));
+        showToast("error", data?.message || "Badge synchronization failed.");
+      }
+      void fetchStaff();
+    } catch {
+      setBadgeSync((current) => ({
+        ...current,
+        [targetUserId]: { ...current[targetUserId], pending: false, error: "Badge synchronization failed." },
+      }));
+      showToast("error", "Badge synchronization failed.");
+    }
   };
 
   const fetchStaff = useCallback(async () => {
@@ -129,7 +172,35 @@ export default function StaffPage() {
       const res = await fetch("/api/moderation/staff", { method: "POST", headers: await authHeaders(true), body: JSON.stringify({ targetUserId: selectedUser.id, role: addRole, reason: addReason.trim() }) });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        showToast("success", (selectedUser.displayName || selectedUser.username || "User") + " appointed as " + ROLE_LABEL[addRole] + ".");
+        const badge = data?.badge ?? null;
+        let message = (selectedUser.displayName || selectedUser.username || "User") + " appointed as " + ROLE_LABEL[addRole] + ".";
+        if (badge?.badge_id) message += ` — ${badge.action === "grant" ? "Badge awarded" : "Badge updated"}.`;
+        else if (badge?.error) {
+          message += " — Role saved, but badge could not be awarded. Retry below.";
+          setBadgeSync((current) => ({
+            ...current,
+            [selectedUser.id]: {
+              synced: false,
+              badgeId: null,
+              action: "grant",
+              error: badge.error,
+              pending: false,
+            },
+          }));
+        } else {
+          message += " — No badge change needed.";
+        }
+        showToast("success", message);
+        setBadgeSync((current) => ({
+          ...current,
+          [selectedUser.id]: {
+            synced: Boolean(badge?.synced),
+            badgeId: badge?.badge_id ?? null,
+            action: badge?.action ?? null,
+            error: badge?.error ?? null,
+            pending: false,
+          },
+        }));
         resetAdd(); void fetchStaff();
       } else { showToast("error", typeof data?.message === "string" ? data.message : "Could not appoint staff member."); }
     } catch { showToast("error", "Could not appoint staff member."); }
@@ -143,8 +214,38 @@ export default function StaffPage() {
     try {
       const res = await fetch("/api/moderation/staff", { method: "PATCH", headers: await authHeaders(true), body: JSON.stringify({ targetUserId: changeTarget.userId, role: changeRole, reason: changeReason.trim() }) });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) { showToast("success", "Role updated to " + ROLE_LABEL[changeRole] + "."); setChangeTarget(null); setChangeReason(""); void fetchStaff(); }
-      else { showToast("error", typeof data?.message === "string" ? data.message : "Could not change role."); }
+      if (res.ok) {
+        const badge = data?.badge ?? null;
+        let message = "Role updated to " + ROLE_LABEL[changeRole] + ".";
+        if (badge?.badge_id) message += ` — ${badge.action === "grant" ? "Badge awarded" : "Badge revoked"}.`;
+        else if (badge?.error) {
+          message += " — Role saved, but badge sync failed. Retry below.";
+          setBadgeSync((current) => ({
+            ...current,
+            [changeTarget.userId]: {
+              synced: false,
+              badgeId: null,
+              action: "grant",
+              error: badge.error,
+              pending: false,
+            },
+          }));
+        } else {
+          message += " — No badge change needed.";
+        }
+        showToast("success", message);
+        setBadgeSync((current) => ({
+          ...current,
+          [changeTarget.userId]: {
+            synced: Boolean(badge?.synced),
+            badgeId: badge?.badge_id ?? null,
+            action: badge?.action ?? null,
+            error: badge?.error ?? null,
+            pending: false,
+          },
+        }));
+        setChangeTarget(null); setChangeReason(""); void fetchStaff();
+      } else { showToast("error", typeof data?.message === "string" ? data.message : "Could not change role."); }
     } catch { showToast("error", "Could not change role."); }
     setSubmitting(false);
   };
@@ -155,8 +256,36 @@ export default function StaffPage() {
     try {
       const res = await fetch("/api/moderation/staff", { method: "PATCH", headers: await authHeaders(true), body: JSON.stringify({ targetUserId: removeTarget.userId, action: "remove", reason: removeReason.trim() || "Removed by administrator" }) });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) { showToast("success", (removeTarget.displayName || removeTarget.username || "Staff member") + " removed from staff."); setRemoveTarget(null); setRemoveReason(""); void fetchStaff(); }
-      else { showToast("error", typeof data?.message === "string" ? data.message : "Could not remove staff member."); }
+      if (res.ok) {
+        const badge = data?.badge ?? null;
+        let message = (removeTarget.displayName || removeTarget.username || "Staff member") + " removed from staff.";
+        if (badge?.badge_id) message += " — Staff badge revoked.";
+        else if (badge?.error) {
+          message += " — Removed from staff, but badge revocation failed. Retry below.";
+          setBadgeSync((current) => ({
+            ...current,
+            [removeTarget.userId]: {
+              synced: false,
+              badgeId: null,
+              action: "revoke",
+              error: badge.error,
+              pending: false,
+            },
+          }));
+        }
+        showToast("success", message);
+        setBadgeSync((current) => ({
+          ...current,
+          [removeTarget.userId]: {
+            synced: Boolean(badge?.synced),
+            badgeId: badge?.badge_id ?? null,
+            action: badge?.action ?? null,
+            error: badge?.error ?? null,
+            pending: false,
+          },
+        }));
+        setRemoveTarget(null); setRemoveReason(""); void fetchStaff();
+      } else { showToast("error", typeof data?.message === "string" ? data.message : "Could not remove staff member."); }
     } catch { showToast("error", "Could not remove staff member."); }
     setSubmitting(false);
   };
@@ -228,6 +357,13 @@ export default function StaffPage() {
                             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-af-muted">
                               <span>Appointed {m.assignedAt ? new Date(m.assignedAt).toLocaleDateString() : "—"}</span>
                               {m.reason && <span className="max-w-[42ch] truncate" title={m.reason}>Reason: {m.reason}</span>}
+                              {badgeSync[m.userId] && (
+                                <span className={badgeSync[m.userId].synced
+                                  ? "inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
+                                  : "inline-flex items-center rounded-full border border-red-400/20 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-200"}>
+                                  {badgeSync[m.userId].synced ? "Badge synced" : "Badge error"}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -241,6 +377,11 @@ export default function StaffPage() {
                                 <button type="button" disabled={isSelf} onClick={() => { setMenuFor(null); setChangeTarget(m); setChangeRole(((m.role as any) || "moderator")); setChangeReason(""); }} className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-af-text hover:bg-af-surface-2 disabled:cursor-not-allowed disabled:opacity-45">Change role</button>
                                 <Link href={m.username ? "/" + m.username : "#"} onClick={() => setMenuFor(null)} className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-af-text hover:bg-af-surface-2 sm:hidden">View profile</Link>
                                 <button type="button" disabled={isSelf} onClick={() => { setMenuFor(null); setRemoveTarget(m); setRemoveReason(""); }} className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-45">Remove from staff</button>
+                                {badgeSync[m.userId] && !badgeSync[m.userId].synced && (
+                                  <button type="button" disabled={badgeSync[m.userId].pending || submitting} onClick={() => { setMenuFor(null); void retryBadgeSync(m.userId, m.role); }} className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-amber-300 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-45">
+                                    {badgeSync[m.userId].pending ? "Retrying…" : "Retry badge sync"}
+                                  </button>
+                                )}
                               </div>
                             </>
                           )}

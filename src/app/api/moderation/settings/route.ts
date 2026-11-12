@@ -11,10 +11,13 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireModeratorRole } from "@/lib/moderation";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/settings", 60, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -44,6 +47,8 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const ctx = await requireModeratorRole("moderator", request);
+    const rl = await rateLimit(getRateLimitKey({ userId: ctx.userId, ip: getClientIp(request) }), "/api/moderation/settings", 20, 60);
+    if (!rl.allowed) return rl.response!;
     const supabase = createServerClient();
     if (!supabase) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -61,7 +66,7 @@ export async function PUT(request: Request) {
 
     const { error } = await supabase.rpc("update_ui_preferences", { p_preferences: prefs });
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: "internal_error" }, { status: 400 });
     }
 
     return NextResponse.json({ ok: true });

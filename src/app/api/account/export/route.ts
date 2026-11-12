@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes, createHash } from "crypto";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -20,8 +21,11 @@ export async function POST(request: Request) {
   const service = createServerClient();
   if (!service) return NextResponse.json({ error: "Service client not configured" }, { status: 500 });
 
+  const rl = await rateLimit(getRateLimitKey({ userId, ip: getClientIp(request) }), "/api/account/export", 3, 3600);
+  if (!rl.allowed) return rl.response;
+
   const { data: requestId, error: rpcError } = await (userClient as any).rpc("request_data_export");
-  if (rpcError) return NextResponse.json({ error: rpcError.message }, { status: 500 });
+  if (rpcError) return NextResponse.json({ error: "Export could not be started." }, { status: 500 });
 
   let stage = "init";
   try {
@@ -67,7 +71,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ requestId, downloadUrl, expiresIn: 3600 });
   } catch (e) {
     console.error("account export failed", { stage, error: e instanceof Error ? e.message : "Unknown error" });
-    await (service as any).from("data_export_requests").update({ status: "failed", failure_reason: e instanceof Error ? e.message : "Unknown error" }).eq("id", requestId);
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Export failed", stage }, { status: 500 });
+    try {
+      await (service as any).from("data_export_requests").update({ status: "failed" }).eq("id", requestId);
+    } catch {}
+    return NextResponse.json({ error: "Export failed" }, { status: 500 });
   }
 }

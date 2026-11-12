@@ -3,6 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import EditProfile from "@/app/edit-profile/page";
 
+vi.mock("@/components/Shell", () => ({
+  Shell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+  EmptyState: ({ title }: { title: string }) => <div>{title}</div>,
+}));
+
+vi.mock("@/components/MoreMenu", () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 const rpc = vi.hoisted(() => vi.fn());
 
 let profileData: Record<string, unknown>;

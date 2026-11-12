@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/rateLimit", () => ({
+  rateLimit: vi.fn(async () => ({ allowed: true })),
+  getClientIp: () => "127.0.0.1",
+  getRateLimitKey: (o: any) => (o?.userId ? `user:${o.userId}` : `ip:${o?.ip || "unknown"}`),
+}));
+
 const ACTOR = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 const RECIPIENT = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12";
 const CONVERSATION_ID = "conv-1";
@@ -122,14 +128,14 @@ describe("createMessageNotification", () => {
 describe("notify API route", () => {
   it("rejects unauthenticated access", async () => {
     const res = await runNotifyRoute(CONVERSATION_ID, null);
-    expect(res.status).toBe(401);
+    expect(res!.status).toBe(401);
   });
 
   it("denies non-participant", async () => {
     const res = await runNotifyRoute(CONVERSATION_ID, { id: ACTOR }, {
       conversation_participants_single: null,
     });
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("succeeds for a participant", async () => {
@@ -140,8 +146,8 @@ describe("notify API route", () => {
         { user_id: RECIPIENT, conversation_id: CONVERSATION_ID },
       ],
     });
-    expect(res.status).toBe(200);
-    const json = await res.json();
+    expect(res!.status).toBe(200);
+    const json = await res!.json();
     expect(json.ok).toBe(true);
   });
 
@@ -150,6 +156,6 @@ describe("notify API route", () => {
       conversation_participants_single: { user_id: ACTOR, conversation_id: CONVERSATION_ID },
       conversation_participants: [{ user_id: ACTOR, conversation_id: CONVERSATION_ID }],
     });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 });

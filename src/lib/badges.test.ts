@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BADGE_REGISTRY, canManageStaffBadge, changeStaffBadge, eligibleAccountAnniversaryBadges, eligiblePawPassBadgeIds, knownBadges, MANAGEABLE_BADGES, mergeBadgeAwards, PAWPASS_BADGES, STAFF_BADGE_IDS, TRUST_BADGES } from "@/lib/badges";
+import { BADGE_REGISTRY, canManageStaffBadge, changeStaffBadge, eligibleAccountAnniversaryBadges, eligiblePawPassBadgeIds, knownBadges, MANAGEABLE_BADGES, mergeBadgeAwards, PAWPASS_BADGES, STAFF_BADGE_IDS, STAFF_ROLE_BADGE_IDS, staffBadgeIdForRole, TRUST_BADGES } from "@/lib/badges";
 
 describe("staff badge authorization rules", () => {
   const admin = { afterfur_staff_admin: true };
@@ -141,5 +141,36 @@ describe("manual badge re-award lifecycle (regression)", () => {
   it("supports expanded manual badges (not only legacy staff role IDs)", () => {
     expect(changeStaffBadge([], "admin", "member", "community_helper", "grant", admin).error).toBeNull();
     expect(changeStaffBadge([], "admin", "member", "web_designer", "grant", admin).error).toBeNull();
+  });
+});
+
+describe("staff role-to-badge mapping", () => {
+  it("maps moderator to staff_moderator badge", () => {
+    expect(staffBadgeIdForRole("moderator")).toBe("staff_moderator");
+  });
+
+  it("maps senior_moderator to staff_moderator badge", () => {
+    expect(staffBadgeIdForRole("senior_moderator")).toBe("staff_moderator");
+  });
+
+  it("maps administrator to no staff badge (null)", () => {
+    expect(staffBadgeIdForRole("administrator")).toBeNull();
+  });
+
+  it("returns null for unknown/null roles", () => {
+    expect(staffBadgeIdForRole(null)).toBeNull();
+  });
+
+  it("uses existing badge registry identifiers only", () => {
+    const used = new Set(Object.values(STAFF_ROLE_BADGE_IDS).filter(Boolean));
+    for (const badgeId of used) {
+      expect(BADGE_REGISTRY.some((b) => b.id === badgeId)).toBe(true);
+    }
+  });
+
+  it("does not invent badge IDs beyond existing staff badges", () => {
+    expect(Object.values(STAFF_ROLE_BADGE_IDS).filter(Boolean)).toEqual(
+      expect.arrayContaining(["staff_moderator"])
+    );
   });
 });

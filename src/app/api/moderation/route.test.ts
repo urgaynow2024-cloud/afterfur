@@ -1,4 +1,10 @@
-﻿import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+vi.mock("@/lib/rateLimit", () => ({
+  rateLimit: vi.fn(async () => ({ allowed: true })),
+  getClientIp: () => "127.0.0.1",
+  getRateLimitKey: (o: any) => (o?.userId ? `user:${o.userId}` : `ip:${o?.ip || "unknown"}`),
+}));
 
 const mockGetUser = vi.fn();
 const mockGetVerifiedUser = vi.fn();
@@ -96,6 +102,7 @@ beforeEach(() => {
     range: mockRange,
   });
   mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+  mockRpc.mockResolvedValue({ data: null, error: null });
   mockUpdate.mockReturnValue({
     eq: mockEq,
   });
@@ -120,7 +127,7 @@ describe("reports GET route", () => {
 
     const { GET } = await import("@/app/api/moderation/reports/route");
     const res = await GET(new Request("http://localhost/api/moderation/reports"));
-    expect(res.status).toBe(401);
+    expect(res!.status).toBe(401);
   });
 
   it("returns 403 when not a moderator", async () => {
@@ -128,7 +135,7 @@ describe("reports GET route", () => {
 
     const { GET } = await import("@/app/api/moderation/reports/route");
     const res = await GET(new Request("http://localhost/api/moderation/reports"));
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("returns paginated reports for moderator", async () => {
@@ -171,8 +178,8 @@ describe("reports GET route", () => {
 
     const { GET } = await import("@/app/api/moderation/reports/route");
     const res = await GET(new Request("http://localhost/api/moderation/reports?page=1&pageSize=20"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
+    expect(res!.status).toBe(200);
+    const body = await res!.json();
     expect(body.reports.length).toBe(1);
     expect(body.reports[0].reason).toBe("harassment");
   });
@@ -187,7 +194,7 @@ describe("reports PATCH route", () => {
       method: "PATCH",
       body: JSON.stringify({ reportId: "r-1", status: "dismissed" }),
     }));
-    expect(res.status).toBe(401);
+    expect(res!.status).toBe(401);
   });
 
   it("resolves a report successfully", async () => {
@@ -213,7 +220,7 @@ describe("reports PATCH route", () => {
       method: "PATCH",
       body: JSON.stringify({ reportId: "r-1", status: "dismissed", moderatorNotes: "No violation found" }),
     }));
-    expect(res.status).toBe(200);
+    expect(res!.status).toBe(200);
     expect(recordModerationAction).toHaveBeenCalled();
   });
 });
@@ -224,7 +231,7 @@ describe("users GET route", () => {
 
     const { GET } = await import("@/app/api/moderation/users/route");
     const res = await GET(new Request("http://localhost/api/moderation/users"));
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("returns users for senior moderator", async () => {
@@ -263,8 +270,8 @@ describe("users GET route", () => {
 
     const { GET } = await import("@/app/api/moderation/users/route");
     const res = await GET(new Request("http://localhost/api/moderation/users"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
+    expect(res!.status).toBe(200);
+    const body = await res!.json();
     expect(body.users.length).toBe(1);
     expect(body.users[0].username).toBe("user1");
   });
@@ -275,7 +282,7 @@ describe("staff management routes", () => {
     (requireModeratorRole as any).mockRejectedValueOnce({ status: 403 });
     const { GET } = await import("@/app/api/moderation/staff/route");
     const res = await GET(new Request("http://localhost/api/moderation/staff"));
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("administrator successfully appoints a moderator (audited)", async () => {
@@ -292,7 +299,7 @@ describe("staff management routes", () => {
     });
     const { POST } = await import("@/app/api/moderation/staff/route");
     const res = await POST(new Request("http://localhost/api/moderation/staff", { method: "POST", body: JSON.stringify({ targetUserId: "user-2", role: "moderator", reason: "Trusted" }) }));
-    expect(res.status).toBe(201);
+    expect(res!.status).toBe(201);
     expect(recordModerationAction).toHaveBeenCalled();
   });
 
@@ -309,7 +316,7 @@ describe("staff management routes", () => {
     });
     const { PATCH } = await import("@/app/api/moderation/staff/route");
     const res = await PATCH(new Request("http://localhost/api/moderation/staff", { method: "PATCH", body: JSON.stringify({ targetUserId: "user-2", role: "senior_moderator", reason: "Promotion" }) }));
-    expect(res.status).toBe(200);
+    expect(res!.status).toBe(200);
     expect(recordModerationAction).toHaveBeenCalled();
   });
 
@@ -322,7 +329,7 @@ describe("staff management routes", () => {
     });
     const { POST } = await import("@/app/api/moderation/staff/route");
     const res = await POST(new Request("http://localhost/api/moderation/staff", { method: "POST", body: JSON.stringify({ targetUserId: "user-2", role: "moderator", reason: "dup" }) }));
-    expect(res.status).toBe(409);
+    expect(res!.status).toBe(409);
   });
 
   it("removes a staff member (audited)", async () => {
@@ -336,7 +343,7 @@ describe("staff management routes", () => {
     });
     const { PATCH } = await import("@/app/api/moderation/staff/route");
     const res = await PATCH(new Request("http://localhost/api/moderation/staff", { method: "PATCH", body: JSON.stringify({ targetUserId: "user-2", action: "remove", reason: "Cleanup" }) }));
-    expect(res.status).toBe(200);
+    expect(res!.status).toBe(200);
     expect(recordModerationAction).toHaveBeenCalled();
   });
 
@@ -344,7 +351,7 @@ describe("staff management routes", () => {
     (requireModeratorRole as any).mockRejectedValueOnce({ status: 403 });
     const { POST } = await import("@/app/api/moderation/staff/route");
     const res = await POST(new Request("http://localhost/api/moderation/staff", { method: "POST", body: JSON.stringify({ targetUserId: "user-2", role: "administrator", reason: "nope" }) }));
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("staff search does not return email or sensitive fields", async () => {
@@ -362,8 +369,8 @@ describe("staff management routes", () => {
     });
     const { GET } = await import("@/app/api/moderation/staff/search/route");
     const res = await GET(new Request("http://localhost/api/moderation/staff/search?q=ab"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
+    expect(res!.status).toBe(200);
+    const body = await res!.json();
     expect(JSON.stringify(body)).not.toContain("email");
     const sel = String(selectSpy.mock.calls[0]?.[0] || "");
     expect(sel).not.toContain("email");
@@ -400,7 +407,7 @@ describe("appeals POST route", () => {
       method: "POST",
       body: JSON.stringify({ enforcementType: "ban", enforcementId: "enf-1", reason: "Unfair ban" }),
     }));
-    expect(res.status).toBe(201);
+    expect(res!.status).toBe(201);
   });
 
   it("returns 400 when reason is missing", async () => {
@@ -411,6 +418,6 @@ describe("appeals POST route", () => {
       method: "POST",
       body: JSON.stringify({ enforcementType: "ban", enforcementId: "enf-1" }),
     }));
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 });

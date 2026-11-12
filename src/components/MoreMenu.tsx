@@ -1,61 +1,63 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
-import { hasModerationNavAccess } from "@/lib/moderationClient";
+import { clearModerationMeCache, fetchModerationMe, hasModerationNavAccess } from "@/lib/moderationClient";
+import { ACCOUNT_SWITCH_EVENT } from "@/lib/accountSessions";
 
 export default function MoreMenu() {
   const [open, setOpen] = useState(false);
   const [canModerate, setCanModerate] = useState(false);
-  const { user } = useAuth();
-  const requestId = useRef(0);
+  const { user, loading, session } = useAuth();
 
-  const refresh = useCallback(async () => {
-    const id = ++requestId.current;
+  const refresh = useCallback(async (force = false) => {
+    // Do not request moderation access before auth initialization/session restoration completes.
+    if (loading) return;
     if (!user) {
       setCanModerate(false);
+      clearModerationMeCache();
       return;
     }
     const supabase = createClient();
-    if (!supabase) {
-      if (id === requestId.current) setCanModerate(false);
-      return;
-    }
+    if (!supabase?.auth?.getSession) return;
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
+      // Prefer session already restored by AuthProvider; fall back to active client session.
+      let token = session?.access_token ?? null;
       if (!token) {
-        if (id === requestId.current) setCanModerate(false);
-        return;
+        const { data: sessionData } = await supabase.auth.getSession();
+        token = sessionData?.session?.access_token ?? null;
       }
-      const res = await fetch("/api/moderation/me", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (id !== requestId.current) return;
-      if (!res.ok) {
-        setCanModerate(false);
-        return;
-      }
-      const data = await res.json().catch(() => null);
-      setCanModerate(hasModerationNavAccess(data));
+      // Temporary missing session (restoration/refresh in flight) must not be treated as permanent denial.
+      if (!token) return;
+      const data = await fetchModerationMe(token, { force });
+      if (data) setCanModerate(hasModerationNavAccess(data));
     } catch {
-      if (id === requestId.current) setCanModerate(false);
+      // Keep previous state on transient failures.
     }
-  }, [user]);
+  }, [user, loading, session?.access_token]);
+
+  useEffect(() => { void refresh(false); }, [refresh]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    // Re-check on auth state changes (login/logout/token refresh/role-relevant session changes).
     const supabase = createClient();
-    if (!supabase) return;
-    const sub = (supabase as any).auth?.onAuthStateChange?.(() => { void refresh(); });
-    return () => { try { sub?.data?.subscription?.unsubscribe?.(); } catch {} };
+    if (!supabase?.auth?.onAuthStateChange) return;
+    let last = 0;
+    const sub = supabase.auth.onAuthStateChange((event) => {
+      // TOKEN_REFRESHED can fire frequently; throttle and only force on meaningful auth changes.
+      const now = Date.now();
+      const force = event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED";
+      if (!force && now - last < 15_000) return;
+      last = now;
+      void refresh(force);
+    });
+    const onSwitch = () => { clearModerationMeCache(); void refresh(true); };
+    if (typeof window !== "undefined") window.addEventListener(ACCOUNT_SWITCH_EVENT, onSwitch);
+    return () => {
+      if (typeof window !== "undefined") window.removeEventListener(ACCOUNT_SWITCH_EVENT, onSwitch);
+      try { sub?.data?.subscription?.unsubscribe?.(); } catch {}
+    };
   }, [refresh]);
 
   return (

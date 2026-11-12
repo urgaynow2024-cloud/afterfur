@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -13,13 +13,36 @@ import { BadgeList } from "@/components/BadgeList";
 import ReportDialog from "@/components/ReportDialog";
 import { parseProfileCustomisation, displayNameStyle, usernameStyle } from "@/lib/profileCustomisation";
 
-type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; profile_customisation?: Record<string, unknown> | null; created_at: string };
+type Profile = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  banner_url: string | null;
+  website: string | null;
+  location: string | null;
+  profile_customisation?: Record<string, unknown> | null;
+  created_at: string | null;
+  is_private?: boolean | null;
+  [key: string]: unknown;
+};
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 type ProfileSummary = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
+// Global refresh mutex to prevent concurrent refresh attempts across components
+const globalRefreshMutex = new Map<string, Promise<{ ok: boolean; token: string | null; userId: string | null }>>();
+
+function profileDiag(event: string, fields: Record<string, unknown>) {
+  if (process.env.NODE_ENV === "production") return;
+  try {
+    console.info(`[profile-client] ${event}`, fields);
+  } catch {}
+}
+
 export default function ProfileClient() {
   const { username } = useParams<{ username: string }>();
-  const { user } = useAuth();
+  const { user, session, loading: authLoading, activeUserId } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -45,97 +68,276 @@ export default function ProfileClient() {
   const editSubmittingRef = useRef(false);
   const [reportUserOpen, setReportUserOpen] = useState(false);
 
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const fetchKeyRef = useRef<string>("");
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  // Track if we've already attempted a refresh for this fetch
+  const refreshAttemptedRef = useRef(false);
+  // Track if fetch has reached a terminal state
+  const terminalStateRef = useRef(false);
+
+  // Keep active client ref in sync (account switches change the active client/session)
   useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      const supabase = createClient();
-      if (!supabase) { setError("Supabase not configured."); setLoading(false); return; }
-      try {
-      const res = await fetch(`/api/profile/${encodeURIComponent(username)}`, { cache: "no-store" });
-      if (cancelled) return;
-      if (res.status === 403) {
-        setError("This profile is private.");
+    supabaseRef.current = createClient();
+  }, [activeUserId, session?.access_token]);
+
+  const fetchProfile = useCallback(async () => {
+    profileDiag("fetch_started", {
+      username,
+      hasUsername: Boolean(username),
+      authLoading,
+      activeUserId,
+      hasSession: Boolean(session),
+      sessionUserId: session?.user?.id ?? null,
+      sessionUserMatchesActive: session?.user?.id === activeUserId || null,
+      hasAccessToken: Boolean(session?.access_token),
+      activeClientPresent: Boolean(supabaseRef.current ?? createClient()),
+    });
+    try { console.info("[profile-diag] fetch_profile_start", { requestedUsername: username, authLoading, activeUserId: activeUserId ?? null, hasSession: Boolean(session), sessionUserId: session?.user?.id ?? null }); } catch {}
+
+    // Wait for auth to finish loading instead of returning early
+    if (authLoading) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (authLoading) return;
+    }
+
+    if (!username) return;
+
+    // Always re-read the session from the active Supabase client rather than
+    // trusting a potentially stale closure value. This handles the case where
+    // AuthProvider finishes session restoration after this component mounted.
+    let currentSession = session;
+    if (activeUserId && !currentSession) {
+      // First wait for session restoration
+      await new Promise(resolve => setTimeout(resolve, 150));
+      const activeClient = supabaseRef.current ?? createClient();
+      if (activeClient) {
+        const { data } = await activeClient.auth.getSession();
+        currentSession = data.session ?? null;
+      }
+    }
+
+    // Second attempt: if there is an active user but still no session, wait once more.
+    // Do not proceed without a Bearer token for a signed-in user.
+    if (activeUserId && !currentSession) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      const activeClient = supabaseRef.current ?? createClient();
+      if (activeClient) {
+        const { data } = await activeClient.auth.getSession();
+        currentSession = data.session ?? null;
+      }
+    }
+
+    profileDiag("session_resolved", {
+      username,
+      activeUserId,
+      hasSession: Boolean(currentSession),
+      sessionUserId: currentSession?.user?.id ?? null,
+      sessionUserMatchesActive: currentSession?.user?.id === activeUserId || null,
+      hasAccessToken: Boolean(currentSession?.access_token),
+    });
+
+    const key = `${username}:${user?.id ?? "anon"}:${currentSession?.access_token ?? "none"}`;
+    if (fetchKeyRef.current === key && terminalStateRef.current) return;
+    fetchKeyRef.current = key;
+    terminalStateRef.current = false;
+    refreshAttemptedRef.current = false;
+
+    fetchControllerRef.current?.abort();
+    const controller = new AbortController();
+    fetchControllerRef.current = controller;
+
+    setLoading(true);
+    setError("");
+
+    const supabase = supabaseRef.current;
+    if (!supabase) {
+      if (!controller.signal.aborted) {
+        setError("Supabase not configured.");
         setLoading(false);
+        terminalStateRef.current = true;
+      }
+      return;
+    }
+
+    let doFetch: ((accessToken: string | null, retryAfterRefresh?: boolean) => Promise<{ ok: boolean; terminalError?: string }>) | null = null;
+
+    try {
+      doFetch = async (accessToken: string | null, retryAfterRefresh = false): Promise<{ ok: boolean; terminalError?: string }> => {
+        const headers: Record<string, string> = {};
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+        const res = await fetch(`/api/profile/${encodeURIComponent(username)}`, { cache: "no-store", headers, signal: controller.signal });
+        if (controller.signal.aborted) return { ok: false };
+
+        if (res.status === 429) return { ok: false, terminalError: "This profile is temporarily rate-limited. Please wait a moment and try again." };
+        if (res.status === 403) {
+          try { console.info("[profile-diag] api_response", { requestedUsername: username, status: 403, hasBearer: Boolean(accessToken) }); } catch {}
+          return { ok: false, terminalError: "This profile is private." };
+        }
+        if (res.status === 404) {
+          try { console.info("[profile-diag] api_response", { requestedUsername: username, status: 404, hasBearer: Boolean(accessToken) }); } catch {}
+          return { ok: false, terminalError: "Profile not found." };
+        }
+        if (res.status === 503) {
+          try { console.info("[profile-diag] api_response", { requestedUsername: username, status: 503, hasBearer: Boolean(accessToken) }); } catch {}
+          return { ok: false, terminalError: "Authentication is temporarily unavailable. Please try again shortly." };
+        }
+        if (res.status === 401) {
+          const body = await res.json().catch(() => ({} as any));
+          const authCode = typeof body?.authCode === "string" ? body.authCode : null;
+          const authError = typeof body?.authError === "string" ? body.authError : null;
+          try { console.info("[profile-diag] api_response", { requestedUsername: username, status: 401, hasBearer: Boolean(accessToken), authCode, authError }); } catch {}
+          const recoverable = authError === "AuthSessionMissingError" || authCode === "session_not_found" || authCode === "bad_jwt" || authError === "AuthApiError";
+          if (!retryAfterRefresh && accessToken && recoverable && !refreshAttemptedRef.current) {
+            refreshAttemptedRef.current = true;
+            try {
+              const activeClient = createClient();
+              if (activeClient) {
+                // Use global mutex to prevent concurrent refreshes
+                const mutexKey = activeUserId ?? "global";
+                let refreshPromise = globalRefreshMutex.get(mutexKey);
+                if (!refreshPromise) {
+                  refreshPromise = (async () => {
+                    try {
+                      const refreshed = await activeClient.auth.refreshSession();
+                      const nextToken = refreshed.data?.session?.access_token ?? null;
+                      const nextUserId = refreshed.data?.session?.user?.id ?? null;
+                      return { ok: !refreshed.error && !!nextToken, token: nextToken, userId: nextUserId };
+                    } catch {
+                      return { ok: false, token: null, userId: null };
+                    }
+                  })();
+                  globalRefreshMutex.set(mutexKey, refreshPromise);
+                }
+                const result = await refreshPromise;
+                globalRefreshMutex.delete(mutexKey);
+                
+                // Never switch accounts; retry at most once only if refreshed session matches active account context.
+                if (result.ok && result.token && (!activeUserId || !result.userId || result.userId === activeUserId)) {
+                  supabaseRef.current = activeClient;
+                  return await doFetch!(result.token, true);
+                }
+              }
+            } catch {
+              // fall through to sign-in-again message
+            }
+          }
+          // If we could not verify a bearer token after a safe refresh attempt,
+          // retry anonymously so public profiles still load without destroying the session.
+          // Never redirect or sign out from profile fetch failures.
+          if (accessToken) {
+            return await doFetch!(null, true);
+          }
+          return { ok: false, terminalError: "Authentication is temporarily unavailable. Please try again shortly." };
+        }
+        if (!res.ok) return { ok: false, terminalError: `Could not load this profile (HTTP ${res.status}).` };
+
+        const json = await res.json().catch(() => null);
+        const prof = json?.profile as Profile | null | undefined;
+        if (controller.signal.aborted) return { ok: false };
+        if (!prof?.id) return { ok: false, terminalError: "Profile not found." };
+        try { console.info("[profile-diag] api_response", { requestedUsername: username, status: 200, hasBearer: Boolean(accessToken), profileIdPresent: Boolean(prof?.id), ownerId: prof?.id ?? null, is_private: (prof as any)?.is_private ?? null, is_private_type: typeof (prof as any)?.is_private }); } catch {}
+        setProfile(prof);
+
+        const { count: followers, error: followersError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", prof.id);
+        const { count: following, error: followingError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", prof.id);
+        if (controller.signal.aborted) return { ok: false };
+        if (followersError || followingError) setFollowError((followersError || followingError)?.message || "Could not load follow counts.");
+        setCounts({ followers: followers ?? 0, following: following ?? 0 });
+
+        if (user && user.id !== prof.id) {
+          const { data: existing } = await supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("following_id", prof.id).maybeSingle();
+          if (controller.signal.aborted) return { ok: false };
+          setIsFollowing(!!existing);
+          const { data: blk } = await (supabase as any).from("blocks").select("blocker_id").eq("blocker_id", user.id).eq("blocked_id", prof.id).maybeSingle();
+          if (controller.signal.aborted) return { ok: false };
+          setIsBlocked(!!blk);
+        } else {
+          setIsFollowing(false);
+          setIsBlocked(false);
+        }
+
+        let pq = supabase.from("posts").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+        if (user?.id !== prof.id) pq = pq.or("moderation_status.is.null,moderation_status.eq.visible");
+        const { data: ps, error: postsError } = await pq;
+        if (controller.signal.aborted) return { ok: false };
+        if (postsError) { setFollowError(postsError.message); } else {
+          const mappedPosts = ((ps ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: { username: prof.username, display_name: prof.display_name, avatar_url: prof.avatar_url } }));
+          setPosts(mappedPosts as Post[]);
+        }
+
+        let rq = supabase.from("replies").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+        if (user?.id !== prof.id) rq = rq.or("moderation_status.is.null,moderation_status.eq.visible");
+        const { data: rs, error: repliesError } = await rq;
+        if (controller.signal.aborted) return { ok: false };
+        if (repliesError) { setFollowError(repliesError.message); } else {
+          const mappedReplies = ((rs ?? []) as { id: string; content: string; created_at: string; author_id: string }[]).map((r) => ({ id: r.id, content: r.content, created_at: r.created_at, author_id: r.author_id, media_urls: null, profiles: { username: prof.username, display_name: prof.display_name, avatar_url: prof.avatar_url } }));
+          setReplies(mappedReplies as Post[]);
+        }
+
+        const { data: likedRows, error: likesError } = await supabase.from("likes").select("post_id").eq("user_id", prof.id);
+        if (controller.signal.aborted) return { ok: false };
+        if (likesError) {
+          if (user?.id === prof.id) setFollowError(likesError.message);
+          setLikes([]);
+        } else {
+          const likedIds = ((likedRows ?? []) as { post_id: string }[]).map((r) => r.post_id);
+          if (likedIds.length) {
+            const { data: likedPosts, error: likedPostsError } = await supabase.from("posts").select("*").in("id", likedIds);
+            if (controller.signal.aborted) return { ok: false };
+            if (likedPostsError) {
+              if (user?.id === prof.id) setFollowError(likedPostsError.message);
+              setLikes([]);
+            } else {
+              const mappedLikes = ((likedPosts ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: null }));
+              setLikes(mappedLikes as Post[]);
+            }
+          } else {
+            setLikes([]);
+          }
+        }
+        return { ok: true };
+      };
+
+      const initialToken = currentSession?.access_token ?? null;
+      const result = await doFetch(initialToken, false);
+      if (controller.signal.aborted) return;
+      if (!result.ok) {
+        if (result.terminalError) setError(result.terminalError);
+        setLoading(false);
+        terminalStateRef.current = true;
         return;
       }
-      if (res.status === 404) {
-        setError("Profile not found.");
+      if (!controller.signal.aborted) {
         setLoading(false);
-        return;
+        terminalStateRef.current = true;
       }
-      if (!res.ok) {
-        setError("Could not load this profile.");
-        setLoading(false);
-        return;
+    } catch (e) {
+      // For signed-in users, retry anonymously once if initial bearer fetch failed
+      // due to a transient client/network issue. Never clear auth state.
+      if (!controller.signal.aborted && currentSession?.access_token) {
+        try {
+          const anonRetry = await doFetch!(null, true);
+          if (!controller.signal.aborted && anonRetry.ok) {
+            setLoading(false);
+            terminalStateRef.current = true;
+            return;
+          }
+        } catch {}
       }
-      const json = await res.json();
-      const prof = json?.profile;
-      if (!prof) {
-        setError("Profile not found.");
-        setLoading(false);
-        return;
-      }
-      setProfile(prof as Profile);
-
-      const { count: followers, error: followersError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", prof.id);
-      const { count: following, error: followingError } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", prof.id);
-      if (cancelled) return;
-      if (followersError || followingError) setError((followersError || followingError)?.message || "Could not load follow counts.");
-      setCounts({ followers: followers ?? 0, following: following ?? 0 });
-
-         if (user && user.id !== prof.id) {
-           const { data: existing } = await supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("following_id", prof.id).maybeSingle();
-           if (cancelled) return;
-           setIsFollowing(!!existing);
-           const { data: blk } = await (supabase as any).from("blocks").select("blocker_id").eq("blocker_id", user.id).eq("blocked_id", prof.id).maybeSingle();
-           if (cancelled) return;
-           setIsBlocked(!!blk);
-         }
-
-      let pq = supabase.from("posts").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
-      if (user?.id !== prof.id) pq = pq.or("moderation_status.is.null,moderation_status.eq.visible");
-      const { data: ps, error: postsError } = await pq;
-      if (cancelled) return;
-      if (postsError) { setError(postsError.message); setLoading(false); return; }
-      const mappedPosts = ((ps ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: prof }));
-      setPosts(mappedPosts as Post[]);
-
-      let rq = supabase.from("replies").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
-      if (user?.id !== prof.id) rq = rq.or("moderation_status.is.null,moderation_status.eq.visible");
-      const { data: rs, error: repliesError } = await rq;
-      if (cancelled) return;
-      if (repliesError) { setError(repliesError.message); setLoading(false); return; }
-      const mappedReplies = ((rs ?? []) as { id: string; content: string; created_at: string; author_id: string }[]).map((r) => ({ id: r.id, content: r.content, created_at: r.created_at, author_id: r.author_id, media_urls: null, profiles: prof }));
-      setReplies(mappedReplies as Post[]);
-
-      const { data: likedRows, error: likesError } = await supabase.from("likes").select("post_id").eq("user_id", prof.id);
-      if (cancelled) return;
-      if (likesError && user?.id === prof.id) { setError(likesError.message); setLoading(false); return; }
-      const likedIds = ((likedRows ?? []) as { post_id: string }[]).map((r) => r.post_id);
-      if (likedIds.length) {
-        const { data: likedPosts, error: likedPostsError } = await supabase.from("posts").select("*").in("id", likedIds);
-        if (cancelled) return;
-        if (likedPostsError && user?.id === prof.id) { setError(likedPostsError.message); setLoading(false); return; }
-        const mappedLikes = ((likedPosts ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: null }));
-        setLikes(mappedLikes as Post[]);
-      } else {
-        setLikes([]);
-      }
-
+      if (controller.signal.aborted) return;
+      setError("Could not load this profile. Check your connection and retry.");
       setLoading(false);
-      } catch {
-        if (cancelled) return;
-        setError("Could not load this profile. Check your connection and retry.");
-        setLoading(false);
-      }
+      terminalStateRef.current = true;
+    }
+  }, [username, user?.id, authLoading, activeUserId, session]);
+
+  useEffect(() => {
+    void fetchProfile();
+    return () => {
+      fetchControllerRef.current?.abort();
     };
-    const timer = window.setTimeout(() => {
-      setLoading(true);
-      setError("");
-      void run();
-    }, 0);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [username, user]);
+  }, [fetchProfile]);
 
   async function openList(type: 'followers' | 'following') {
     if (!profile) return;
@@ -353,7 +555,7 @@ export default function ProfileClient() {
         <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-af-muted">
           {profile.website && <a href={profile.website} className="text-af-accent hover:underline">{profile.website.replace(/^https?:\/\//, "")}</a>}
           {profile.location && <span>{profile.location}</span>}
-          <span>Joined {new Date(profile.created_at).toLocaleDateString()}</span>
+          {profile.created_at ? <span>Joined {new Date(profile.created_at).toLocaleDateString()}</span> : null}
         </div>
         <div className="mt-5 flex flex-wrap gap-6 text-sm">
           <button type="button" onClick={() => openList('followers')} className="text-left hover:underline"><strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span></button>

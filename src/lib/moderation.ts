@@ -14,7 +14,7 @@
  */
 
 import { createServerClient } from "@/lib/supabase/server";
-import { getVerifiedUser, type VerifiedAuthUser } from "@/lib/serverAuth";
+import { verifyRequestAuth, type VerifiedAuthUser } from "@/lib/serverAuth";
 import type { Json } from "@/lib/supabase/database.types";
 
 export type ModeratorRole = "moderator" | "senior_moderator" | "administrator";
@@ -81,17 +81,16 @@ function contextFromVerifiedUser(user: VerifiedAuthUser, role: ModeratorRole | n
 
 /**
  * Determine moderator context for the current authenticated user.
- * Resolves user from trusted request auth (Bearer JWT verified by Supabase) when
- * request is provided; falls back to verified client auth for compatibility.
- * Administrator access is granted ONLY via trusted app_metadata.afterfur_staff_admin
- * or moderator_roles rows — never via user_metadata.
+ * Uses explicit Bearer JWT verification when provided. No bearer => anonymous context.
+ * Invalid/unverifiable bearer must not be treated as authenticated.
  */
 export async function getModeratorContext(request?: Request | null): Promise<ModeratorContext> {
   const supabase = createServerClient();
   if (!supabase) return emptyContext();
 
-  const user = await getVerifiedUser(request);
-  if (!user?.id) return emptyContext();
+  const auth = await verifyRequestAuth(request);
+  if (!auth.ok) return emptyContext();
+  const user = auth.user;
 
   if (isTrustedStaffAdmin(user.app_metadata)) {
     return contextFromVerifiedUser(user, "administrator");
@@ -121,8 +120,21 @@ export async function getModeratorContext(request?: Request | null): Promise<Mod
 
 /**
  * Require at least the given moderator role for the verified authenticated user.
+ * Distinguishes invalid/unavailable bearer from missing credentials for correct status handling.
  */
 export async function requireModeratorRole(minRole: ModeratorRole, request?: Request | null): Promise<ModeratorContext> {
+  const auth = await verifyRequestAuth(request);
+  if (!auth.ok) {
+    const status = auth.mode === "bearer" && auth.reason === "verification_unavailable" ? 503 : 401;
+    if (process.env.NODE_ENV !== "production" || process.env.AF_MOD_DIAG === "1") {
+      try { console.info("[mod-auth] require_role_denied", { minRole, status, authMode: auth.mode, reason: auth.reason, errorName: auth.mode === "bearer" ? auth.errorName : undefined }); } catch {}
+    }
+    const err: any = new Error(status === 503 ? "Authentication verification temporarily unavailable." : "Authentication required.");
+    err.status = status;
+    err.code = status === 503 ? "auth_verification_unavailable" : "unauthorized";
+    throw err;
+  }
+
   const ctx = await getModeratorContext(request);
   if (!ctx.userId) {
     if (process.env.NODE_ENV !== "production" || process.env.AF_MOD_DIAG === "1") {

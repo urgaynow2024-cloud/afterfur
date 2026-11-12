@@ -1,10 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState } from "react";
 import { EmptyState, PageHeader, Shell } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
-import { MANAGEABLE_BADGES } from "@/lib/badges";
+import { MANAGEABLE_BADGES, badgeImageFor } from "@/lib/badges";
 
 type Target = { user_id: string; username: string; display_name: string | null; avatar_url?: string | null };
 type AuditRow = { id: number; action: string; badge_id: string; occurred_at: string; actor_id: string | null };
@@ -146,12 +147,20 @@ export default function StaffBadgesPage() {
                       {list.map((badge) => {
                         const active = badges.includes(badge.id);
                         const busy = pendingBadge === badge.id;
+                        const src = badgeImageFor(badge.id);
                         return (
                           <div key={badge.id} className="rounded-lg border border-af-border bg-af-surface-2 p-3">
                             <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <span className="text-sm font-medium text-af-text">{badge.mark} {badge.label}</span>
-                                <p className="mt-1 text-xs text-af-muted">{badge.id}</p>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {src ? (
+                                  <Image src={src} alt={badge.label} width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
+                                ) : (
+                                  <span className="flex h-8 w-8 shrink-0 items-center justify-center text-base font-bold text-af-brand-soft">{badge.mark}</span>
+                                )}
+                                <div className="min-w-0">
+                                  <span className="block truncate text-sm font-medium text-af-text">{badge.label}</span>
+                                  <p className="mt-1 text-xs text-af-muted">{badge.id}</p>
+                                </div>
                               </div>
                               {active ? <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-medium text-emerald-300">Active</span> : <span className="rounded-full bg-af-surface px-2 py-0.5 text-xs text-af-muted">Inactive</span>}
                             </div>

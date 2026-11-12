@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const ME = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 const OTHER = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12";
+
+function assertResponse(res: Response | undefined): Response {
+  if (!res) throw new Error("Expected Response but got undefined");
+  return res;
+}
 
 function makeChain(rows: any[] | null, singleRow: any | null = null) {
   let filtered: any[] = rows ?? (singleRow ? [singleRow] : []);
@@ -32,13 +37,32 @@ function makeChain(rows: any[] | null, singleRow: any | null = null) {
   return chain;
 }
 
+const current: { supabase: any; db: Record<string, any> } = { supabase: null, db: {} };
+
+const mockGetVerifiedUser = vi.fn();
+const mockRateLimit = vi.fn(async () => ({ allowed: true }));
+
+vi.mock("@/lib/serverAuth", () => ({
+  getVerifiedUser: mockGetVerifiedUser,
+}));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createServerClient: () => current.supabase,
+}));
+
+vi.mock("@/lib/rateLimit", () => ({
+  rateLimit: vi.fn(async () => ({ allowed: true })),
+  getClientIp: () => "127.0.0.1",
+  getRateLimitKey: (o: any) => (o?.userId ? `user:${o.userId}` : `ip:${o?.ip || "unknown"}`),
+}));
+
 function makeSupabase(user: { id: string } | null, db: Record<string, any> = {}) {
   return {
     auth: {
       getUser: async () => ({ data: { user }, error: user ? null : new Error("no user") }),
     },
-    from: (table: string) => makeChain(db[table] ?? null, db[table + "_single"] ?? null),
     rpc: async (_name: string, _args: any) => ({ data: null, error: null }),
+    from: (table: string) => makeChain(db[table] ?? null, db[table + "_single"] ?? null),
     storage: {
       from: () => ({
         upload: async () => ({ data: { path: "uploaded" }, error: null }),
@@ -48,13 +72,8 @@ function makeSupabase(user: { id: string } | null, db: Record<string, any> = {})
   };
 }
 
-let current: { supabase: any; db: Record<string, any> } = { supabase: null, db: {} };
-
-vi.mock("@/lib/supabase/server", () => ({
-  createServerClient: () => current.supabase,
-}));
-
 async function runReadReceiptsRoute(body: unknown, user: { id: string } | null = { id: ME }, db: Record<string, any> = {}) {
+  mockGetVerifiedUser.mockResolvedValue(user);
   current.supabase = makeSupabase(user, db);
   current.db = db;
   const { POST } = await import("@/app/api/messages/read-receipts/route");
@@ -67,6 +86,7 @@ async function runReadReceiptsRoute(body: unknown, user: { id: string } | null =
 }
 
 async function runAttachmentsRoute(body: unknown, user: { id: string } | null = { id: ME }, db: Record<string, any> = {}) {
+  mockGetVerifiedUser.mockResolvedValue(user);
   current.supabase = makeSupabase(user, db);
   current.db = db;
   const { POST } = await import("@/app/api/messages/attachments/route");
@@ -79,6 +99,7 @@ async function runAttachmentsRoute(body: unknown, user: { id: string } | null = 
 }
 
 async function runSignedUrlRoute(query: string, user: { id: string } | null = { id: ME }, db: Record<string, any> = {}) {
+  mockGetVerifiedUser.mockResolvedValue(user);
   current.supabase = makeSupabase(user, db);
   current.db = db;
   const { GET } = await import("@/app/api/messages/attachments/signed-url/route");
@@ -87,54 +108,70 @@ async function runSignedUrlRoute(query: string, user: { id: string } | null = { 
 }
 
 describe("read-receipts route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetVerifiedUser.mockResolvedValue({ id: ME });
+    current.supabase = makeSupabase({ id: ME }, {});
+  });
+
   it("rejects unauthenticated access", async () => {
     const res = await runReadReceiptsRoute({ conversationId: "c1", messageIds: ["m1"] }, null);
-    expect(res.status).toBe(401);
+    expect(res!.status).toBe(401);
   });
 
   it("rejects missing conversationId", async () => {
     const res = await runReadReceiptsRoute({ messageIds: ["m1"] }, { id: ME });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("rejects empty messageIds", async () => {
     const res = await runReadReceiptsRoute({ conversationId: "c1", messageIds: [] }, { id: ME });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("denies non-member", async () => {
     const res = await runReadReceiptsRoute({ conversationId: "c1", messageIds: ["m1"] }, { id: ME }, {
       conversation_participants_single: null,
     });
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("marks messages as read for a member", async () => {
     const res = await runReadReceiptsRoute({ conversationId: "c1", messageIds: ["m1", "m2"] }, { id: ME }, {
       conversation_participants_single: { user_id: ME, conversation_id: "c1" },
     });
-    expect(res.status).toBe(200);
-    const json = await res.json();
+    expect(res!.status).toBe(200);
+    const json = await res!.json();
     expect(json.ok).toBe(true);
   });
 });
 
 describe("attachments route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetVerifiedUser.mockResolvedValue({ id: ME });
+    current.supabase = makeSupabase({ id: ME }, {
+      conversation_participants_single: { user_id: ME, conversation_id: "c1" },
+      messages_single: { id: "m1", conversation_id: "c1", sender_id: ME },
+      message_attachments: [],
+    });
+  });
+
   it("rejects unauthenticated access", async () => {
     const res = await runAttachmentsRoute({ messageId: "m1", conversationId: "c1", storagePath: "u1/file.png" }, null);
-    expect(res.status).toBe(401);
+    expect(res!.status).toBe(401);
   });
 
   it("rejects missing fields", async () => {
     const res = await runAttachmentsRoute({}, { id: ME });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("denies non-member", async () => {
     const res = await runAttachmentsRoute({ messageId: "m1", conversationId: "c1", storagePath: "u1/file.png" }, { id: ME }, {
       conversation_participants_single: null,
     });
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("denies unknown message", async () => {
@@ -142,7 +179,7 @@ describe("attachments route", () => {
       conversation_participants_single: { user_id: ME, conversation_id: "c1" },
       messages_single: null,
     });
-    expect(res.status).toBe(404);
+    expect(res!.status).toBe(404);
   });
 
   it("denies message in different conversation", async () => {
@@ -150,7 +187,7 @@ describe("attachments route", () => {
       conversation_participants_single: { user_id: ME, conversation_id: "c1" },
       messages_single: { id: "m1", conversation_id: "c2", sender_id: ME },
     });
-    expect(res.status).toBe(404);
+    expect(res!.status).toBe(404);
   });
 
   it("rejects invalid storage path", async () => {
@@ -158,7 +195,7 @@ describe("attachments route", () => {
       conversation_participants_single: { user_id: ME, conversation_id: "c1" },
       messages_single: { id: "m1", conversation_id: "c1", sender_id: ME },
     });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("rejects oversized file", async () => {
@@ -168,7 +205,7 @@ describe("attachments route", () => {
       conversation_participants_single: { user_id: ME, conversation_id: "c1" },
       messages_single: { id: "m1", conversation_id: "c1", sender_id: ME },
     });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("registers an attachment successfully", async () => {
@@ -179,8 +216,8 @@ describe("attachments route", () => {
       messages_single: { id: "m1", conversation_id: "c1", sender_id: ME },
       message_attachments: [],
     });
-    expect(res.status).toBe(201);
-    const json = await res.json();
+    expect(res!.status).toBe(201);
+    const json = await res!.json();
     expect(json.attachment.message_id).toBe("m1");
     expect(json.attachment.storage_path).toBe("u1/file.png");
   });
@@ -193,26 +230,35 @@ describe("attachments route", () => {
       messages_single: { id: "m1", conversation_id: "c1", sender_id: ME },
       message_attachments: [{ id: "a1", storage_path: "u1/file.png", bucket_id: "message_attachments" }],
     });
-    expect(res.status).toBe(409);
+    expect(res!.status).toBe(409);
   });
 });
 
 describe("attachments signed-url route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetVerifiedUser.mockResolvedValue({ id: ME });
+    current.supabase = makeSupabase({ id: ME }, {
+      message_attachments_single: { conversation_id: "c1", uploader_id: OTHER, storage_path: "u1/file.png", bucket_id: "message_attachments", media_type: "image/png" },
+      conversation_participants_single: { user_id: ME, conversation_id: "c1" },
+    });
+  });
+
   it("rejects unauthenticated access", async () => {
     const res = await runSignedUrlRoute("path=u1/file.png", null);
-    expect(res.status).toBe(401);
+    expect(res!.status).toBe(401);
   });
 
   it("rejects missing path", async () => {
     const res = await runSignedUrlRoute("", { id: ME });
-    expect(res.status).toBe(400);
+    expect(res!.status).toBe(400);
   });
 
   it("denies unknown attachment", async () => {
     const res = await runSignedUrlRoute("path=u1/file.png", { id: ME }, {
       message_attachments_single: null,
     });
-    expect(res.status).toBe(404);
+    expect(res!.status).toBe(404);
   });
 
   it("denies non-member", async () => {
@@ -220,7 +266,7 @@ describe("attachments signed-url route", () => {
       message_attachments_single: { conversation_id: "c1", uploader_id: OTHER, storage_path: "u1/file.png", bucket_id: "message_attachments" },
       conversation_participants_single: null,
     });
-    expect(res.status).toBe(403);
+    expect(res!.status).toBe(403);
   });
 
   it("returns signed URL for a member", async () => {
@@ -228,8 +274,8 @@ describe("attachments signed-url route", () => {
       message_attachments_single: { conversation_id: "c1", uploader_id: OTHER, storage_path: "u1/file.png", bucket_id: "message_attachments", media_type: "image/png" },
       conversation_participants_single: { user_id: ME, conversation_id: "c1" },
     });
-    expect(res.status).toBe(200);
-    const json = await res.json();
+    expect(res!.status).toBe(200);
+    const json = await res!.json();
     expect(json.signedUrl).toBeTruthy();
     expect(json.path).toBe("u1/file.png");
   });

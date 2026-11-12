@@ -1,5 +1,8 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/serverAuth";
+import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
+import { canShowPostInFeed } from "@/lib/feedPrivacy";
 
 export async function GET(request: Request) {
   try {
@@ -7,14 +10,15 @@ export async function GET(request: Request) {
     const limit = Number(searchParams.get("limit") || "12");
     const offset = Number(searchParams.get("offset") || "0");
 
+    const user = await getVerifiedUser(request);
+    const viewerId = user?.id ?? null;
+    const rl = await rateLimit(getRateLimitKey({ userId: viewerId, ip: getClientIp(request) }), "/api/feed/explore", 120, 60);
+    if (!rl.allowed) return rl.response!;
+
     const supabase = createServerClient();
-    if (!supabase) {
-      return NextResponse.json({ posts: [] });
-    }
-    let viewerId: string | null = null;
-    const { data: userData } = await (supabase as any).auth.getUser();
-    viewerId = userData.user?.id ?? null;
-    const meta = (userData.user as any)?.app_metadata ?? {};
+    if (!supabase) return NextResponse.json({ posts: [] });
+
+    const meta = (user as any)?.app_metadata ?? {};
     let staff = meta.afterfur_staff_admin === true || meta.afterfur_staff_admin === "true";
     if (!staff && viewerId) {
       const { data: role } = await (supabase as any).from("moderator_roles").select("role").eq("user_id", viewerId).maybeSingle();
@@ -48,7 +52,6 @@ export async function GET(request: Request) {
       (blocks.data || []).forEach((b: any) => { if (b.blocked_id) blockedSet.add(b.blocked_id); });
     }
 
-    const { canShowPostInFeed } = await import("@/lib/feedPrivacy");
     const filtered = (posts as any[])
       .filter((p: any) => {
         if (blockedSet.has(p.author_id)) return false;
