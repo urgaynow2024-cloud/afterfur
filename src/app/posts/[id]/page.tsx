@@ -423,7 +423,7 @@ function PostPageInner() {
               <EmptyState title="No replies yet" body="Be the first to reply." />
             </div>
           ) : (
-            <section className="overflow-hidden rounded-2xl border border-af-border bg-af-surface/70 shadow-sm">
+<section className="rounded-2xl border border-af-border bg-af-surface/70 shadow-sm">
               <header className="border-b border-af-border px-4 py-3 sm:px-5">
                 <h2 className="text-base font-semibold tracking-tight text-af-text">Replies</h2>
                 <p className="mt-0.5 text-xs text-af-muted">{replies.length} {replies.length === 1 ? "reply" : "replies"}</p>

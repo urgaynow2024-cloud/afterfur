@@ -11,6 +11,11 @@ vi.mock("@/lib/supabase/client", () => ({
 vi.mock("@/lib/accountSessions", () => ({
   ACCOUNT_SWITCH_EVENT: "afterfur:account-switched",
   clearTransientAccountState: vi.fn(),
+  clearActiveBoundClient: vi.fn(),
+  setActiveBoundClient: vi.fn(),
+  peekSessionForUser: vi.fn(() => null),
+  ensureActiveSession: vi.fn(async () => true),
+  getLegacyClient: vi.fn(() => null),
   emitAccountSwitched: vi.fn(),
   getActiveClient: vi.fn(() => ({ auth: { getSession: vi.fn().mockReturnValue(new Promise(() => {})), onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }) } })),
   getActiveUserId: vi.fn(() => null),

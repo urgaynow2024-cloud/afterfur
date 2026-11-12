@@ -51,7 +51,7 @@ export function AccountSwitcherMenu({
   }
 
   return (
-    <div className="w-[min(21rem,calc(100vw-1.5rem))] rounded-xl border border-af-border bg-af-surface p-2 shadow-xl shadow-black/30">
+    <div role="menu" aria-label="Switch account" className="max-h-[calc(100dvh-6rem)] w-full overflow-y-auto overscroll-contain rounded-xl border border-af-border bg-af-surface p-2 shadow-xl shadow-black/30">
       <div className="px-2 py-1.5"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-af-muted">Accounts</div></div>
 
       <div className="mb-1 flex items-center gap-2.5 rounded-lg border border-af-border/70 bg-af-surface-2/45 px-2 py-2">

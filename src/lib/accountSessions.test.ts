@@ -110,7 +110,7 @@ describe("accountSessions multi-session storage", () => {
     if (!r.ok) expect(r.reason).toBe("expired");
   });
 
-  it("logging out one account does not remove other saved sessions", async () => {
+it("logging out one account does not remove other saved sessions", async () => {
     const mod = await import("./accountSessions");
     clients.set(mod.storageKeyForUser("uA"), makeMockClient(mod.storageKeyForUser("uA"), { session: { access_token: "at.A", refresh_token: "rt.A", user: { id: "uA" } } }));
     clients.set(mod.storageKeyForUser("uB"), makeMockClient(mod.storageKeyForUser("uB"), { session: { access_token: "at.B", refresh_token: "rt.B", user: { id: "uB" } } }));
@@ -119,5 +119,28 @@ describe("accountSessions multi-session storage", () => {
     await mod.signOutAccount("uA");
     expect(mod.readSavedAccounts().map(a => a.userId)).toEqual(["uB"]);
     expect((await mod.restoreAccountSession("uB")).ok).toBe(true);
+  });
+
+  it("persists a legacy/default-client session into the active account's isolated storage", async () => {
+    const mod = await import("./accountSessions");
+    const key = mod.storageKeyForUser("uA");
+    clients.set(key, makeMockClient(key));
+    mod.upsertSavedAccount({ userId: "uA" });
+    const ok = await mod.ensureActiveSession("uA", { access_token: "at.A", refresh_token: "rt.A", user: { id: "uA" } } as any);
+    expect(ok).toBe(true);
+    expect(mod.peekSessionForUser("uA")?.access_token).toBe("at.A");
+    expect(mod.peekSessionForUser("uA")?.refresh_token).toBe("rt.A");
+  });
+
+  it("uses the AuthProvider-bound client as the single active client", async () => {
+    const mod = await import("./accountSessions");
+    const key = mod.storageKeyForUser("uA");
+    const client = makeMockClient(key);
+    clients.set(key, client);
+    mod.setActiveBoundClient(client as any);
+    expect(mod.getActiveClient()).toBe(client);
+    mod.clearActiveBoundClient();
+    mod.setActiveUserId("uA");
+    expect(mod.getActiveClient()).toBe(client);
   });
 });

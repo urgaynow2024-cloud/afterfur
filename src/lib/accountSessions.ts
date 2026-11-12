@@ -131,7 +131,9 @@ export function removeSavedAccount(userId: string) {
   const key = target?.storageKey ?? storageKeyForUser(userId);
   const cached = clientCache.get(key);
   if (cached) { try { void (cached as any).auth?.stopAutoRefresh?.(); } catch {} clientCache.delete(key); refreshWanted.delete(key); }
-  if (getActiveUserId() === userId) setActiveUserId(next[0]?.userId ?? null);
+  const wasActive = getActiveUserId() === userId;
+  if (wasActive) setActiveUserId(next[0]?.userId ?? null);
+  if (wasActive) activeBoundClient = null;
   return next;
 }
 
@@ -144,6 +146,65 @@ export function touchSavedAccount(userId: string) {
 
 export function getSavedAccount(userId: string) {
   return readSavedAccounts().find((a) => a.userId === userId) ?? null;
+}
+
+/**
+ * Read a persisted Supabase session without triggering a network refresh.
+ *
+ * Supabase stores the session object directly under its storage key. This is
+ * used only to decide whether a client already has a session; it never logs or
+ * exposes token values.
+ */
+export function peekSessionForUser(userId: string): Session | null {
+  if (!canUseStorage()) return null;
+  const storageKey = getSavedAccount(userId)?.storageKey ?? storageKeyForUser(userId);
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Session | { currentSession?: Session | null } | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    const maybe = "currentSession" in parsed ? parsed.currentSession : parsed;
+    return maybe && typeof maybe === "object" && "access_token" in maybe && "refresh_token" in maybe ? (maybe as Session) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ensure the active account's isolated Supabase client has the session.
+ *
+ * Sessions created by the legacy/default client (older installs, OAuth/email
+ * callbacks, sign-up) must be copied into the per-account storage key, otherwise
+ * a reload binds the per-account client, finds no session, and shows the app as
+ * signed out even though the legacy client still holds a valid session.
+ */
+export async function ensureActiveSession(userId: string, session: Session): Promise<boolean> {
+  const target = getClientForUser(userId, { autoRefreshToken: true });
+  if (!target) return false;
+  const existing = peekSessionForUser(userId);
+  if (existing?.access_token && existing.refresh_token === session.refresh_token) return true;
+  try {
+    const { error } = await target.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+    if (error) return false;
+    setActiveUserId(userId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// The AuthProvider is the single source of truth for which Supabase client is
+// bound to the current session. Components use this so they cannot accidentally
+// query through a different client that has no session.
+let activeBoundClient: SupabaseClient<Database> | null = null;
+export function setActiveBoundClient(client: SupabaseClient<Database> | null) {
+  activeBoundClient = client;
+}
+export function clearActiveBoundClient() {
+  activeBoundClient = null;
 }
 
 function setAutoRefresh(client: SupabaseClient<Database>, storageKey: string, enable: boolean) {
@@ -186,6 +247,7 @@ export function getClientForStorageKey(storageKey: string, opts?: { autoRefreshT
 }
 
 export function getActiveClient(): SupabaseClient<Database> | null {
+  if (activeBoundClient) return activeBoundClient;
   const activeId = getActiveUserId();
   if (!activeId) return getLegacyDefaultClient();
   const account = getSavedAccount(activeId);
@@ -339,8 +401,14 @@ export async function signOutAccount(userId: string): Promise<{ error: string | 
   if (canUseStorage()) {
     try { window.localStorage.removeItem(storageKey); } catch {}
   }
+  const wasActive = getActiveUserId() === userId;
   writeSavedAccounts(remaining);
-  if (getActiveUserId() === userId) setActiveUserId(remaining[0]?.userId ?? null);
+  if (wasActive) {
+    setActiveUserId(remaining[0]?.userId ?? null);
+    // The bound client has just been signed out; do not let components keep
+    // using it until AuthProvider binds the next active account.
+    activeBoundClient = null;
+  }
   if (clientCache.has(storageKey)) { clientCache.delete(storageKey); refreshWanted.delete(storageKey); }
   // Clear any pending refresh mutex for this account
   refreshMutex.delete(userId);
@@ -358,6 +426,7 @@ export async function signOutAllAccounts(): Promise<void> {
   }
   writeSavedAccounts([]);
   setActiveUserId(null);
+  activeBoundClient = null;
   clientCache.clear();
   refreshWanted.clear();
 }

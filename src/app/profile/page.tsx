@@ -6,8 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 import PostCard from "@/components/PostCard";
 import Link from "next/link";
 import { BadgeList } from "@/components/BadgeList";
+import { BadgeCollection } from "@/components/BadgeCollection";
+import { PrivateMediaGrid } from "@/components/post/private-media-grid";
+import { StyledDisplayName, StyledUsername } from "@/components/profile/styled-name";
 
-type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; created_at: string };
+type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; created_at: string; profile_customisation?: Record<string, unknown> | null };
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 type ProfileSummary = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 type RepostRow = { post_id: string };
@@ -82,20 +85,30 @@ export default function Profile() {
     <Shell>
       <PageHeader title="Profile" />
       {loading ? (
-        <div className="p-8 text-center text-sm text-af-muted">Loading…</div>
+        <div aria-label="Loading your profile" className="animate-pulse">
+          <div className="h-40 w-full bg-af-surface-2 sm:h-52" />
+          <div className="px-4 pb-6 pt-12 sm:px-5 sm:pt-14">
+            <div className="h-7 w-2/5 rounded bg-af-surface-2" />
+            <div className="mt-2 h-3.5 w-1/4 rounded bg-af-surface-2" />
+            <div className="mt-4 space-y-2">
+              <div className="h-3 w-full rounded bg-af-surface-2" />
+              <div className="h-3 w-4/5 rounded bg-af-surface-2" />
+            </div>
+          </div>
+        </div>
       ) : !profile ? (
         <EmptyState title="Complete your profile" body="Add your details to help the community find you." action={{ label: "Edit profile", href: "/edit-profile" }} />
       ) : (
         <div>
           <div className="relative">
             {profile.banner_url ? (
-              <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-40 w-full object-cover sm:h-56" />
+              <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-40 w-full object-cover sm:h-52" />
             ) : (
-              <div aria-hidden="true" className="h-40 w-full border-b border-af-border bg-gradient-to-br from-af-surface to-af-surface-2 sm:h-56" />
+              <div aria-hidden="true" className="h-40 w-full border-b border-af-border bg-gradient-to-br from-af-surface via-af-surface-2 to-af-surface sm:h-52" />
             )}
-            <div className="absolute -bottom-12 left-5 sm:-bottom-14 sm:left-6">
+            <div className="absolute -bottom-10 left-4 sm:-bottom-12 sm:left-5">
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={`${profile.display_name || profile.username}'s avatar`} className="h-24 w-24 rounded-full border-4 border-af-bg object-cover shadow-xl sm:h-28 sm:w-28" />
+                <img src={profile.avatar_url} alt={`${profile.display_name || profile.username}'s avatar`} className="h-24 w-24 rounded-full border-4 border-af-bg bg-af-surface object-cover shadow-xl sm:h-28 sm:w-28" />
               ) : (
                 <div aria-hidden="true" className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-af-bg bg-af-surface-raised text-2xl font-bold text-af-brand-soft shadow-xl sm:h-28 sm:w-28">
                   {(profile.display_name || profile.username).slice(0, 1).toUpperCase()}
@@ -103,37 +116,32 @@ export default function Profile() {
               )}
             </div>
           </div>
-          <div className="px-5 pb-6 pt-16 sm:px-6 sm:pt-20">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="break-words text-2xl font-bold tracking-tight">{profile.display_name || profile.username}</h2>
-                <p className="text-sm text-af-muted">@{profile.username}</p>
+          <div className="px-4 pb-5 pt-12 sm:px-5 sm:pt-14">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <StyledDisplayName profile={{ display_name: profile.display_name, username: profile.username, profile_customisation: profile.profile_customisation }} size="lg" />
+                <div className="mt-0.5"><StyledUsername profile={{ display_name: profile.display_name, username: profile.username, profile_customisation: profile.profile_customisation }} /></div>
                 <BadgeList userId={profile.id} className="mt-2" />
               </div>
-              <Link href="/edit-profile" className="af-action-secondary">
-                Edit profile
-              </Link>
+              <Link href="/edit-profile" className="af-action-secondary shrink-0">Edit profile</Link>
             </div>
-            {profile.bio && <p className="mt-4 max-w-prose whitespace-pre-wrap text-[15px] leading-6 text-af-text-2">{profile.bio}</p>}
-            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-af-muted">
+            {profile.bio && <p className="mt-3 max-w-prose whitespace-pre-wrap text-[15px] leading-6 text-af-text-2">{profile.bio}</p>}
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-af-muted">
               {profile.location && <span>{profile.location}</span>}
               {profile.website && (
-                <a href={profile.website} className="text-af-accent hover:underline">
+                <a href={profile.website} className="text-af-brand-soft hover:underline">
                   {profile.website.replace(/^https?:\/\//, "")}
                 </a>
               )}
-              <span>Joined {new Date(profile.created_at).toLocaleDateString()}</span>
+              <span>Joined {new Date(profile.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
             </div>
-            <div className="mt-5 flex gap-6 text-sm">
-              <span>
-                <strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span>
-              </span>
-              <span>
-                <strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span>
-              </span>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+              <span><strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span></span>
+              <span><strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span></span>
+              <BadgeCollection userId={profile.id} username={profile.username} />
             </div>
           </div>
-          <div role="tablist" aria-label="Your profile posts" className="flex border-b border-af-border px-2 sm:px-4">
+          <div role="tablist" aria-label="Your profile posts" className="sticky top-14 z-20 flex border-b border-af-border bg-af-bg/95 px-2 backdrop-blur-md md:top-0 sm:px-4">
             {(["posts", "replies", "reposts", "media"] as const).map((t) => (
               <button
                 key={t}
@@ -141,12 +149,9 @@ export default function Profile() {
                 role="tab"
                 aria-selected={tab === t}
                 onClick={() => setTab(t)}
-                className={`relative min-h-12 flex-1 px-1 text-xs font-medium capitalize transition-colors hover:text-af-text sm:text-sm ${
-                  tab === t ? "font-bold text-af-text" : "text-af-muted"
-                }`}
+                className={`af-feed-tab min-h-12 flex-1 px-1 text-xs capitalize sm:text-sm ${tab === t ? "" : "text-af-muted"}`}
               >
                 {t}
-                {tab === t && <div className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-af-brand" />}
               </button>
             ))}
           </div>
@@ -162,14 +167,16 @@ export default function Profile() {
                   return true;
                 });
                 return (
-                  <div className="p-4">
-                    <div className="mb-4 flex gap-2 text-[13px]">
+                  <div className="p-2 sm:p-3">
+                    <div className="mb-3 flex flex-wrap gap-2 text-[13px]">
                       {(["all", "photos", "gifs", "videos"] as const).map((f) => (
                         <button
                           key={f}
+                          type="button"
                           onClick={() => setMediaFilter(f)}
-                          className={`rounded-full px-3 py-1 transition-colors ${
-                            mediaFilter === f ? "bg-af-brand text-white" : "bg-af-surface-2 text-af-text hover:bg-af-surface-3"
+                          aria-pressed={mediaFilter === f}
+                          className={`min-h-8 rounded-full px-3 font-medium capitalize transition-colors ${
+                            mediaFilter === f ? "bg-af-brand text-white" : "bg-af-surface-2 text-af-text-2 hover:bg-af-surface-raised hover:text-af-text"
                           }`}
                         >
                           {f}
@@ -177,22 +184,14 @@ export default function Profile() {
                       ))}
                     </div>
                     {filtered.length === 0 ? (
-                      <EmptyState title="No media yet" body="Media you post will appear here." />
+                      <EmptyState title="No media yet" body="Photos, GIFs and videos you post will appear here." />
                     ) : (
-                  <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
-                        {filtered.map((it, i) => (
-                          <Link key={it.url + i} href={`/${encodeURIComponent(profile.username)}/status/${encodeURIComponent(it.post.id)}`} aria-label="Open media post" className="aspect-square overflow-hidden rounded-md bg-af-surface-2">
-                            {/\.(mp4|webm|mov)$/i.test(it.url) ? (
-                              <div className="relative h-full w-full">
-                                <video src={it.url} aria-label="Video thumbnail" className="h-full w-full object-contain" />
-                                <span className="absolute inset-0 flex items-center justify-center text-4xl text-white drop-shadow-lg">▶</span>
-                              </div>
-                            ) : (
-                              <img src={it.url} alt="Profile media" loading="lazy" className="h-full w-full object-contain" />
-                            )}
-                          </Link>
-                        ))}
-                      </div>
+                      <PrivateMediaGrid
+                        items={filtered.map((it) => ({ url: it.url, postId: it.post.id }))}
+                        username={profile.username}
+                        gridClassName="grid grid-cols-2 gap-1 sm:grid-cols-3"
+                        itemClassName="aspect-square overflow-hidden rounded-lg bg-af-surface-2"
+                      />
                     )}
                   </div>
                 );

@@ -11,7 +11,9 @@ import PostText from "@/components/PostText";
 import Link from "next/link";
 import { BadgeList } from "@/components/BadgeList";
 import ReportDialog from "@/components/ReportDialog";
-import { parseProfileCustomisation, displayNameStyle, usernameStyle } from "@/lib/profileCustomisation";
+import { PrivateMediaGrid } from "@/components/post/private-media-grid";
+import { BadgeCollection } from "@/components/BadgeCollection";
+import { StyledDisplayName, StyledUsername } from "@/components/profile/styled-name";
 
 type Profile = {
   id: string;
@@ -47,11 +49,13 @@ export default function ProfileClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"posts" | "replies" | "media" | "likes">("posts");
+  const [mediaFilter, setMediaFilter] = useState<"all" | "photos" | "gifs" | "videos">("all");
   const [posts, setPosts] = useState<Post[]>([]);
   const [replies, setReplies] = useState<Post[]>([]);
   const [likes, setLikes] = useState<Post[]>([]);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followStatus, setFollowStatus] = useState<"none" | "pending" | "accepted">("none");
   const [followBusy, setFollowBusy] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
@@ -172,7 +176,7 @@ export default function ProfileClient() {
         if (res.status === 429) return { ok: false, terminalError: "This profile is temporarily rate-limited. Please wait a moment and try again." };
         if (res.status === 403) {
           try { console.info("[profile-diag] api_response", { requestedUsername: username, status: 403, hasBearer: Boolean(accessToken) }); } catch {}
-          return { ok: false, terminalError: "This profile is private." };
+          return { ok: false, terminalError: "private" };
         }
         if (res.status === 404) {
           try { console.info("[profile-diag] api_response", { requestedUsername: username, status: 404, hasBearer: Boolean(accessToken) }); } catch {}
@@ -246,9 +250,10 @@ export default function ProfileClient() {
         setCounts({ followers: followers ?? 0, following: following ?? 0 });
 
         if (user && user.id !== prof.id) {
-          const { data: existing } = await supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("following_id", prof.id).maybeSingle();
+          const { data: existing } = await supabase.from("follows").select("follower_id,status").eq("follower_id", user.id).eq("following_id", prof.id).maybeSingle();
           if (controller.signal.aborted) return { ok: false };
           setIsFollowing(!!existing);
+          setFollowStatus(existing?.status === "accepted" ? "accepted" : existing ? "pending" : "none");
           const { data: blk } = await (supabase as any).from("blocks").select("blocker_id").eq("blocker_id", user.id).eq("blocked_id", prof.id).maybeSingle();
           if (controller.signal.aborted) return { ok: false };
           setIsBlocked(!!blk);
@@ -368,15 +373,17 @@ export default function ProfileClient() {
     setFollowError("");
     try {
     if (isFollowing) {
-      const { error } = await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id);
-      if (error) { setFollowError(error.message); return; }
-      setIsFollowing(false);
-      setCounts((c) => ({ ...c, followers: Math.max(0, c.followers - 1) }));
-    } else {
-      const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
-      if (error) { setFollowError(error.message); return; }
-      setIsFollowing(true);
-      setCounts((c) => ({ ...c, followers: c.followers + 1 }));
+        const { error } = await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", profile.id);
+        if (error) { setFollowError(error.message); return; }
+        setIsFollowing(false);
+        setFollowStatus("none");
+        setCounts((c) => ({ ...c, followers: Math.max(0, c.followers - 1) }));
+      } else {
+        const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: profile.id });
+        if (error) { setFollowError(error.message); return; }
+        setIsFollowing(true);
+        setFollowStatus("accepted");
+        setCounts((c) => ({ ...c, followers: c.followers + 1 }));
       try {
         const prof = profile as any;
         const isPrivate = !!prof.is_private;
@@ -419,11 +426,28 @@ export default function ProfileClient() {
     return (
       <Shell>
         <PageHeader title="Profile" />
-        <div className="p-8 text-center text-sm text-af-muted">Loading profile…</div>
+        <div aria-label="Loading profile" className="animate-pulse">
+          <div className="h-40 w-full bg-af-surface-2 sm:h-52" />
+          <div className="px-4 pb-6 pt-12 sm:px-5 sm:pt-14">
+            <div className="h-7 w-2/5 rounded bg-af-surface-2" />
+            <div className="mt-2 h-3.5 w-1/4 rounded bg-af-surface-2" />
+            <div className="mt-4 space-y-2">
+              <div className="h-3 w-full rounded bg-af-surface-2" />
+              <div className="h-3 w-4/5 rounded bg-af-surface-2" />
+            </div>
+            <div className="mt-5 flex gap-4">
+              <div className="h-3 w-20 rounded bg-af-surface-2" />
+              <div className="h-3 w-20 rounded bg-af-surface-2" />
+            </div>
+          </div>
+        </div>
       </Shell>
     );
   }
 
+  if (error === "private") {
+    return <Shell><PageHeader title="Profile" /><EmptyState title="Private profile" body="This account is private. Follow them to request access to their posts." action={{ label: "Find creators", href: "/explore" }} /></Shell>;
+  }
   if (error) {
     return <Shell><PageHeader title="Profile" /><div role="alert" className="m-4 rounded-lg border border-af-danger/40 bg-af-danger/10 p-4 text-sm text-af-danger">Could not load this profile: {error}</div></Shell>;
   }
@@ -489,21 +513,29 @@ export default function ProfileClient() {
     setEditSubmitting(false);
   }
   const mediaItems = posts.flatMap((p) => (p.media_urls ?? []).map((u) => ({ url: u, post: p })));
+  const filteredMediaItems = mediaItems.filter((item) => {
+    const lower = item.url.toLowerCase();
+    const isGif = lower.endsWith(".gif");
+    const isVideo = /\.(mp4|webm|mov)$/i.test(lower);
+    if (mediaFilter === "photos") return !isGif && !isVideo;
+    if (mediaFilter === "gifs") return isGif;
+    if (mediaFilter === "videos") return isVideo;
+    return true;
+  });
   const isOwn = user?.id === profile.id;
-  const customisation = parseProfileCustomisation(profile.profile_customisation);
-  const dnStyle = displayNameStyle(customisation);
-  const unStyle = usernameStyle(customisation);
+  const followLabel = followStatus === "accepted" ? "Following" : followStatus === "pending" ? "Requested" : profile.is_private ? "Request follow" : "Follow";
+  const profileForNames = { display_name: profile.display_name, username: profile.username, profile_customisation: profile.profile_customisation };
   return (
     <Shell>
       <div className="relative">
         {profile.banner_url ? (
-          <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-40 w-full object-cover sm:h-56" />
+          <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-40 w-full object-cover sm:h-52" />
         ) : (
-          <div aria-hidden="true" className="h-40 w-full border-b border-af-border bg-gradient-to-br from-af-surface to-af-surface-2 sm:h-56" />
+          <div aria-hidden="true" className="h-40 w-full border-b border-af-border bg-gradient-to-br from-af-surface via-af-surface-2 to-af-surface sm:h-52" />
         )}
-        <div className="absolute -bottom-12 left-5 sm:-bottom-14 sm:left-6">
+        <div className="absolute -bottom-10 left-4 sm:-bottom-12 sm:left-5">
           {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt={`${profile.display_name || profile.username}'s avatar`} className="h-24 w-24 rounded-full border-4 border-af-bg object-cover shadow-xl sm:h-28 sm:w-28" />
+            <img src={profile.avatar_url} alt={`${profile.display_name || profile.username}'s avatar`} className="h-24 w-24 rounded-full border-4 border-af-bg bg-af-surface object-cover shadow-xl sm:h-28 sm:w-28" />
           ) : (
             <div aria-hidden="true" className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-af-bg bg-af-surface-raised text-2xl font-bold text-af-brand-soft shadow-xl sm:h-28 sm:w-28">
               {(profile.display_name || profile.username).slice(0, 1).toUpperCase()}
@@ -511,59 +543,62 @@ export default function ProfileClient() {
           )}
         </div>
       </div>
-      <div className="px-5 pb-6 pt-16 sm:px-6 sm:pt-20">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="px-4 pb-5 pt-12 sm:px-5 sm:pt-14">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className={`break-words text-2xl font-bold tracking-tight ${dnStyle.className}`} style={dnStyle.style}>{profile.display_name || profile.username}</h1>
-            <p className={`text-sm text-af-muted ${unStyle.className}`} style={unStyle.style}>@{profile.username}</p>
+            <StyledDisplayName profile={profileForNames} size="lg" />
+            <div className="mt-0.5"><StyledUsername profile={profileForNames} /></div>
             <BadgeList userId={profile.id} className="mt-2" />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {isOwn ? (
-              <Link href="/edit-profile" className="af-action-secondary">
-                Edit profile
-              </Link>
+              <Link href="/edit-profile" className="af-action-secondary">Edit profile</Link>
             ) : (
               <button
                 onClick={toggleFollow}
                 aria-pressed={isFollowing}
-                aria-label={`${isFollowing ? "Unfollow" : "Follow"} ${profile.display_name || profile.username}`}
+                aria-label={`${isFollowing ? "Unfollow" : followLabel} ${profile.display_name || profile.username}`}
                 disabled={followBusy}
-                className={`min-h-10 rounded-full px-5 text-sm font-semibold transition-colors disabled:opacity-50 ${isFollowing ? "border border-af-border-strong text-af-text hover:bg-af-surface-2" : "bg-af-brand text-white hover:bg-af-brand-hover"}`}
+                className={`min-h-9 rounded-full px-4 text-sm font-bold transition-colors disabled:opacity-50 ${isFollowing ? "border border-af-border-strong text-af-text hover:bg-af-surface-2" : "bg-af-text text-af-bg hover:opacity-90"}`}
               >
-                {followBusy ? "..." : isFollowing ? "Following" : "Follow"}
+                {followBusy ? "…" : followLabel}
               </button>
             )}
-               {user && !isOwn && (
-                 <>
-                   <button type="button" onClick={() => setReportUserOpen(true)} className="min-h-10 rounded-full border border-af-border px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">Report</button>
-                   {!isBlocked ? (
-                     <button type="button" onClick={doBlock} disabled={blockBusy} className="min-h-10 rounded-full border border-af-border px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">{blockBusy ? "Blocking…" : "Block"}</button>
-                   ) : (
-                     <button type="button" onClick={doUnblock} disabled={blockBusy} className="min-h-10 rounded-full border border-af-border px-4 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">{blockBusy ? "Unblocking…" : "Unblock"}</button>
-                   )}
-                 </>
-               )}
+            {user && !isOwn && (
+              <>
+                <button type="button" onClick={() => setReportUserOpen(true)} aria-label="Report this account" className="af-post-action" title="Report">
+                  <span aria-hidden="true" className="h-[18px] w-[18px] bg-current" style={{ maskImage: "url(/icons/afterfur/flag.svg)", WebkitMaskImage: "url(/icons/afterfur/flag.svg)", maskPosition: "center", WebkitMaskPosition: "center", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskSize: "contain", WebkitMaskSize: "contain" }} />
+                </button>
+                {!isBlocked ? (
+                  <button type="button" onClick={doBlock} disabled={blockBusy} aria-label="Block this account" title="Block" className="af-post-action">
+                    <span aria-hidden="true" className="h-[18px] w-[18px] bg-current" style={{ maskImage: "url(/icons/afterfur/ban.svg)", WebkitMaskImage: "url(/icons/afterfur/ban.svg)", maskPosition: "center", WebkitMaskPosition: "center", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskSize: "contain", WebkitMaskSize: "contain" }} />
+                  </button>
+                ) : (
+                  <button type="button" onClick={doUnblock} disabled={blockBusy} className="min-h-9 rounded-full border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">{blockBusy ? "Unblocking…" : "Unblock"}</button>
+                )}
+              </>
+            )}
           </div>
         </div>
         {followError && <p role="alert" className="mt-3 text-sm text-af-danger">Follow update failed: {followError}</p>}
         {profile.bio && (
-          <div className="mt-4 max-w-prose">
+          <div className="mt-3 max-w-prose">
             <PostText content={profile.bio} />
           </div>
         )}
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-af-muted">
-          {profile.website && <a href={profile.website} className="text-af-accent hover:underline">{profile.website.replace(/^https?:\/\//, "")}</a>}
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-af-muted">
+          {profile.website && <a href={profile.website} className="text-af-brand-soft hover:underline">{profile.website.replace(/^https?:\/\//, "")}</a>}
           {profile.location && <span>{profile.location}</span>}
-          {profile.created_at ? <span>Joined {new Date(profile.created_at).toLocaleDateString()}</span> : null}
+          {profile.created_at ? <span>Joined {new Date(profile.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span> : null}
         </div>
-        <div className="mt-5 flex flex-wrap gap-6 text-sm">
-          <button type="button" onClick={() => openList('followers')} className="text-left hover:underline"><strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span></button>
-          <button type="button" onClick={() => openList('following')} className="text-left hover:underline"><strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span></button>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <button type="button" onClick={() => openList("following")} className="hover:underline"><strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span></button>
+          <button type="button" onClick={() => openList("followers")} className="hover:underline"><strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span></button>
+          <BadgeCollection userId={profile.id} username={profile.username} />
         </div>
       </div>
 
-      <div role="tablist" aria-label="Profile posts" className="flex border-b border-af-border px-2 sm:px-4">
+      <div role="tablist" aria-label="Profile posts" className="sticky top-14 z-20 flex border-b border-af-border bg-af-bg/95 px-2 backdrop-blur-md md:top-0 sm:px-4">
         {(isOwn ? ["posts", "replies", "media", "likes"] as const : ["posts", "replies", "media"] as const).map((t) => (
           <button
             key={t}
@@ -571,31 +606,39 @@ export default function ProfileClient() {
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`relative min-h-12 flex-1 px-1 text-xs font-semibold capitalize transition-colors hover:text-af-text sm:text-sm ${tab === t ? "text-af-text" : "text-af-muted"}`}
+            className={`af-feed-tab min-h-12 flex-1 px-1 text-xs capitalize sm:text-sm ${tab === t ? "" : "text-af-muted"}`}
           >
             {t}
-            {tab === t && <div className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-af-brand" />}
           </button>
         ))}
       </div>
 
       {tab === "media" ? (
-        mediaItems.length === 0 ? (
-          <EmptyState title="No media yet" body="Media this user posts will appear here." />
+        filteredMediaItems.length === 0 ? (
+          <EmptyState title="No media yet" body="Photos, GIFs and videos this user posts will appear here." />
         ) : (
-          <div className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-3">
-            {mediaItems.map((item, index) => (
-              <Link key={item.url + index} href={`/${encodeURIComponent(profile.username)}/status/${encodeURIComponent(item.post.id)}`} aria-label={`Open media post by ${profile.display_name || profile.username}`} className="aspect-square overflow-hidden rounded-md bg-af-surface-2">
-                {/\.(mp4|webm|mov)$/i.test(item.url) ? (
-                  <div className="relative h-full w-full">
-                    <video src={item.url} aria-label="Video thumbnail" className="h-full w-full object-contain" />
-                    <span className="absolute inset-0 flex items-center justify-center text-3xl text-white drop-shadow-lg">▶</span>
-                  </div>
-                ) : (
-                  <img src={item.url} alt="Profile media" loading="lazy" className="h-full w-full object-contain" />
-                )}
-              </Link>
-            ))}
+          <div className="p-2 sm:p-3">
+            <div className="mb-3 flex flex-wrap gap-2 text-[13px]">
+              {(["all", "photos", "gifs", "videos"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setMediaFilter(f)}
+                  className={`min-h-8 rounded-full px-3 font-medium capitalize transition-colors ${
+                    mediaFilter === f ? "bg-af-brand text-white" : "bg-af-surface-2 text-af-text-2 hover:bg-af-surface-raised hover:text-af-text"
+                  }`}
+                  aria-pressed={mediaFilter === f}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <PrivateMediaGrid
+              items={filteredMediaItems.map((it) => ({ url: it.url, postId: it.post.id }))}
+              username={profile.username}
+              gridClassName="grid grid-cols-2 gap-1 sm:grid-cols-3"
+              itemClassName="aspect-square overflow-hidden rounded-lg bg-af-surface-2"
+            />
           </div>
         )
       ) : tab === "replies" ? (
@@ -610,16 +653,18 @@ export default function ProfileClient() {
       {listType && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="profile-list-title" onClick={() => setListType(null)}>
           <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-xl border border-af-border bg-af-surface p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-af-border pb-3">
               <h2 id="profile-list-title" className="text-base font-semibold capitalize text-af-text">{listType}</h2>
-              <button type="button" onClick={() => setListType(null)} className="min-h-10 rounded-md px-3 text-sm text-af-muted hover:bg-af-surface-2 hover:text-af-text">Close</button>
+              <button type="button" onClick={() => setListType(null)} aria-label="Close list" className="flex h-9 w-9 items-center justify-center rounded-full text-af-muted hover:bg-af-surface-2 hover:text-af-text">
+                <span aria-hidden="true" className="text-xl leading-none">×</span>
+              </button>
             </div>
             {listLoading ? <p className="mt-4 text-sm text-af-muted">Loading…</p> : listError ? <p className="mt-4 text-sm text-af-danger">{listError}</p> : listProfiles.length === 0 ? <p className="mt-4 text-sm text-af-muted">No accounts found.</p> : (
-              <div className="mt-4 space-y-3">
+              <div className="mt-2">
                 {listProfiles.map((p) => (
-                  <div key={p.id} className="flex items-center gap-3">
-                    <Link href={`/${p.username}`} className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2">
-                      {p.avatar_url ? <img src={p.avatar_url} alt="" className="h-full w-full object-cover" /> : null}
+                  <div key={p.id} className="flex items-center gap-3 border-b border-af-border/60 py-3 last:border-0">
+                    <Link href={`/${p.username}`} className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">
+                      {p.avatar_url ? <img src={p.avatar_url} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-af-brand-soft">{(p.display_name || p.username).slice(0, 1).toUpperCase()}</span>}
                     </Link>
                     <div className="min-w-0 flex-1">
                       <Link href={`/${p.username}`} className="block truncate text-sm font-bold hover:underline">{p.display_name || p.username}</Link>

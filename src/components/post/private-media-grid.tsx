@@ -11,7 +11,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { isStoragePath } from "@/lib/media";
+import { classifyMediaUrl } from "@/lib/media";
 import { useResolvedMediaUrls } from "@/lib/media-url-state";
 
 type MediaItem = {
@@ -29,10 +29,7 @@ type PrivateMediaGridProps = {
 };
 
 function classify(url: string): "image" | "video" | "gif" {
-  const lower = url.toLowerCase();
-  if (lower.endsWith(".gif")) return "gif";
-  if (/\.(mp4|webm|mov)$/i.test(lower)) return "video";
-  return "image";
+  return classifyMediaUrl(url);
 }
 
 export function PrivateMediaGrid({
@@ -74,11 +71,15 @@ export function PrivateMediaGrid({
           >
             {kind === "video" ? (
               <div className="relative h-full w-full">
-                <video src={resolved} aria-label="Video thumbnail" className="h-full w-full object-contain" />
-                <span className="absolute inset-0 flex items-center justify-center text-4xl text-white drop-shadow-lg">▶</span>
+                <video src={resolved} aria-label="Video thumbnail" muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/65 text-white ring-1 ring-white/20">
+                    <svg viewBox="0 0 24 24" className="ml-0.5 h-4 w-4" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.29-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14Z" /></svg>
+                  </span>
+                </span>
               </div>
             ) : (
-              <img src={resolved} alt="Profile media" loading="lazy" className="h-full w-full object-contain" />
+              <img src={resolved} alt="Profile media" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.03]" />
             )}
           </Link>
         );

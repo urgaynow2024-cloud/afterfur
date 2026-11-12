@@ -205,8 +205,8 @@ export default function Explore() {
                 <EmptyState title="Nothing to explore yet" body="New public posts will appear here." />
               </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-af-border bg-af-surface/40 sm:mx-6">
-                <div className="divide-y divide-af-border">
+              <div className="border-y border-af-border bg-af-surface/30">
+                <div>
                   {posts.map((post) => (
                     <PostCard key={post.id} post={post} onEdit={user?.id === post.author_id ? startEdit : undefined} onDelete={user?.id === post.author_id ? deletePost : undefined} />
                   ))}

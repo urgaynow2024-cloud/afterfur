@@ -25,7 +25,7 @@ export function StyledDisplayName({ profile, reducedMotion = false, className, s
   const rm = reducedMotion || motion;
   const customisation = parseProfileCustomisation(profile.profile_customisation);
   const { className: fxClass, style } = displayNameStyle(customisation, rm);
-  const textSize = size === "sm" ? "text-sm" : size === "lg" ? "text-xl font-semibold tracking-tight" : "text-lg font-semibold tracking-tight";
+  const textSize = size === "sm" ? "text-sm" : size === "lg" ? "text-2xl font-semibold tracking-tight" : "text-lg font-semibold tracking-tight";
   return (
     <span className={`break-words ${textSize} text-af-text ${fxClass} ${className ?? ""}`} style={style}>
       {profile.display_name || profile.username}

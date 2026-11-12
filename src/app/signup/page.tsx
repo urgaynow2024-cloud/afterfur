@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { captureSessionToAccount, emitAccountSwitched } from "@/lib/accountSessions";
 
 type SignUpState = "idle" | "submitting" | "confirm-email" | "success" | "error";
 type UsernameLookup = { data: { id: string } | null; error: { message: string } | null };
@@ -139,6 +140,15 @@ export default function SignUp() {
       }
 
       if (userId && session) {
+        // Persist the new session under the active account's isolated storage
+        // key so a reload/next navigation does not fall back to a client with no
+        // session. Sign-up may have happened on the legacy/default client.
+        try {
+          const captured = await captureSessionToAccount(supabase);
+          if (!("error" in captured)) emitAccountSwitched(captured.userId);
+        } catch (captureErr) {
+          console.info("signup:captureSession", captureErr);
+        }
         try {
             const { error: profileError } = await withTimeout(
               Promise.resolve(supabase.from("profiles").insert({ id: userId, username: usernameClean, display_name: displayName.trim(), terms_accepted_version: "0.4", terms_accepted_at: new Date().toISOString() })) as PromiseLike<ProfileInsertResponse>,

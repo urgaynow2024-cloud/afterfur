@@ -83,7 +83,7 @@ function SpoilerText({ value }: { value: string }) {
 export default function PostText({ content, className }: { content: string; className?: string }) {
   const segments = tokenize(content);
   return (
-    <span className={`whitespace-pre-wrap break-words text-[15px] leading-6 text-af-text-2 ${className ?? ""}`}>
+    <span className={`whitespace-pre-wrap break-words text-[15px] leading-6 text-af-text ${className ?? ""}`}>
       {segments.map((segment, index) => {
         if (segment.type === "text") {
           return <span key={index}>{segment.value}</span>;

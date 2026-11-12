@@ -68,7 +68,7 @@ export default function MoreMenu() {
         className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-[15px] font-medium text-af-text-2 transition-colors hover:bg-af-surface hover:text-af-text"
         aria-expanded={open}
       >
-        <span aria-hidden="true" className="h-5 w-5 shrink-0 bg-current opacity-75" />
+        <span aria-hidden="true" className="h-5 w-5 shrink-0 bg-current opacity-75" style={{ maskImage: "url(/icons/afterfur/more-horizontal.svg)", WebkitMaskImage: "url(/icons/afterfur/more-horizontal.svg)", maskPosition: "center", WebkitMaskPosition: "center", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskSize: "contain", WebkitMaskSize: "contain" }} />
         More
       </button>
       {open && (

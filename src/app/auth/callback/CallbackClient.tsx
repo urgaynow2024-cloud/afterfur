@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { captureSessionToAccount, emitAccountSwitched } from "@/lib/accountSessions";
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -39,6 +40,12 @@ export default function AuthCallback() {
           }
         } catch {
           // Ignore profile creation errors in callback - user can complete profile later
+        }
+        try {
+          const captured = await captureSessionToAccount(supabase);
+          if (!("error" in captured)) emitAccountSwitched(captured.userId);
+        } catch (captureErr) {
+          console.info("auth:callback_captureSession", captureErr);
         }
         router.push("/");
         return;
