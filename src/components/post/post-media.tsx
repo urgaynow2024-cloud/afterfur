@@ -83,7 +83,7 @@ export function PostMedia({ urls, nsfw = false, alt = "Post attachment" }: PostM
 
   if (loading && resolvedItems.length === 0) {
     return (
-      <div className="mt-3">
+      <div className="mt-2">
         {mediaUrls.length === 1 ? (
           <div
             className="w-full animate-pulse rounded-2xl border border-af-border bg-af-surface-2"
@@ -106,7 +106,7 @@ export function PostMedia({ urls, nsfw = false, alt = "Post attachment" }: PostM
 
   if (resolvedItems.length === 0) {
     return (
-      <div className="mt-3 flex min-h-32 items-center justify-center rounded-2xl border border-af-border bg-af-surface-2 px-4 text-sm text-af-muted">
+      <div className="mt-2 flex min-h-32 items-center justify-center rounded-2xl border border-af-border bg-af-surface-2 px-4 text-sm text-af-muted">
         {loading ? "Loading media…" : "Media unavailable"}
       </div>
     );
@@ -117,7 +117,7 @@ export function PostMedia({ urls, nsfw = false, alt = "Post attachment" }: PostM
     const isVideo = classifyMediaUrl(item.resolved) === "video";
 
     return (
-      <div className="relative mt-3">
+      <div className="relative mt-2">
         <div className="relative flex justify-center overflow-hidden rounded-2xl border border-af-border bg-af-surface-2">
           {isVideo ? (
             <div className="relative w-full">
@@ -191,7 +191,7 @@ export function PostMedia({ urls, nsfw = false, alt = "Post attachment" }: PostM
 
   return (
     <>
-      <div className="relative mt-3">
+      <div className="relative mt-2">
         <div className="grid grid-cols-2 gap-1 overflow-hidden rounded-2xl">
           {visible.map((item, index) => {
             const isVideo = isVideoUrl(item.resolved);

@@ -473,7 +473,7 @@ export default function Home() {
       }
     >
       <header className="sticky top-14 z-20 border-b border-af-border/80 bg-af-bg/90 backdrop-blur-md md:top-0">
-        <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3 sm:px-5">
+        <div className="flex items-center justify-between gap-3 px-3.5 pb-1 pt-2.5">
           <div className="min-w-0">
             <h1 className="truncate text-xl font-bold tracking-tight text-af-text">Home</h1>
             <p className="truncate text-xs text-af-muted">Your space for the AfterFur community</p>
@@ -499,7 +499,7 @@ export default function Home() {
       {spotlightActionError && <div role="alert" className="mx-4 mt-2 text-sm text-af-danger">Follow update failed: {spotlightActionError}</div>}
 
       {user && (
-        <div className="border-b border-af-border/80 px-4 py-3.5 sm:px-5">
+        <div className="border-b border-af-border/80 px-3.5 py-3">
           <div className="flex gap-3">
             {currentUserProfile?.avatar_url ? (
               <img src={currentUserProfile.avatar_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-af-border" />
@@ -575,7 +575,7 @@ export default function Home() {
       {isLoading ? (
         <div aria-label="Loading posts" className="divide-y divide-af-border/70">
           {[0, 1, 2, 3].map((n) => (
-            <div key={n} aria-hidden="true" className="flex animate-pulse gap-3 px-4 py-4 sm:px-5">
+            <div key={n} aria-hidden="true" className="flex animate-pulse gap-3 px-3.5 py-3">
               <div className="h-10 w-10 shrink-0 rounded-full bg-af-surface-2" />
               <div className="flex-1 space-y-2.5">
                 <div className="h-3 w-2/5 rounded bg-af-surface-2" />

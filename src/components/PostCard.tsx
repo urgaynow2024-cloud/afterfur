@@ -334,9 +334,9 @@ export default function PostCard({
 
   return (
     <>
-      <article className="relative border-b border-af-border px-4 py-3.5 transition-colors hover:bg-af-surface/40 sm:px-5">
+      <article className="relative border-b border-af-border/80 px-3.5 py-3 transition-colors hover:bg-af-surface/40">
         {repostedBy && (
-          <div className="mb-1.5 ml-[3.25rem] flex items-center gap-1.5 text-xs font-medium text-af-muted">
+          <div className="mb-1 ml-[3.25rem] flex items-center gap-1.5 text-[11px] font-medium text-af-muted">
             <ActionIcon name="repeat-2" className="h-3.5 w-3.5" />
             <span className="truncate">{repostedBy} reposted</span>
           </div>
@@ -359,12 +359,12 @@ export default function PostCard({
                   <span className={`max-w-full truncate font-bold text-af-text ${displayNameFxClass}`} style={displayNameStyle}>{displayName}</span>
                 )}
                 <BadgeList userId={post.author_id} />
-                <span className={`truncate text-af-muted ${usernameFxClass}`} style={usernameStyle}>@{username}</span>
-                <span aria-hidden="true" className="text-af-muted">·</span>
-                <time dateTime={post.created_at} title={fullTimestamp(post.created_at)} className="shrink-0 text-af-muted hover:underline">
+                <span className={`truncate text-[13px] text-af-muted ${usernameFxClass}`} style={usernameStyle}>@{username}</span>
+                <span aria-hidden="true" className="text-[13px] text-af-muted">·</span>
+                <time dateTime={post.created_at} title={fullTimestamp(post.created_at)} className="shrink-0 text-[13px] text-af-muted hover:underline">
                   <Link href={postHref} className="hover:text-af-text">{timeAgo(post.created_at)}</Link>
                 </time>
-                {post.edited_at && <span className="text-xs text-af-muted">(edited)</span>}
+                {post.edited_at && <span className="text-[11px] text-af-muted">(edited)</span>}
               </div>
               <PostOptionsMenu
                 post={post}
@@ -377,14 +377,14 @@ export default function PostCard({
             </div>
 
             {post.content?.trim() && (
-              <div className="mt-1">
+              <div className="mt-0.5">
                 <PostText content={post.content} />
               </div>
             )}
 
             <PostMedia urls={post.media_urls} nsfw={(post.classification ?? "SFW") === "NSFW"} alt={`${displayName}'s post attachment`} />
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-0.5 gap-y-1 pr-0.5 sm:flex-nowrap sm:justify-between sm:pr-2">
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-0.5 gap-y-0.5 pr-0.5 sm:flex-nowrap sm:justify-between sm:pr-1">
               <Link
                 href={postHref}
                 aria-label={`Reply to ${displayName}'s post${replyCount !== null ? `, ${replyCount} replies` : ""}`}
