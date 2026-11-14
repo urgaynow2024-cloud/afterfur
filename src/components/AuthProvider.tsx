@@ -86,19 +86,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     // A SIGNED_OUT/USER_DELETED event can arrive from a stale client, another
     // tab, or a refresh race. Only clear the local user after confirming that
-    // the bound client genuinely has no session left. Explicit sign-out removes
-    // the session first, so it still clears correctly.
+    // the bound client genuinely has no live session for the active account.
+    // Persisted storage snapshots are not used here: a legitimate remote/server
+    // sign-out or revoked refresh token must be able to clear local auth state
+    // even if a stale snapshot remains until refresh/revalidation clears it.
+    // Explicit local sign-out removes persisted session state first, so it still
+    // clears correctly.
     if (!nextUser && next === null && (opts?.event === "SIGNED_OUT" || opts?.event === "USER_DELETED")) {
       let hasSession = false;
+      const activeId = getActiveUserId();
       try {
         const checkClient = sourceClient ?? getActiveClient();
         if (checkClient) {
           const { data } = await checkClient.auth.getSession();
-          hasSession = Boolean(data.session);
+          hasSession = Boolean(data.session?.user?.id && (!activeId || data.session.user.id === activeId));
         }
       } catch {}
       if (hasSession) {
-        try { console.info("[auth-diag] applySession_ignored_stale_signout", { event: opts?.event ?? null }); } catch {}
+        try { console.info("[auth-diag] applySession_ignored_stale_signout", { event: opts?.event ?? null, activeId }); } catch {}
         return;
       }
     }
@@ -171,6 +176,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // legacy/default key while the active account uses an isolated per-user key.
     // Recover that session instead of showing a signed-out state.
     if (!initialSession && userIdHint) {
+      const stored = peekSessionForUser(userIdHint);
+      if (stored?.access_token && (!stored.user?.id || stored.user.id === userIdHint)) {
+        try { console.info("[auth-diag] bindClient_stored_session_recovered_early", { userId: userIdHint }); } catch {}
+        initialSession = stored;
+      }
+    }
+    if (!initialSession && userIdHint) {
       const legacy = getLegacyClient();
       if (legacy && legacy !== client) {
         const { data: legacyData } = await legacy.auth.getSession().catch(() => ({ data: { session: null } as { session: Session | null } }));
@@ -181,10 +193,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (targetData.session) {
             initialSession = targetData.session;
           } else {
-            // The isolated client could not persist the session; keep using the
-            // client that actually holds it so the UI and queries stay signed in.
-            effectiveClient = legacy;
-            initialSession = legacyData.session;
+            // Prefer keeping the per-account client bound. If the copy could not be
+            // persisted, fall back to the stored session snapshot so refresh/network
+            // races do not present a false signed-out state.
+            initialSession = peekSessionForUser(userIdHint) ?? legacyData.session;
           }
         }
       }

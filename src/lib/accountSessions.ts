@@ -273,10 +273,12 @@ export function pauseInactiveClientRefresh(activeUserId?: string | null) {
     if (activeKey && key === activeKey) setAutoRefresh(client, key, true);
     else setAutoRefresh(client, key, false);
   });
-  // Also pause/unpause the legacy client: it must never auto-refresh while any
-  // account is active, since it could share a refresh token with a per-account client.
+  // The legacy/default client must never auto-refresh: it may share a refresh token
+  // with a per-account client (session recovery copies tokens), and concurrent
+  // refreshes rotate single-use tokens causing "Invalid Refresh Token: Already Used".
+  // Session recovery is handled explicitly by AuthProvider/account session helpers.
   if (legacyClient) {
-    setAutoRefresh(legacyClient, "legacy", Boolean(activeUserId));
+    setAutoRefresh(legacyClient, "legacy", false);
   }
 }
 
@@ -297,8 +299,10 @@ function getLegacyDefaultClient(): SupabaseClient<Database> | null {
     // client (which happens after ensureActiveSession copies a session), both clients
     // would independently rotate the same single-use refresh token, causing
     // "Invalid Refresh Token: Already Used" errors on the other account.
+    // detectSessionInUrl is disabled so callback/URL token handling cannot mutate or
+    // compete with the active per-account session client.
     legacyClient = createSupabaseClient<Database>(url, key, {
-      auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: true },
+      auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
     });
   }
   return legacyClient;
