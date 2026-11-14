@@ -43,7 +43,7 @@ function makeMockClient(storageKey: string, opts?: {
           const errMsg = opts?.refreshError || "expired";
           return { data: { session: null }, error: { message: errMsg } };
         }
-        if (session) session = { ...session, access_token: session.access_token + ".refreshed" };
+        if (session) session = { ...session, access_token: session.access_token + ".refreshed", refresh_token: session.refresh_token + ".rotated" };
         return { data: { session }, error: session ? null : { message: "no session" } };
       }),
       setSession: vi.fn(async (tokens: { access_token: string; refresh_token: string }) => {
@@ -294,5 +294,135 @@ describe("Session lifecycle regression tests", () => {
     // This tests the ProfileClient component behavior
     // Placeholder for now - would need React Testing Library integration
     expect(true).toBe(true);
+  });
+
+  it("cross-account refreshes are serialized by global lock (no concurrent token rotation)", async () => {
+    const mod = await import("./accountSessions");
+    const keyA = mod.storageKeyForUser("uA");
+    const keyB = mod.storageKeyForUser("uB");
+
+    let refreshACalled = false;
+    let refreshBCalled = false;
+    let refreshOverlap = false;
+    let refreshAInFlight = false;
+    let refreshBInFlight = false;
+
+    const clientA = makeMockClient(keyA, {
+      session: { access_token: "at.A.expired", refresh_token: "rt.SHARED", user: { id: "uA", email: "a@example.com" } },
+      userOk: false,
+      refreshOk: true,
+    });
+    const originalRefreshA = clientA.auth.refreshSession;
+    clientA.auth.refreshSession = vi.fn(async () => {
+      refreshACalled = true;
+      refreshAInFlight = true;
+      if (refreshBInFlight) refreshOverlap = true;
+      await new Promise(r => setTimeout(r, 20)); // simulate network delay
+      refreshAInFlight = false;
+      return originalRefreshA();
+    });
+
+    const clientB = makeMockClient(keyB, {
+      session: { access_token: "at.B.expired", refresh_token: "rt.SHARED", user: { id: "uB", email: "b@example.com" } },
+      userOk: false,
+      refreshOk: true,
+    });
+    const originalRefreshB = clientB.auth.refreshSession;
+    clientB.auth.refreshSession = vi.fn(async () => {
+      refreshBCalled = true;
+      refreshBInFlight = true;
+      if (refreshAInFlight) refreshOverlap = true;
+      await new Promise(r => setTimeout(r, 20)); // simulate network delay
+      refreshBInFlight = false;
+      return originalRefreshB();
+    });
+
+    clients.set(keyA, clientA);
+    clients.set(keyB, clientB);
+    mod.upsertSavedAccount({ userId: "uA", email: "a@example.com" });
+    mod.upsertSavedAccount({ userId: "uB", email: "b@example.com" });
+
+    // Both accounts share the same refresh token (rt.SHARED) - simulates
+    // a session copied from legacy client to per-account storage.
+    // Concurrent restores must NOT overlap refreshes.
+    const [rA, rB] = await Promise.all([
+      mod.restoreAccountSession("uA"),
+      mod.restoreAccountSession("uB"),
+    ]);
+
+    expect(rA.ok).toBe(true);
+    expect(rB.ok).toBe(true);
+    expect(refreshACalled).toBe(true);
+    expect(refreshBCalled).toBe(true);
+    expect(refreshOverlap).toBe(false); // Global lock prevented concurrent refresh
+  });
+
+  it("already used refresh token invalidates only the affected account", async () => {
+    const mod = await import("./accountSessions");
+    const keyA = mod.storageKeyForUser("uA");
+    const keyB = mod.storageKeyForUser("uB");
+
+    const clientA = makeMockClient(keyA, {
+      session: { access_token: "at.A.expired", refresh_token: "rt.A", user: { id: "uA", email: "a@example.com" } },
+      userOk: false,
+      refreshOk: false,
+      refreshError: "Invalid Refresh Token: Already Used",
+    });
+    const clientB = makeMockClient(keyB, {
+      session: { access_token: "at.B", refresh_token: "rt.B", user: { id: "uB", email: "b@example.com" } },
+    });
+
+    clients.set(keyA, clientA);
+    clients.set(keyB, clientB);
+    mod.upsertSavedAccount({ userId: "uA", email: "a@example.com" });
+    mod.upsertSavedAccount({ userId: "uB", email: "b@example.com" });
+
+    // Account A's refresh token is already used - should be marked invalid
+    const rA = await mod.restoreAccountSession("uA");
+    expect(rA.ok).toBe(false);
+    if (!rA.ok) expect(rA.reason).toBe("invalid_refresh_token");
+
+    // Account B should still be restorable - its token is independent
+    const rB = await mod.restoreAccountSession("uB");
+    expect(rB.ok).toBe(true);
+    expect(mod.getActiveUserId()).toBe("uB");
+
+    // Retrying A should not attempt refresh again (already marked invalid)
+    const rA2 = await mod.restoreAccountSession("uA");
+    expect(rA2.ok).toBe(false);
+    if (!rA2.ok) expect(rA2.reason).toBe("invalid_refresh_token");
+  });
+
+  it("stale refresh response (no token rotation) is detected and rejected", async () => {
+    const mod = await import("./accountSessions");
+    const key = mod.storageKeyForUser("uA");
+
+    const client = makeMockClient(key, {
+      session: { access_token: "at.A.expired", refresh_token: "rt.A", user: { id: "uA", email: "a@example.com" } },
+      userOk: false,
+      refreshOk: true,
+    });
+    // Wrap refreshSession: first call rotates normally, second call returns same token (stale)
+    const originalRefresh = client.auth.refreshSession;
+    let refreshCount = 0;
+    client.auth.refreshSession = vi.fn(async () => {
+      refreshCount++;
+      if (refreshCount === 1) {
+        return originalRefresh();
+      }
+      // Stale: return the SAME refresh_token as the current session (no rotation)
+      return { data: { session: { access_token: "at.A.new", refresh_token: "rt.A.rotated", user: { id: "uA" } } }, error: null };
+    });
+    clients.set(key, client);
+    mod.upsertSavedAccount({ userId: "uA", email: "a@example.com" });
+
+    // First refresh succeeds (token rotates from rt.A → rt.A.rotated)
+    const r1 = await mod.restoreAccountSession("uA");
+    expect(r1.ok).toBe(true);
+
+    // Second refresh returns same token (rt.A.rotated) → stale, rejected
+    const r2 = await mod.restoreAccountSession("uA");
+    expect(r2.ok).toBe(false);
+    if (!r2.ok) expect(r2.reason).toBe("expired");
   });
 });

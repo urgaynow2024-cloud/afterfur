@@ -3,14 +3,16 @@ import { useEffect, useState } from "react";
 import { Shell, PageHeader, EmptyState } from "@/components/Shell";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
+import { callRpc } from "@/lib/rpc";
 import PostCard from "@/components/PostCard";
 import Link from "next/link";
 import { BadgeList } from "@/components/BadgeList";
 import { BadgeCollection } from "@/components/BadgeCollection";
 import { PrivateMediaGrid } from "@/components/post/private-media-grid";
 import { StyledDisplayName, StyledUsername } from "@/components/profile/styled-name";
+import { LinkChip } from "@/components/profile/profile-links";
 
-type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; created_at: string; profile_customisation?: Record<string, unknown> | null };
+type Profile = { id: string; username: string; display_name: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; website: string | null; location: string | null; pronouns: string | null; created_at: string; profile_customisation?: Record<string, unknown> | null; profile_links?: Array<{ id: string; url: string; label: string | null; display_order: number }> | null };
 type Post = { id: string; content: string; created_at: string; author_id: string; media_urls?: string[] | null; profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null };
 type ProfileSummary = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 type RepostRow = { post_id: string };
@@ -42,6 +44,14 @@ export default function Profile() {
         profileData = np;
       }
       setProfile(profileData as Profile);
+      // Fetch the owner's saved external links and attach them to the profile.
+      try {
+        const { data: linksData, error: linksError } = await callRpc(supabase, "get_my_profile_links", undefined);
+        if (!linksError && linksData) {
+          const arr = Array.isArray(linksData) ? linksData : [];
+          setProfile({ ...(profileData as Profile), profile_links: arr as Profile["profile_links"] } as Profile);
+        }
+      } catch {}
       const mapped = ((ps ?? []) as Post[]).map((p) => ({ ...p, profiles: profileData as Profile }));
       setPosts(mapped as Post[]);
 
@@ -74,7 +84,7 @@ export default function Profile() {
 
   if (!user) {
     return (
-      <Shell>
+      <Shell compact={true}>
         <PageHeader title="Profile" />
         <EmptyState title="Sign in to view your profile" body="Create an account or sign in to manage your profile." action={{ label: "Sign in", href: "/signin" }} />
       </Shell>
@@ -82,7 +92,7 @@ export default function Profile() {
   }
 
   return (
-    <Shell>
+    <Shell compact={true}>
       <PageHeader title="Profile" />
       {loading ? (
         <div aria-label="Loading your profile" className="animate-pulse">
@@ -120,8 +130,9 @@ export default function Profile() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <StyledDisplayName profile={{ display_name: profile.display_name, username: profile.username, profile_customisation: profile.profile_customisation }} size="lg" />
-                <div className="mt-0.5"><StyledUsername profile={{ display_name: profile.display_name, username: profile.username, profile_customisation: profile.profile_customisation }} /></div>
-                <BadgeList userId={profile.id} className="mt-2" />
+<div className="mt-0.5"><StyledUsername profile={{ display_name: profile.display_name, username: profile.username, profile_customisation: profile.profile_customisation }} /></div>
+            {profile.pronouns && <span className="ml-1 text-xs text-af-text-2">{profile.pronouns}</span>}
+            <BadgeList userId={profile.id} className="mt-2" />
               </div>
               <Link href="/edit-profile" className="af-action-secondary shrink-0">Edit profile</Link>
             </div>
@@ -132,6 +143,16 @@ export default function Profile() {
                 <a href={profile.website} className="text-af-brand-soft hover:underline">
                   {profile.website.replace(/^https?:\/\//, "")}
                 </a>
+              )}
+              {profile.profile_links && profile.profile_links.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {profile.profile_links
+                    .slice()
+                    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+                    .map((link) => (
+                      <LinkChip key={link.id} link={link} />
+                    ))}
+                </div>
               )}
               <span>Joined {new Date(profile.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
             </div>

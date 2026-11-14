@@ -71,7 +71,7 @@ function NsfwPageInner() {
 
   if (loading) {
     return (
-      <Shell>
+      <Shell compact={true}>
         <PageHeader title="NSFW" />
         <div className="p-8 text-center text-sm text-af-muted">Loading…</div>
       </Shell>
@@ -80,7 +80,7 @@ function NsfwPageInner() {
 
   if (error) {
     return (
-      <Shell>
+      <Shell compact={true}>
         <PageHeader title="NSFW" />
         <div className="p-8 text-center text-sm text-af-danger">{error}</div>
       </Shell>
@@ -89,7 +89,7 @@ function NsfwPageInner() {
 
   if (!user) {
     return (
-      <Shell>
+      <Shell compact={true}>
         <PageHeader title="NSFW" />
         <EmptyState title="Sign in required" body="You must be signed in to view NSFW content." action={{ label: "Sign in", href: "/signin" }} />
       </Shell>
@@ -114,7 +114,7 @@ function NsfwPageInner() {
 
 export default function NsfwPage() {
   return (
-    <Suspense fallback={<Shell><PageHeader title="NSFW" /><div className="p-8 text-center text-sm text-af-muted">Loading…</div></Shell>}>
+    <Suspense fallback={<Shell compact={true}><PageHeader title="NSFW" /><div className="p-8 text-center text-sm text-af-muted">Loading…</div></Shell>}>
       <NsfwPageInner />
     </Suspense>
   );

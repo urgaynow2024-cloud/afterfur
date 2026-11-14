@@ -1,37 +1,14 @@
 import { createClient } from "@/lib/supabase/client";
+import {
+  REPORT_DESCRIPTION_MAX,
+  isValidReportReason,
+  isValidTargetType,
+  type ReportReason,
+  type ReportTargetType,
+} from "@/lib/reportMeta";
 
-export type ReportTargetType = "post" | "reply" | "user";
-
-export type ReportReason =
-  | "harassment"
-  | "hate_speech"
-  | "threats_violence"
-  | "sexual_content"
-  | "illegal_exploitation"
-  | "spam_scam_impersonation"
-  | "copyright"
-  | "privacy_doxxing"
-  | "other";
-
-export const REPORT_TARGET_TYPES: { value: ReportTargetType; label: string }[] = [
-  { value: "post", label: "Post" },
-  { value: "reply", label: "Reply" },
-  { value: "user", label: "Account" },
-];
-
-export const REPORT_REASONS: { value: ReportReason; label: string }[] = [
-  { value: "harassment", label: "Harassment or bullying" },
-  { value: "hate_speech", label: "Hate or discriminatory abuse" },
-  { value: "threats_violence", label: "Threats or violence" },
-  { value: "sexual_content", label: "Sexual or adult content" },
-  { value: "illegal_exploitation", label: "Suspected illegal content or exploitation" },
-  { value: "spam_scam_impersonation", label: "Spam, scams or impersonation" },
-  { value: "copyright", label: "Copyright concerns" },
-  { value: "privacy_doxxing", label: "Privacy violations or doxxing" },
-  { value: "other", label: "Other" },
-];
-
-export const REPORT_DESCRIPTION_MAX = 1000;
+// Re-export pure report metadata so existing `@/lib/reports` imports keep working.
+export * from "@/lib/reportMeta";
 
 export type ReportSubmission = {
   targetType: ReportTargetType;
@@ -39,19 +16,6 @@ export type ReportSubmission = {
   reason: ReportReason;
   description?: string | null;
 };
-
-export function isValidTargetType(value: string): value is ReportTargetType {
-  return value === "post" || value === "reply" || value === "user";
-}
-
-export function isValidReportReason(value: string): value is ReportReason {
-  return REPORT_REASONS.some((reason) => reason.value === value);
-}
-
-export function reportReasonLabel(reason: ReportReason): string {
-  const found = REPORT_REASONS.find((r) => r.value === reason);
-  return found ? found.label : reason;
-}
 
 export interface ReportClient {
   rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;

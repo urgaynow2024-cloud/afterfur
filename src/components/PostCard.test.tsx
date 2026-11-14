@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import PostCard from "@/components/PostCard";
 
@@ -66,6 +66,55 @@ describe("shared post action counts", () => {
     interactions.replyCount.mockReturnValue(6);
     render(<PostCard post={post} />);
     expect(screen.getByRole("link", { name: /6 replies/ })).toBeTruthy();
+  });
+
+  it("opens the AfterFur ShareDialog with the exact post permalink, copies link, shares externally, and closes cleanly without navigator.share", async () => {
+    interactions.userId = "user-1";
+    interactions.available = true;
+    const { container: base } = render(<PostCard post={post} />);
+    const shareSpy = vi.fn();
+    Object.assign(navigator, {
+      share: shareSpy,
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    expect(screen.queryByRole("dialog", { name: /Share post/i })).toBeNull();
+
+    const shareButton = within(base).getByRole("button", { name: /Share Artist's post/i });
+    fireEvent.click(shareButton);
+
+    const dialog = screen.getByRole("dialog", { name: /Share post/i });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+
+    const permalinkInput = within(dialog).getByLabelText("Post permalink") as HTMLInputElement;
+    expect(permalinkInput.value).toContain("/artist/status/post-1");
+    expect(permalinkInput.value).not.toBe("http://localhost:3000/");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy link" }));
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(permalinkInput.value);
+      expect(within(dialog).getByRole("status")).toHaveTextContent("Link copied to clipboard!");
+    });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Facebook" }));
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent(permalinkInput.value)),
+      "_blank",
+      "noopener,noreferrer",
+    );
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "QR code" }));
+    expect(within(dialog).getByRole("img", { name: `QR code for ${permalinkInput.value}` })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: /Share post/i })).toBeNull();
+    expect(shareSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(shareButton);
+    fireEvent.click(screen.getByRole("dialog", { name: /Share post/i }));
+    expect(screen.queryByRole("dialog", { name: /Share post/i })).toBeNull();
   });
 });
 

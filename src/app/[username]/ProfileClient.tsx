@@ -14,6 +14,7 @@ import ReportDialog from "@/components/ReportDialog";
 import { PrivateMediaGrid } from "@/components/post/private-media-grid";
 import { BadgeCollection } from "@/components/BadgeCollection";
 import { StyledDisplayName, StyledUsername } from "@/components/profile/styled-name";
+import { LinkChip } from "@/components/profile/profile-links";
 
 type Profile = {
   id: string;
@@ -294,7 +295,19 @@ export default function ProfileClient() {
               if (user?.id === prof.id) setFollowError(likedPostsError.message);
               setLikes([]);
             } else {
-              const mappedLikes = ((likedPosts ?? []) as Omit<Post, "profiles">[]).map((p) => ({ ...p, profiles: null }));
+              const likedPostsArr = (likedPosts ?? []) as Omit<Post, "profiles">[];
+              const likeAuthorIds = [...new Set(likedPostsArr.map((p) => p.author_id).filter(Boolean))];
+              let likeAuthorMap = new Map<string, { username: string; display_name: string | null; avatar_url: string | null }>();
+              if (likeAuthorIds.length) {
+                const { data: likeAuthors } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", likeAuthorIds);
+                if (likeAuthors) {
+                  likeAuthorMap = new Map((likeAuthors as { id: string; username: string; display_name: string | null; avatar_url: string | null }[]).map((a) => [a.id, { username: a.username, display_name: a.display_name, avatar_url: a.avatar_url }]));
+                }
+              }
+              const mappedLikes = likedPostsArr.map((p) => ({
+                ...p,
+                profiles: likeAuthorMap.get(p.author_id) ?? null,
+              }));
               setLikes(mappedLikes as Post[]);
             }
           } else {
@@ -548,6 +561,9 @@ export default function ProfileClient() {
           <div className="min-w-0">
             <StyledDisplayName profile={profileForNames} size="lg" />
             <div className="mt-0.5"><StyledUsername profile={profileForNames} /></div>
+            {(profile as any).pronouns && (
+              <span className="ml-1 text-xs text-af-text-2">{(profile as any).pronouns}</span>
+            )}
             <BadgeList userId={profile.id} className="mt-2" />
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -589,6 +605,16 @@ export default function ProfileClient() {
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-af-muted">
           {profile.website && <a href={profile.website} className="text-af-brand-soft hover:underline">{profile.website.replace(/^https?:\/\//, "")}</a>}
           {profile.location && <span>{profile.location}</span>}
+          {Array.isArray((profile as any).profile_links) && (profile as any).profile_links.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {(profile as any).profile_links
+                .slice()
+                .sort((a: { display_order?: number }, b: { display_order?: number }) => (a.display_order ?? 0) - (b.display_order ?? 0))
+                .map((link: { id: string; url: string; label: string | null; display_order: number }) => (
+                  <LinkChip key={link.id} link={link} />
+                ))}
+            </div>
+          )}
           {profile.created_at ? <span>Joined {new Date(profile.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span> : null}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">

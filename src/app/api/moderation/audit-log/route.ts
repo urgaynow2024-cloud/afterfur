@@ -23,7 +23,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const actorId = url.searchParams.get("actor_id") || undefined;
     const targetType = url.searchParams.get("target_type") || undefined;
+    const targetId = url.searchParams.get("target_id") || undefined;
     const action = url.searchParams.get("action") || undefined;
+    const dateFrom = url.searchParams.get("dateFrom") || undefined;
+    const dateTo = url.searchParams.get("dateTo") || undefined;
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
     const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "20", 10)));
     const offset = (page - 1) * pageSize;
@@ -37,7 +40,10 @@ export async function GET(request: Request) {
 
     if (actorId) q = q.eq("actor_id", actorId);
     if (targetType) q = q.eq("target_type", targetType);
+    if (targetId) q = q.eq("target_id", targetId);
     if (action) q = q.ilike("action", `%${action}%`);
+    if (dateFrom) q = q.gte("created_at", dateFrom);
+    if (dateTo) q = q.lte("created_at", dateTo);
 
     q = q.range(offset, offset + pageSize - 1);
 

@@ -34,6 +34,8 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const search = url.searchParams.get("search") || undefined;
+    const userId = url.searchParams.get("user_id") || undefined;
+    const activeOnly = url.searchParams.get("activeOnly") !== "false";
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
     const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "20", 10)));
     const offset = (page - 1) * pageSize;
@@ -43,7 +45,9 @@ export async function GET(request: Request) {
       .select("id, username, display_name, avatar_url, is_private, created_at")
       .order("created_at", { ascending: false });
 
-    if (search) {
+    if (userId) {
+      q = q.eq("id", userId);
+    } else if (search) {
       q = q.or(`username.ilike.%${search}%,display_name.ilike.%${search}%`);
     }
 
@@ -57,16 +61,25 @@ export async function GET(request: Request) {
 
     const userIds = ((data ?? []) as any[]).map((row) => row.id);
 
-    // Fetch active enforcements for these users.
-    const { data: enforcements, error: enforcementError } = await supabase
-      .from("user_enforcements")
-      .select("user_id, type, reason, starts_at, ends_at, created_at")
-      .in("user_id", userIds)
-      .is("ends_at", null)
-      .order("created_at", { ascending: false });
+    // Fetch enforcement records for these users. By default only active
+    // (unrevoked) enforcements are returned; set activeOnly=false for full history.
+    let enforcements: any[] = [];
+    if (userIds.length) {
+      let enforcementQ = supabase
+        .from("user_enforcements")
+        .select("id, user_id, type, reason, starts_at, ends_at, created_by, created_at, revoked_reason, reviewed_by, reviewed_at")
+        .in("user_id", userIds)
+        .order("created_at", { ascending: false });
 
-    if (enforcementError) {
-      return NextResponse.json({ error: "internal_error" }, { status: 500 });
+      if (activeOnly) {
+        enforcementQ = enforcementQ.is("revoked_reason", null);
+      }
+
+      const { data, error: enforcementError } = await enforcementQ;
+      if (enforcementError) {
+        return NextResponse.json({ error: "internal_error" }, { status: 500 });
+      }
+      enforcements = data ?? [];
     }
 
     const enforcementMap = new Map<string, any[]>();

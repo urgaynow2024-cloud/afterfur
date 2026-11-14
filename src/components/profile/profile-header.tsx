@@ -4,11 +4,13 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { BadgeList } from "@/components/BadgeList";
 import ReportDialog from "@/components/ReportDialog";
+import ShareDialog from "@/components/ShareDialog";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import PostText from "@/components/PostText";
 import { StyledDisplayName, StyledUsername } from "@/components/profile/styled-name";
 import type { ProfileHeaderProps } from "./profile-types";
+import { LinkChip } from "@/components/profile/profile-links";
 import { ProfileOverflowMenu } from "./profile-overflow-menu";
 import { followActionFor, type FollowStatus } from "@/lib/follow";
 
@@ -24,6 +26,7 @@ export function ProfileHeader({
   followBusy = false,
 }: ProfileHeaderProps) {
   const [reportOpen, setReportOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number | null>(null);
   const [bannerFallback, setBannerFallback] = useState(false);
@@ -67,18 +70,8 @@ export function ProfileHeader({
   }, [profileUrl]);
 
   const handleShare = useCallback(() => {
-    const shareData = {
-      title: `${profile.display_name || profile.username} on AfterFur`,
-      text: `Check out ${profile.display_name || profile.username}'s profile on AfterFur`,
-      url: profileUrl,
-    };
-    if (typeof navigator !== "undefined" && (navigator as { share?: (data: ShareData) => Promise<void> }).share) {
-      (navigator as { share: (data: ShareData) => Promise<void> }).share(shareData).catch(() => {});
-    } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(profileUrl);
-      setCopied(true);
-    }
-  }, [profileUrl, profile.display_name, profile.username]);
+    setShareOpen(true);
+  }, []);
 
   const isOwn = isSelf;
   const showReport = Boolean(user && !isOwn);
@@ -116,6 +109,9 @@ export function ProfileHeader({
         </div>
         <BadgeList userId={profile.id} className="mt-1" />
         <StyledUsername profile={profile} />
+        {profile.pronouns && (
+          <span className="ml-1 text-xs text-af-text-2">{profile.pronouns}</span>
+        )}
         {profile.custom_status && (!profile.status_expires_at || new Date(profile.status_expires_at) > new Date()) && (
           <p className="mt-1 text-sm text-af-text-2">{profile.status_emoji} {profile.custom_status}</p>
         )}
@@ -123,6 +119,16 @@ export function ProfileHeader({
           <p className="mt-2 sm:mt-3 max-w-prose whitespace-pre-wrap text-[15px] leading-6 text-af-text-2">
             <PostText content={profile.bio} />
           </p>
+        )}
+        {profile.profile_links && profile.profile_links.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {profile.profile_links
+              .slice()
+              .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+              .map((link) => (
+                <LinkChip key={link.id} link={link} />
+              ))}
+          </div>
         )}
         <div className="mt-3 sm:mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-af-muted">
           {profile.location && <span className="flex items-center gap-1.5">📍 {profile.location}</span>}
@@ -201,6 +207,16 @@ export function ProfileHeader({
           />
         </div>
       </div>
+      <ShareDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        url={profileUrl}
+        title={`${profile.display_name || profile.username} on AfterFur`}
+        text={`Check out ${profile.display_name || profile.username}'s profile on AfterFur`}
+        dialogTitle={`Share ${profile.display_name || profile.username}'s profile`}
+        authorLabel={`@${profile.username} on AfterFur`}
+        onCopyLink={handleCopyLink}
+      />
       <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} targetType="user" targetId={profile.id} targetLabel="this account" />
     </div>
   );

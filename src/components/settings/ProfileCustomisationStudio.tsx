@@ -109,30 +109,36 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
 
   if (!isPrime) {
     return (
-      <section className="mt-4 rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
-        <h2 className="text-base font-semibold text-af-text">Public Profile Customisation</h2>
+      <section aria-labelledby="profile-customisation-heading" className="rounded-2xl border border-af-border bg-af-surface p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 id="profile-customisation-heading" className="text-sm font-semibold text-af-text">Public Profile Customisation</h3>
+          <span className="rounded-full border border-af-border bg-af-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-af-muted">PawPass Prime</span>
+        </div>
         <p className="mt-1 text-sm text-af-muted">Visible to other users on your profile.</p>
-        <div className="mt-4 rounded-xl border border-af-border/40 bg-af-surface-2/50 p-4">
-          <p className="text-sm text-af-muted">Activate PawPass Prime to unlock profile customisation.</p>
-          <p className="mt-1 text-xs text-af-muted">Prime benefits include custom profile accent, display-name styling, colours and effects.</p>
+        <div className="mt-3 min-w-0 rounded-xl border border-af-border bg-af-surface-2/40 p-4">
+          <p className="text-sm font-medium text-af-text">Activate PawPass Prime to unlock profile customisation.</p>
+          <p className="mt-1 text-xs leading-relaxed text-af-muted">Prime benefits include custom profile accent, display-name fonts, styling, colours and effects.</p>
         </div>
       </section>
     );
   }
 
   return (
-    <section className="mt-4 rounded-2xl border border-af-border bg-af-surface p-5 shadow-sm sm:p-6">
-      <h2 className="text-base font-semibold text-af-text">Public Profile Customisation</h2>
-      <p className="mt-1 text-sm text-af-muted">Visible to other users on your profile. Prime benefit.</p>
+    <section aria-labelledby="profile-customisation-heading" className="rounded-2xl border border-af-border bg-af-surface p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="profile-customisation-heading" className="text-sm font-semibold text-af-text">Public Profile Customisation</h3>
+        <span className="rounded-full border border-af-success/30 bg-af-success/10 px-2.5 py-0.5 text-[11px] font-medium text-af-success">Prime Unlocked</span>
+      </div>
+      <p className="mt-1 text-sm text-af-muted">Customise how your name appears to other users on your public profile.</p>
       {error && <p role="alert" className="mt-3 rounded-md border border-af-danger/40 bg-af-danger/10 px-3 py-2 text-sm text-af-danger">{error}</p>}
-      {msg && <p role="status" className="mt-3 rounded-md border border-af-border bg-af-surface-2 px-3 py-2 text-sm text-af-text-2">{msg}</p>}
+      {msg && <p role="status" className="mt-3 rounded-md border border-af-success/30 bg-af-success/10 px-3 py-2 text-sm text-af-success">{msg}</p>}
 
-      <div className="mt-5 space-y-6">
-        <div className="space-y-6 min-w-0">
-          <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5">
+      <div className="mt-4 min-w-0 space-y-3.5">
+        <div className="min-w-0 space-y-3.5">
+          <div className="min-w-0 rounded-xl border border-af-border bg-af-surface-2/40 p-3.5 sm:p-4">
             <h3 className="text-sm font-semibold text-af-text">Display name font</h3>
-            <p className="mt-1 text-xs text-af-muted">Choose how your display name appears on your profile.</p>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <p className="mt-0.5 text-xs leading-relaxed text-af-muted">Choose how your display name appears on your profile.</p>
+            <div className="af-fonts-grid mt-3">
               {FONTS.map((font) => {
                 const selected = selectedFont === font.id;
                 return (
@@ -142,21 +148,25 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
                     role="radio"
                     aria-checked={selected}
                     onClick={() => { setSelectedFont(font.id); setDraft((prev) => ({ ...prev, font: font.id })); }}
-                    className={`flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-xs transition-colors ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border hover:bg-af-surface-2"} ${font.style ? "" : ""}`}
+                    className={`flex min-h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border px-2 py-2.5 text-center text-xs transition-colors ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border bg-af-surface/50 hover:bg-af-surface-2"}`}
                   >
-                    <span className={`leading-none ${font.className} ${font.style?.fontWeight ? `font-${font.style.fontWeight}` : ""}`}>{displayName || username}</span>
-                    <span className={selected ? "text-af-brand" : "text-af-text-2"}>{font.label}</span>
+                    <span className={`line-clamp-2 max-w-full break-words px-0.5 text-sm leading-snug ${font.className} ${font.style?.fontWeight ? `font-${font.style.fontWeight}` : ""}`}>
+                      {displayName || username}
+                    </span>
+                    <span className={`max-w-full truncate text-[11px] font-medium ${selected ? "text-af-brand-soft" : "text-af-text-2"}`}>
+                      {font.label}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5">
+          <div className="min-w-0 space-y-3.5 sm:space-y-4">
+            <div className="min-w-0 rounded-xl border border-af-border bg-af-surface-2/40 p-3.5 sm:p-4">
               <h3 className="text-sm font-semibold text-af-text">Display name effect</h3>
-              <p className="mt-1 text-xs text-af-muted">Styling applied to your display name.</p>
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <p className="mt-0.5 text-xs leading-relaxed text-af-muted">Styling applied to your display name.</p>
+              <div className="af-effects-grid mt-3">
                 {EFFECTS.map((effect) => {
                   const selected = selectedDisplayEffect === effect.id;
                   return (
@@ -166,19 +176,39 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
                       role="radio"
                       aria-checked={selected}
                       onClick={() => { setSelectedDisplayEffect(effect.id); setDraft((prev) => ({ ...prev, displayNameEffect: effect.id })); }}
-                      className={`flex min-h-[96px] flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border px-4 py-4 text-center transition-colors ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border hover:bg-af-surface-2"} af-effect-${effect.id} ${reducedMotion && (effect.id === "glitch" || effect.id === "aurora") ? "af-effect-none" : ""}`}
+                      className={`af-effect-card group flex min-h-[100px] min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border px-3 py-3 text-center transition-colors ${
+                        selected
+                          ? "border-af-brand bg-af-brand/10 shadow-sm shadow-af-brand/10"
+                          : "border-af-border bg-af-surface/50 hover:border-af-border-strong hover:bg-af-surface-2"
+                      }`}
                     >
-                      <span className="max-w-full break-words leading-none" data-glitch={displayName}>{displayName || username}</span>
-                      <span className={`break-words text-xs ${selected ? "text-af-brand" : "text-af-text-2"}`}>{effect.label}</span>
+                      <span className="flex min-h-[1.85rem] w-full min-w-0 items-center justify-center px-0.5 text-center text-sm font-semibold leading-snug text-af-text">
+                        <span
+                          className={`af-effect-preview-text ${effectClassName(effect.id, reducedMotion)}`}
+                          data-glitch={displayName || username}
+                        >
+                          {displayName || username}
+                        </span>
+                      </span>
+                      <span
+                        className={`inline-flex max-w-full items-center truncate rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                          selected
+                            ? "bg-af-brand/20 text-af-brand-soft"
+                            : "bg-af-surface-raised/80 text-af-text-2 group-hover:text-af-text"
+                        }`}
+                      >
+                        {effect.label}
+                      </span>
                     </button>
                   );
                 })}
               </div>
             </div>
-            <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5">
+
+            <div className="min-w-0 rounded-xl border border-af-border bg-af-surface-2/40 p-3.5 sm:p-4">
               <h3 className="text-sm font-semibold text-af-text">Username effect</h3>
-              <p className="mt-1 text-xs text-af-muted">Styling applied to your @username.</p>
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <p className="mt-0.5 text-xs leading-relaxed text-af-muted">Styling applied to your @username.</p>
+              <div className="af-effects-grid mt-3">
                 {EFFECTS.map((effect) => {
                   const selected = selectedUsernameEffect === effect.id;
                   return (
@@ -188,10 +218,29 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
                       role="radio"
                       aria-checked={selected}
                       onClick={() => { setSelectedUsernameEffect(effect.id); setDraft((prev) => ({ ...prev, usernameEffect: effect.id })); }}
-                      className={`flex min-h-[96px] flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border px-4 py-4 text-center transition-colors ${selected ? "border-af-brand bg-af-brand/10" : "border-af-border hover:bg-af-surface-2"} af-effect-${effect.id} ${reducedMotion && (effect.id === "glitch" || effect.id === "aurora") ? "af-effect-none" : ""}`}
+                      className={`af-effect-card group flex min-h-[100px] min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border px-3 py-3 text-center transition-colors ${
+                        selected
+                          ? "border-af-brand bg-af-brand/10 shadow-sm shadow-af-brand/10"
+                          : "border-af-border bg-af-surface/50 hover:border-af-border-strong hover:bg-af-surface-2"
+                      }`}
                     >
-                      <span className="max-w-full break-words leading-none" data-glitch={`@${username}`}>{`@${username}`}</span>
-                      <span className={`break-words text-xs ${selected ? "text-af-brand" : "text-af-text-2"}`}>{effect.label}</span>
+                      <span className="flex min-h-[1.85rem] w-full min-w-0 items-center justify-center px-0.5 text-center text-sm font-semibold leading-snug text-af-text">
+                        <span
+                          className={`af-effect-preview-text ${effectClassName(effect.id, reducedMotion)}`}
+                          data-glitch={`@${username}`}
+                        >
+                          @{username}
+                        </span>
+                      </span>
+                      <span
+                        className={`inline-flex max-w-full items-center truncate rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                          selected
+                            ? "bg-af-brand/20 text-af-brand-soft"
+                            : "bg-af-surface-raised/80 text-af-text-2 group-hover:text-af-text"
+                        }`}
+                      >
+                        {effect.label}
+                      </span>
                     </button>
                   );
                 })}
@@ -199,174 +248,182 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
             </div>
           </div>
 
-          <div className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5 space-y-6">
-            <div>
-              <h3 className="text-sm font-semibold text-af-text">Display name colour</h3>
-              <p className="mt-1 text-xs text-af-muted">Pick a preset or enter a custom hex colour.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {CURATED_COLOURS.map((colour) => {
-                  const selected = draft.displayNameColor === colour;
-                  return (
-                    <button
-                      key={colour}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => { setField("displayNameColor", colour); }}
-                      className={`h-9 w-9 rounded-full border-2 transition-colors ${selected ? "ring-2 ring-af-brand ring-offset-1 ring-offset-af-surface" : "border-af-border hover:border-af-brand/40"}`}
-                      style={{ backgroundColor: colour }}
-                    />
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => setField("displayNameColor", draft.displayNameColor ?? "#ffffff")}
-                  className="relative h-9 w-9 rounded-full border-2 border-af-border flex items-center justify-center"
-                >
-                  <input
-                    type="color"
-                    value={draft.displayNameColor ?? "#ffffff"}
-                    onChange={(e) => setField("displayNameColor", e.target.value)}
-                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
-                    aria-label="Custom display name colour"
-                  />
-                  <span className="text-[10px]" aria-hidden="true">+</span>
-                </button>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <label className="text-xs text-af-muted">Custom hex</label>
-                <input
-                  type="text"
-                  value={draft.displayNameColor ?? ""}
-                  onChange={(e) => setField("displayNameColor", e.target.value)}
-                  className="af-field w-full px-2 py-1.5 text-xs"
-                  placeholder="#ffffff"
-                  aria-label="Custom display name colour hex"
-                  disabled={!colourInputValid}
-                />
-                {!draft.displayNameColor && <span className="text-xs text-af-muted">default</span>}
-                {draft.displayNameColor && !isValidColour(draft.displayNameColor) && <span className="text-xs text-af-danger">Invalid hex</span>}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-semibold text-af-text">Username colour</h3>
-              <p className="mt-1 text-xs text-af-muted">Pick a preset or enter a custom hex colour.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {CURATED_COLOURS.map((colour) => {
-                  const selected = draft.usernameColor === colour;
-                  return (
-                    <button
-                      key={`user-${colour}`}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => { setField("usernameColor", colour); }}
-                      className={`h-9 w-9 rounded-full border-2 transition-colors ${selected ? "ring-2 ring-af-brand ring-offset-1 ring-offset-af-surface" : "border-af-border hover:border-af-brand/40"}`}
-                      style={{ backgroundColor: colour }}
-                    />
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => setField("usernameColor", draft.usernameColor ?? "#ffffff")}
-                  className="relative h-9 w-9 rounded-full border-2 border-af-border flex items-center justify-center"
-                >
-                  <input
-                    type="color"
-                    value={draft.usernameColor ?? "#ffffff"}
-                    onChange={(e) => setField("usernameColor", e.target.value)}
-                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
-                    aria-label="Custom username colour"
-                  />
-                  <span className="text-[10px]" aria-hidden="true">+</span>
-                </button>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <label className="text-xs text-af-muted">Custom hex</label>
-                <input
-                  type="text"
-                  value={draft.usernameColor ?? ""}
-                  onChange={(e) => setField("usernameColor", e.target.value)}
-                  className="af-field w-full px-2 py-1.5 text-xs"
-                  placeholder="#ffffff"
-                  aria-label="Custom username colour hex"
-                />
-                {draft.usernameColor && !isValidColour(draft.usernameColor) && <span className="text-xs text-af-danger">Invalid hex</span>}
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <h3 className="text-sm font-semibold text-af-text">Profile accent colour</h3>
-                <p className="mt-1 text-xs text-af-muted">Accent used across your profile UI.</p>
-                <div className="mt-3 flex flex-wrap gap-2">
+          <div className="min-w-0 space-y-3.5 rounded-xl border border-af-border bg-af-surface-2/40 p-3.5 sm:p-4">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-af-text">Display name colour</h3>
+                <p className="mt-0.5 text-xs text-af-muted">Preset or custom hex colour for your display name.</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {CURATED_COLOURS.map((colour) => {
-                    const selected = draft.accent === colour;
+                    const selected = draft.displayNameColor === colour;
                     return (
                       <button
-                        key={`accent-${colour}`}
+                        key={colour}
                         type="button"
                         role="radio"
                         aria-checked={selected}
-                        onClick={() => { setField("accent", colour); }}
-                        className={`h-9 w-9 rounded-full border-2 transition-colors ${selected ? "ring-2 ring-af-brand ring-offset-1 ring-offset-af-surface" : "border-af-border hover:border-af-brand/40"}`}
+                        aria-label={`Display name colour ${colour}`}
+                        onClick={() => { setField("displayNameColor", colour); }}
+                        className={`h-7 w-7 rounded-full border-2 transition-colors ${selected ? "ring-2 ring-af-brand ring-offset-1 ring-offset-af-surface" : "border-af-border hover:border-af-brand/40"}`}
                         style={{ backgroundColor: colour }}
                       />
                     );
                   })}
                   <button
                     type="button"
-                    onClick={() => setField("accent", draft.accent ?? "#8b5cf6")}
-                    className="relative h-9 w-9 rounded-full border-2 border-af-border flex items-center justify-center"
+                    onClick={() => setField("displayNameColor", draft.displayNameColor ?? "#ffffff")}
+                    className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-af-border"
+                    aria-label="Pick custom display name colour"
                   >
                     <input
                       type="color"
-                      value={draft.accent ?? "#8b5cf6"}
-                      onChange={(e) => setField("accent", e.target.value)}
-                      className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
-                      aria-label="Custom profile accent colour"
+                      value={draft.displayNameColor ?? "#ffffff"}
+                      onChange={(e) => setField("displayNameColor", e.target.value)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      aria-label="Custom display name colour"
                     />
                     <span className="text-[10px]" aria-hidden="true">+</span>
                   </button>
                 </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <label className="text-xs text-af-muted">Custom hex</label>
+                <div className="mt-2 flex min-w-0 items-center gap-2">
+                  <label className="shrink-0 text-xs text-af-muted">Custom hex</label>
                   <input
                     type="text"
-                    value={draft.accent ?? ""}
-                    onChange={(e) => setField("accent", e.target.value)}
-                    className="af-field w-full px-2 py-1.5 text-xs"
-                    placeholder="#8b5cf6"
-                    aria-label="Custom profile accent hex"
+                    value={draft.displayNameColor ?? ""}
+                    onChange={(e) => setField("displayNameColor", e.target.value)}
+                    className="af-field min-w-0 flex-1 bg-af-surface px-2 py-1 text-xs"
+                    placeholder="#ffffff"
+                    aria-label="Custom display name colour hex"
+                    disabled={!colourInputValid}
                   />
-                  {draft.accent && !isValidColour(draft.accent) && <span className="text-xs text-af-danger">Invalid hex</span>}
+                  {draft.displayNameColor && !isValidColour(draft.displayNameColor) && <span className="shrink-0 text-xs text-af-danger">Invalid hex</span>}
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-sm font-semibold text-af-text">Gradient colours</h3>
-                <p className="mt-1 text-xs text-af-muted">Start and end colours for gradient effects.</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-af-muted">Start</label>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-af-text">Username colour</h3>
+                <p className="mt-0.5 text-xs text-af-muted">Preset or custom hex colour for your @username.</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {CURATED_COLOURS.map((colour) => {
+                    const selected = draft.usernameColor === colour;
+                    return (
+                      <button
+                        key={`user-${colour}`}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        aria-label={`Username colour ${colour}`}
+                        onClick={() => { setField("usernameColor", colour); }}
+                        className={`h-7 w-7 rounded-full border-2 transition-colors ${selected ? "ring-2 ring-af-brand ring-offset-1 ring-offset-af-surface" : "border-af-border hover:border-af-brand/40"}`}
+                        style={{ backgroundColor: colour }}
+                      />
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setField("usernameColor", draft.usernameColor ?? "#ffffff")}
+                    className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-af-border"
+                    aria-label="Pick custom username colour"
+                  >
                     <input
                       type="color"
-                      value={draft.gradientStart ?? "#8b5cf6"}
-                      onChange={(e) => setField("gradientStart", e.target.value)}
-                      className="af-field h-10 w-full cursor-pointer"
-                      aria-label="Gradient start colour"
+                      value={draft.usernameColor ?? "#ffffff"}
+                      onChange={(e) => setField("usernameColor", e.target.value)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      aria-label="Custom username colour"
                     />
+                    <span className="text-[10px]" aria-hidden="true">+</span>
+                  </button>
+                </div>
+                <div className="mt-2 flex min-w-0 items-center gap-2">
+                  <label className="shrink-0 text-xs text-af-muted">Custom hex</label>
+                  <input
+                    type="text"
+                    value={draft.usernameColor ?? ""}
+                    onChange={(e) => setField("usernameColor", e.target.value)}
+                    className="af-field min-w-0 flex-1 bg-af-surface px-2 py-1 text-xs"
+                    placeholder="#ffffff"
+                    aria-label="Custom username colour hex"
+                  />
+                  {draft.usernameColor && !isValidColour(draft.usernameColor) && <span className="shrink-0 text-xs text-af-danger">Invalid hex</span>}
+                </div>
+              </div>
+
+              <div className="min-w-0 border-t border-af-border/70 pt-3.5 sm:col-span-2">
+                <h3 className="text-sm font-semibold text-af-text">Profile accent & gradient colours</h3>
+                <div className="mt-2 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-af-muted">Accent used across your profile UI.</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {CURATED_COLOURS.map((colour) => {
+                        const selected = draft.accent === colour;
+                        return (
+                          <button
+                            key={`accent-${colour}`}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            aria-label={`Profile accent colour ${colour}`}
+                            onClick={() => { setField("accent", colour); }}
+                            className={`h-7 w-7 rounded-full border-2 transition-colors ${selected ? "ring-2 ring-af-brand ring-offset-1 ring-offset-af-surface" : "border-af-border hover:border-af-brand/40"}`}
+                            style={{ backgroundColor: colour }}
+                          />
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setField("accent", draft.accent ?? "#8b5cf6")}
+                        className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-af-border"
+                        aria-label="Pick custom profile accent colour"
+                      >
+                        <input
+                          type="color"
+                          value={draft.accent ?? "#8b5cf6"}
+                          onChange={(e) => setField("accent", e.target.value)}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          aria-label="Custom profile accent colour"
+                        />
+                        <span className="text-[10px]" aria-hidden="true">+</span>
+                      </button>
+                    </div>
+                    <div className="mt-2 flex min-w-0 items-center gap-2">
+                      <label className="shrink-0 text-xs text-af-muted">Custom hex</label>
+                      <input
+                        type="text"
+                        value={draft.accent ?? ""}
+                        onChange={(e) => setField("accent", e.target.value)}
+                        className="af-field min-w-0 flex-1 bg-af-surface px-2 py-1 text-xs"
+                        placeholder="#8b5cf6"
+                        aria-label="Custom profile accent hex"
+                      />
+                      {draft.accent && !isValidColour(draft.accent) && <span className="shrink-0 text-xs text-af-danger">Invalid hex</span>}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-af-muted">End</label>
-                    <input
-                      type="color"
-                      value={draft.gradientEnd ?? "#8b5cf6"}
-                      onChange={(e) => setField("gradientEnd", e.target.value)}
-                      className="af-field h-10 w-full cursor-pointer"
-                      aria-label="Gradient end colour"
-                    />
+
+                  <div className="min-w-0">
+                    <p className="text-xs text-af-muted">Start and end colours for gradient effects.</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <label className="text-xs text-af-muted">Gradient start</label>
+                        <input
+                          type="color"
+                          value={draft.gradientStart ?? "#8b5cf6"}
+                          onChange={(e) => setField("gradientStart", e.target.value)}
+                          className="af-field h-9 w-full min-w-0 cursor-pointer bg-af-surface"
+                          aria-label="Gradient start colour"
+                        />
+                      </div>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <label className="text-xs text-af-muted">Gradient end</label>
+                        <input
+                          type="color"
+                          value={draft.gradientEnd ?? "#8b5cf6"}
+                          onChange={(e) => setField("gradientEnd", e.target.value)}
+                          className="af-field h-9 w-full min-w-0 cursor-pointer bg-af-surface"
+                          aria-label="Gradient end colour"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -374,12 +431,12 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
           </div>
         </div>
 
-        <section className="rounded-xl border border-af-border bg-af-surface-2/40 p-4 sm:p-5 space-y-4">
+        <div className="min-w-0 space-y-3 rounded-xl border border-af-border bg-af-surface-2/40 p-3.5 sm:p-4">
           <div>
-            <h3 className="text-sm font-semibold text-af-text">Preview</h3>
-            <p className="mt-1 text-xs text-af-muted">Live preview of how your name will appear on your profile.</p>
+            <h3 className="text-sm font-semibold text-af-text">Live preview</h3>
+            <p className="mt-0.5 text-xs text-af-muted">Live preview of how your name will appear on your profile.</p>
           </div>
-          <div className="flex items-center justify-center rounded-lg border border-af-border bg-af-surface p-6 min-h-[120px]">
+          <div className="flex min-h-[112px] w-full min-w-0 items-center justify-center overflow-hidden rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
             <StyledNamePreview
               displayName={displayName}
               username={username}
@@ -392,12 +449,12 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
               reducedMotion={reducedMotion}
             />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={!hasChanges || saving || !colourInputValid}
               onClick={handleReset}
-              className="min-h-10 rounded-md border border-af-border px-4 text-xs font-semibold text-af-text-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-af-surface-2"
+              className="min-h-9 rounded-lg border border-af-border bg-af-surface px-4 text-xs font-semibold text-af-text-2 transition-colors hover:text-af-text disabled:cursor-not-allowed disabled:opacity-40"
             >
               Reset
             </button>
@@ -405,13 +462,13 @@ export default function ProfileCustomisationStudio({ isPrime, customisation: ini
               type="button"
               disabled={!hasChanges || saving || !colourInputValid}
               onClick={handleSave}
-              className="min-h-10 rounded-md bg-af-brand px-4 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-af-brand-hover"
+              className="min-h-9 rounded-lg bg-af-brand px-4 text-xs font-semibold text-white transition-colors hover:bg-af-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving ? "Saving…" : "Save customisation"}
             </button>
+            {!hasChanges && <span className="text-xs text-af-muted">No unsaved changes</span>}
           </div>
-          {!hasChanges && <span className="text-xs text-af-muted">No unsaved changes</span>}
-        </section>
+        </div>
       </div>
     </section>
   );
@@ -439,11 +496,19 @@ function StyledNamePreview({ displayName, username, accent, font, displayNameEff
     uStyle.color = "#e2e8f0";
   }
   return (
-    <div className="flex flex-col gap-1">
-      <span className={`text-xl font-semibold tracking-tight leading-none ${fontClassName(font)} ${effectClassName(displayNameEffect, reducedMotion)}`} style={dStyle} data-glitch={displayName}>
+    <div className="af-live-preview flex w-full min-w-0 max-w-full flex-col items-center justify-center gap-1.5 px-1 text-center">
+      <span
+        className={`af-effect-preview-text max-w-full min-w-0 break-words text-xl font-semibold leading-snug tracking-tight ${fontClassName(font)} ${effectClassName(displayNameEffect, reducedMotion)}`}
+        style={dStyle}
+        data-glitch={displayName}
+      >
         {displayName}
       </span>
-      <span className={`text-xs leading-none ${fontClassName(font)} ${effectClassName(usernameEffect, reducedMotion)}`} style={uStyle} data-glitch={username}>
+      <span
+        className={`af-effect-preview-text max-w-full min-w-0 break-words text-xs leading-snug ${fontClassName(font)} ${effectClassName(usernameEffect, reducedMotion)}`}
+        style={uStyle}
+        data-glitch={username}
+      >
         @{username}
       </span>
     </div>

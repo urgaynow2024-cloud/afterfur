@@ -13,8 +13,10 @@ const profile = {
   banner_url: "https://example.com/banner.png",
   website: "https://example.com",
   location: "The Internet",
+  pronouns: null,
   created_at: "2024-01-01T00:00:00Z",
   profile_customisation: null,
+  profile_links: [],
 };
 
 const renderHeader = (user = { id: "u2" }) =>

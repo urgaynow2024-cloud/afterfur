@@ -414,6 +414,7 @@ export default function Home() {
 
   return (
     <Shell
+      compact={true}
       right={
         <div className="space-y-4">
           <div className="rounded-2xl border border-af-border bg-af-surface/60 p-4">
@@ -620,14 +621,6 @@ export default function Home() {
             <PostCard
               key={p.id}
               post={p}
-              onShare={(id) => {
-                const post = posts.find((p) => p.id === id);
-                const username = post?.profiles?.username || "profile";
-                const url = `${window.location.origin}/${username}/status/${id}`;
-                const copied = navigator.clipboard?.writeText(url);
-                if (copied) copied.then(() => setError("")).catch(() => setError("Could not copy link."));
-                else setError("Could not copy link.");
-              }}
               onEdit={user?.id === p.author_id ? startEdit : undefined}
               onDelete={user?.id === p.author_id ? (id) => setConfirmDelete(id) : undefined}
             />

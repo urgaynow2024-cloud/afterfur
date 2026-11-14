@@ -58,7 +58,10 @@ export async function GET(request: Request) {
     const supabase = createServerClient();
     if (!supabase) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const url = new URL(request.url);
+    const dateFrom = url.searchParams.get("dateFrom") || undefined;
+    const dateTo = url.searchParams.get("dateTo") || undefined;
+    const windowStart = dateFrom ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: reportsByStatus, error: reportsError } = await supabase.from("reports").select("status");
     if (reportsError) return dbFailureResponse(reportsError, "reports");
@@ -68,21 +71,33 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
+    const dismissedCount = (statusCounts.dismissed || 0) + (statusCounts.actioned || 0);
+
     const recentReportsRes = await supabase
       .from("reports")
       .select("id, target_type, reason, status, created_at")
-      .gte("created_at", sevenDaysAgo)
+      .gte("created_at", windowStart)
       .order("created_at", { ascending: false })
       .limit(10);
     if (recentReportsRes.error) return dbFailureResponse(recentReportsRes.error, "reports");
 
     const enforcementsRes = await supabase
       .from("user_enforcements")
-      .select("id, type, reason, created_at")
-      .gte("created_at", sevenDaysAgo)
+      .select("id, user_id, type, reason, created_at")
+      .gte("created_at", windowStart)
       .order("created_at", { ascending: false })
       .limit(10);
     if (enforcementsRes.error) return dbFailureResponse(enforcementsRes.error, "user_enforcements");
+
+    const { data: enforcementProfiles, error: enforcementProfileError } = await supabase
+      .from("profiles")
+      .select("id, username, display_name")
+      .in(
+        "user_id",
+        [...new Set(((enforcementsRes.data ?? []) as any[]).map((r) => r.user_id).filter(Boolean))],
+      );
+    if (enforcementProfileError) return dbFailureResponse(enforcementProfileError, "profiles");
+    const enforcementProfileMap = new Map(((enforcementProfiles ?? []) as any[]).map((p) => [p.id, p]));
 
     const appealsRes = await supabase
       .from("appeals")
@@ -90,16 +105,54 @@ export async function GET(request: Request) {
       .eq("status", "pending");
     if (appealsRes.error) return dbFailureResponse(appealsRes.error, "appeals");
 
+    // Active moderation staff count (real moderator_roles records).
+    const { data: staffRoles, error: staffError } = await supabase
+      .from("moderator_roles")
+      .select("id", { count: "exact", head: true });
+    if (staffError) return dbFailureResponse(staffError, "moderator_roles");
+
+    // Recent moderation activity from the immutable audit log.
+    const { data: recentActivityRows, error: activityError } = await supabase
+      .from("moderation_audit_log")
+      .select(
+        "id, actor_id, target_type, target_id, action, created_at, profiles!moderation_audit_log_actor_id_fkey(username, display_name)",
+      )
+      .gte("created_at", windowStart)
+      .order("created_at", { ascending: false })
+      .limit(15);
+    if (activityError) return dbFailureResponse(activityError, "moderation_audit_log");
+
+    const recentActivity = ((recentActivityRows ?? []) as any[]).map((row) => {
+      const actor = row.profiles;
+      return {
+        id: row.id,
+        actorId: row.actor_id,
+        actorUsername: actor?.username ?? null,
+        actorDisplayName: actor?.display_name ?? null,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        action: row.action,
+        createdAt: row.created_at,
+      };
+    });
+
     return NextResponse.json({
       ok: true,
       pendingReports: statusCounts.pending || 0,
-      reviewedReports: statusCounts.reviewed || 0,
+      underReviewReports: statusCounts.reviewed || 0,
+      resolvedReports: dismissedCount,
       dismissedReports: statusCounts.dismissed || 0,
       actionedReports: statusCounts.actioned || 0,
       totalReports: (reportsByStatus ?? []).length,
       recentReports: recentReportsRes.data ?? [],
-      recentEnforcements: enforcementsRes.data ?? [],
+      recentEnforcements: ((enforcementsRes.data ?? []) as any[]).map((e) => ({
+        ...e,
+        actorUsername: enforcementProfileMap.get(e.user_id)?.username ?? null,
+        actorDisplayName: enforcementProfileMap.get(e.user_id)?.display_name ?? null,
+      })),
       pendingAppeals: appealsRes.count ?? 0,
+      activeStaff: staffRoles?.length ?? 0,
+      recentActivity,
       generatedAt: new Date().toISOString(),
     });
   } catch (err: any) {

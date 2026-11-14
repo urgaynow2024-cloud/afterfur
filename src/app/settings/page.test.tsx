@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import Settings from "@/app/settings/page";
 
 const rpc = vi.hoisted(() => vi.fn());
@@ -77,52 +77,113 @@ describe("staff badge RPC authorization", () => {
   });
 });
 
-describe("settings no longer embeds the profile editor", () => {
-  it("does not render the avatar upload form", () => {
+describe("three-column settings category switching & navigation", () => {
+  it("renders all 9 category buttons in Column 2 and displays ONLY the selected category in Column 3", () => {
     (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
-      user: { id: "u1", app_metadata: {} },
+      user: { id: "u1", email: "user@afterfur.site", app_metadata: {} },
     });
-    render(<Settings />);
-    expect(screen.queryByLabelText(/Choose profile avatar image/i)).toBeNull();
-    expect(screen.queryByLabelText(/Choose profile banner image/i)).toBeNull();
-  });
+    const { container } = render(<Settings />);
 
-  it("does not render username, display name or bio inputs", () => {
-    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
-      user: { id: "u1", app_metadata: {} },
-    });
-    render(<Settings />);
-    expect(screen.queryByLabelText(/^Username$/i)).toBeNull();
-    expect(screen.queryByLabelText(/^Display name$/i)).toBeNull();
-    expect(screen.queryByLabelText(/^Bio$/i)).toBeNull();
-  });
+    const shell = container.querySelector(".af-settings-shell");
+    expect(shell).not.toBeNull();
+    expect(shell?.className).toContain("md:flex-row");
 
-  it("does not render the profile Save button", () => {
-    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
-      user: { id: "u1", app_metadata: {} },
-    });
-    render(<Settings />);
-    const saveButtons = screen.queryAllByRole("button", { name: /^Save$/i });
-    expect(saveButtons.length).toBe(0);
-  });
+    const sidebar = container.querySelector(".af-settings-sidebar");
+    expect(sidebar).not.toBeNull();
 
-  it("renders an Edit profile link pointing to /edit-profile", () => {
-    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
-      user: { id: "u1", app_metadata: {} },
-    });
-    render(<Settings />);
-    const link = screen.getByRole("link", { name: /Edit profile/i });
-    expect(link.getAttribute("href")).toBe("/edit-profile");
-  });
+    const content = container.querySelector(".af-settings-content");
+    expect(content).not.toBeNull();
+    expect(content?.className).toContain("min-w-0");
+    expect(content?.className).toContain("flex-1");
 
-  it("renders policy and support links", () => {
-    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
-      user: { id: "u1", app_metadata: {} },
-    });
-    render(<Settings />);
+    const searchInput = screen.getByLabelText(/Search Settings/i);
+    expect(searchInput).not.toBeNull();
+
+    const expectedTabs = [
+      "Account",
+      "Security",
+      "Privacy",
+      "Blocked accounts",
+      "Notifications",
+      "Accessibility",
+      "Appearance",
+      "PawPass",
+      "Account & Data",
+    ];
+
+    for (const tabLabel of expectedTabs) {
+      const btn = screen.getByRole("button", { name: tabLabel });
+      expect(btn).not.toBeNull();
+    }
+
+    // Default tab is Account: displays Edit profile and hides Security/Appearance/PawPass headings
+    expect(screen.getByRole("link", { name: /Edit profile/i })).not.toBeNull();
+    expect(screen.queryByRole("heading", { name: "Security and account access" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Public Profile Customisation" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /PawPass membership/i })).toBeNull();
+
+    // Switch to Security
+    fireEvent.click(screen.getByRole("button", { name: "Security" }));
+    expect(screen.getByRole("heading", { name: "Security and account access" })).not.toBeNull();
+    expect(screen.queryByRole("link", { name: /Edit profile/i })).toBeNull();
+
+    // Switch to Privacy
+    fireEvent.click(screen.getByRole("button", { name: "Privacy" }));
+    expect(screen.getByRole("heading", { name: "Privacy and safety" })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Incoming follow requests" })).not.toBeNull();
+
+    // Switch to Blocked accounts
+    fireEvent.click(screen.getByRole("button", { name: "Blocked accounts" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Blocked accounts" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Show" })).not.toBeNull();
+
+    // Switch to PawPass (dedicated section, not mixed into Account or Appearance)
+    fireEvent.click(screen.getByRole("button", { name: "PawPass" }));
+    expect(screen.getByRole("heading", { level: 2, name: "PawPass" })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /PawPass membership/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /Founding 50 reward/i })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /Save customisation/i })).toBeNull();
+
+    // Switch to Appearance (contains ProfileCustomisationStudio)
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Appearance" })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /Private interface appearance/i })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /Public Profile Customisation/i })).not.toBeNull();
+    expect(screen.queryByRole("heading", { name: /Founding 50 reward/i })).toBeNull();
+
+    // Switch to Account & Data
+    fireEvent.click(screen.getByRole("button", { name: "Account & Data" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Account & Data" })).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /Request my data/i })).not.toBeNull();
     expect(screen.getAllByRole("link", { name: /Terms of Service/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Privacy Policy/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /All policies/i }).length).toBeGreaterThan(0);
+  });
+
+  it("filters settings categories when typing in Search Settings", () => {
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
+      user: { id: "u1", email: "user@afterfur.site", app_metadata: {} },
+    });
+    render(<Settings />);
+
+    const searchInput = screen.getByLabelText(/Search Settings/i);
+    fireEvent.change(searchInput, { target: { value: "Blocked" } });
+
+    expect(screen.getByRole("button", { name: "Blocked accounts" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Account" })).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Blocked accounts" })).not.toBeNull();
+  });
+
+  it("does not render the old stacked profile fields and keeps single main landmark", () => {
+    (useAuth as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({
+      user: { id: "u1", app_metadata: {} },
+    });
+    const { container } = render(<Settings />);
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+    expect(screen.queryByLabelText(/Choose profile avatar image/i)).toBeNull();
+    expect(screen.queryByLabelText(/^Bio$/i)).toBeNull();
+    const layout = container.querySelector(".af-settings-layout");
+    expect(layout).not.toBeNull();
   });
 });
 

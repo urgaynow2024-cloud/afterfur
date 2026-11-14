@@ -67,11 +67,11 @@ export default function PostClient() {
     return () => { cancelled = true; };
   }, [user]);
 
-  if (loading) return <Shell><PageHeader title="Post" /><div className="p-8 text-center text-sm text-af-muted">Loading…</div></Shell>;
-  if (error || !post) return <Shell><PageHeader title="Post" /><EmptyState title="Post not found" body="This post may have been removed or is unavailable." /></Shell>;
+  if (loading) return <Shell compact={true}><PageHeader title="Post" /><div className="p-8 text-center text-sm text-af-muted">Loading…</div></Shell>;
+  if (error || !post) return <Shell compact={true}><PageHeader title="Post" /><EmptyState title="Post not found" body="This post may have been removed or is unavailable." /></Shell>;
 
   return (
-    <Shell>
+    <Shell compact={true}>
       <PageHeader title="Post" subtitle={`@${post.profiles?.username || username}`} />
       <PostCard post={post} />
       {post.author_id === user?.id && isPawPass && (

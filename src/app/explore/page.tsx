@@ -140,7 +140,7 @@ export default function Explore() {
   }, [load]);
 
   return (
-    <Shell>
+    <Shell compact={true}>
       <PageHeader title="Explore" subtitle="Discover creators and recent posts shared by the community." />
       <div className="px-4 py-4 sm:px-6">
         <Link href="/search" className="group flex items-center gap-3 rounded-2xl border border-af-border-strong bg-af-surface/80 px-4 py-3.5 text-sm text-af-muted shadow-sm transition-all hover:border-af-brand-soft hover:bg-af-surface-2 hover:text-af-text">

@@ -138,7 +138,7 @@ export default function Search() {
   }
 
   return (
-    <Shell>
+    <Shell compact={true}>
       <PageHeader title="Search" subtitle="Find people and posts across AfterFur." />
       <div className="px-4 py-4 sm:px-6">
         <form onSubmit={(e) => { e.preventDefault(); run(); }} className="flex flex-col gap-3 rounded-2xl border border-af-border-strong bg-af-surface/80 p-3 shadow-sm sm:flex-row sm:items-center sm:p-4">

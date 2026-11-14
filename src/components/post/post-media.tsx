@@ -127,7 +127,7 @@ export function PostMedia({ urls, nsfw = false, alt = "Post attachment" }: PostM
                 playsInline
                 preload="metadata"
                 aria-label={alt}
-                className={`block h-auto w-full bg-black object-contain ${blurClasses}`}
+                className={`block h-auto w-full bg-black object-contain md:max-h-[500px] ${blurClasses}`}
               >
                 Your browser does not support embedded video.
               </video>
@@ -156,7 +156,7 @@ export function PostMedia({ urls, nsfw = false, alt = "Post attachment" }: PostM
                 alt={alt}
                 loading="lazy"
                 decoding="async"
-                className={`block h-auto w-full object-contain ${blurClasses}`}
+                className={`block h-auto w-full object-contain md:max-h-[500px] ${blurClasses}`}
               />
             </button>
           )}

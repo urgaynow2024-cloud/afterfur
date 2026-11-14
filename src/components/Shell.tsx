@@ -21,7 +21,7 @@ const NAV = [
   { href: "/profile", label: "Profile", icon: "user-round" },
 ];
 
-function ShellInner({ children, right }: { children: ReactNode; right?: ReactNode }) {
+function ShellInner({ children, right, compact }: { children: ReactNode; right?: ReactNode; compact?: boolean }) {
   const { user, loading, signOut } = useAuth();
   const pathname = usePathname();
   const [profile, setProfile] = useState<{ username?: string; display_name?: string | null; avatar_url?: string | null } | null>(null);
@@ -139,7 +139,7 @@ function ShellInner({ children, right }: { children: ReactNode; right?: ReactNod
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 border-x border-af-border/80 xl:max-w-[var(--af-content-width)]">{children}</main>
+        <main className={`min-w-0 flex-1 border-x border-af-border/80 ${compact ? "lg:max-w-[var(--af-content-width)] lg:mx-auto" : right !== undefined && right !== null ? "xl:max-w-[var(--af-content-width)]" : ""}`}>{children}</main>
         {right !== undefined && right !== null ? <aside className="hidden w-[var(--af-sidebar-width)] shrink-0 xl:block"><div className="sticky top-0 max-h-screen overflow-y-auto px-4 py-4">{right}</div></aside> : null}
       </div>
       <GlobalComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
@@ -164,8 +164,8 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
   );
 }
 
-export function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  return <Suspense fallback={<div className="min-h-screen bg-af-bg" />}><ShellInner right={right}>{children}</ShellInner></Suspense>;
+export function Shell({ children, right, compact }: { children: ReactNode; right?: ReactNode; compact?: boolean }) {
+  return <Suspense fallback={<div className="min-h-screen bg-af-bg" />}><ShellInner right={right} compact={compact}>{children}</ShellInner></Suspense>;
 }
 export function EmptyState({ title, body, action }: { title: string; body: string; action?: { label: string; href: string } }) {
   return (

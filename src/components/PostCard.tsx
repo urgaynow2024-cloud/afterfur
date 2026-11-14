@@ -6,11 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { usePostInteractions } from "@/components/PostInteractionProvider";
 import { createClient } from "@/lib/supabase/client";
 import { loadMyMembershipStatus } from "@/lib/pawpass";
-import ReportDialog from "@/components/ReportDialog";
 import { optimisticLikeCount, reconcileLikeCount } from "@/lib/likes";
 import { BadgeList } from "@/components/BadgeList";
 import PostText from "@/components/PostText";
 import PostMedia from "@/components/post/post-media";
+import ReportDialog from "@/components/ReportDialog";
+import ShareDialog from "@/components/ShareDialog";
+import { copyTextToClipboard, getAbsoluteShareUrl, resolvePostPath } from "@/lib/share";
 import { parseProfileCustomisation, displayNameStyle as computeDisplayNameStyle, usernameStyle as computeUsernameStyle } from "@/lib/profileCustomisation";
 
 export type PostData = {
@@ -184,19 +186,18 @@ function PostOptionsMenu({
 export default function PostCard({
   post,
   repostedBy,
-  onShare,
   onEdit,
   onDelete,
 }: {
   post: PostData;
   repostedBy?: string | null;
-  onShare?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
   const interactions = usePostInteractions();
   const [activating, setActivating] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [countOptimism, setCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
   const [repostCountOptimism, setRepostCountOptimism] = useState<{ postId: string; base: number; value: number } | null>(null);
   const [isPawPass, setIsPawPass] = useState(false);
@@ -215,9 +216,8 @@ export default function PostCard({
   const { className: displayNameFxClass, style: displayNameStyle } = computeDisplayNameStyle(custom);
   const { className: usernameFxClass, style: usernameStyle } = computeUsernameStyle(custom);
   const authorHref = post.profiles?.username ? `/${encodeURIComponent(post.profiles.username)}` : null;
-  const postHref = post.profiles?.username
-    ? `/${encodeURIComponent(post.profiles.username)}/status/${encodeURIComponent(post.id)}`
-    : `/posts/${encodeURIComponent(post.id)}`;
+  const postHref = resolvePostPath(post);
+  const postUrl = typeof window !== "undefined" ? getAbsoluteShareUrl(postHref) : postHref;
 
   useEffect(() => {
     const supabase = createClient();
@@ -277,40 +277,10 @@ export default function PostCard({
     }
   }
 
-  function copyPostLink() {
-    if (onShare) {
-      onShare(post.id);
-      if (shareTimer.current !== null) window.clearTimeout(shareTimer.current);
-      setShareStatus("copied");
-      shareTimer.current = window.setTimeout(() => setShareStatus("idle"), 2000);
-      return;
-    }
-    const url = typeof window !== "undefined" ? `${window.location.origin}${postHref}` : postHref;
-    void handleShare(url);
-  }
-
-  async function handleShare(explicitUrl?: string) {
-    const url = explicitUrl ?? (typeof window !== "undefined" ? `${window.location.origin}${postHref}` : postHref);
-    const title = `${displayName} on AfterFur`;
-    const text = post.content?.slice(0, 120) || "";
+  async function copyPostLink() {
     if (shareTimer.current !== null) window.clearTimeout(shareTimer.current);
-    try {
-      if (typeof navigator !== "undefined" && typeof navigator.share === "function" && !explicitUrl) {
-        await navigator.share({ title, text, url });
-        setShareStatus("shared");
-      } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-        setShareStatus("copied");
-      } else {
-        setShareStatus("error");
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setShareStatus("cancelled");
-      } else {
-        setShareStatus("error");
-      }
-    }
+    const success = await copyTextToClipboard(postUrl);
+    setShareStatus(success ? "copied" : "error");
     shareTimer.current = window.setTimeout(() => setShareStatus("idle"), 2000);
   }
 
@@ -334,20 +304,20 @@ export default function PostCard({
 
   return (
     <>
-      <article className="relative border-b border-af-border/80 px-3.5 py-3 transition-colors hover:bg-af-surface/40">
+      <article className="relative border-b border-af-border/80 px-3 py-2.5 transition-colors hover:bg-af-surface/40">
         {repostedBy && (
-          <div className="mb-1 ml-[3.25rem] flex items-center gap-1.5 text-[11px] font-medium text-af-muted">
+          <div className="mb-1 ml-[3rem] flex items-center gap-1.5 text-[11px] font-medium text-af-muted">
             <ActionIcon name="repeat-2" className="h-3.5 w-3.5" />
             <span className="truncate">{repostedBy} reposted</span>
           </div>
         )}
         <div className="flex min-w-0 gap-3">
           {authorHref ? (
-            <Link href={authorHref} aria-label={`View ${displayName}'s profile`} className="mt-0.5 h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border transition-opacity hover:opacity-90">
+            <Link href={authorHref} aria-label={`View ${displayName}'s profile`} className="mt-0 h-9 w-9 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border transition-opacity hover:opacity-90">
               {avatar}
             </Link>
           ) : (
-            <div aria-hidden="true" className="mt-0.5 h-10 w-10 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">{avatar}</div>
+            <div aria-hidden="true" className="mt-0 h-9 w-9 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">{avatar}</div>
           )}
 
           <div className="min-w-0 flex-1">
@@ -384,7 +354,7 @@ export default function PostCard({
 
             <PostMedia urls={post.media_urls} nsfw={(post.classification ?? "SFW") === "NSFW"} alt={`${displayName}'s post attachment`} />
 
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-0.5 gap-y-0.5 pr-0.5 sm:flex-nowrap sm:justify-between sm:pr-1">
+            <div className="mt-1 flex flex-wrap items-center gap-x-0.5 gap-y-0.5 pr-0.5 sm:flex-nowrap sm:justify-between sm:pr-1">
               <Link
                 href={postHref}
                 aria-label={`Reply to ${displayName}'s post${replyCount !== null ? `, ${replyCount} replies` : ""}`}
@@ -456,7 +426,7 @@ export default function PostCard({
 
               <button
                 type="button"
-                onClick={() => { void handleShare(); }}
+                onClick={() => setShareOpen(true)}
                 aria-label={`Share ${displayName}'s post`}
                 data-tooltip={shareStatus === "copied" ? "Copied!" : "Share"}
                 title="Share"
@@ -504,6 +474,20 @@ export default function PostCard({
           </div>
         </div>
       </article>
+      <ShareDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        url={postUrl}
+        title={`${displayName} on AfterFur`}
+        text={post.content?.slice(0, 120) || ""}
+        dialogTitle="Share post"
+        authorLabel={`@${username} on AfterFur`}
+        onCopyLink={() => {
+          if (shareTimer.current !== null) window.clearTimeout(shareTimer.current);
+          setShareStatus("copied");
+          shareTimer.current = window.setTimeout(() => setShareStatus("idle"), 2000);
+        }}
+      />
       <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} targetType="post" targetId={post.id} targetLabel="this post" />
     </>
   );

@@ -24,8 +24,8 @@ test("compact timeline fits mobile without horizontal overflow", async ({ page }
     };
   });
   console.log(JSON.stringify(metrics, null, 2));
-  expect(metrics.padding.top).toBe("12px");
-  expect(metrics.padding.right).toBe("14px");
+  expect(metrics.padding.top).toBe("10px");
+  expect(metrics.padding.right).toBe("12px");
   expect(metrics.action.w).toBe(36);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.innerWidth);
   if (metrics.media && metrics.frame) {
@@ -59,8 +59,8 @@ test("compact timeline uses the intended desktop density", async ({ page }) => {
   });
   console.log(JSON.stringify(metrics, null, 2));
   expect(metrics.article).toBeLessThanOrEqual(600);
-  expect(metrics.padding.top).toBe("12px");
-  expect(metrics.padding.right).toBe("14px");
+  expect(metrics.padding.top).toBe("10px");
+  expect(metrics.padding.right).toBe("12px");
   expect(metrics.action.w).toBe(36);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.innerWidth);
   if (metrics.media && metrics.frame) {

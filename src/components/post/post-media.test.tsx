@@ -21,7 +21,9 @@ describe("PostMedia sizing", () => {
     expect(image).toHaveClass("w-full");
     expect(image).toHaveClass("h-auto");
     expect(image).not.toHaveClass("w-auto");
-    expect(image?.className).not.toContain("max-h-");
+    // Responsive max-height is allowed at desktop breakpoints (md:max-h-[500px]),
+    // but no non-responsive fixed-height container should be applied.
+    expect(image?.className.split(" ").some((c) => c.startsWith("max-h-"))).toBe(false);
   });
 
   it("renders multiple images in a grid with cover thumbnails", () => {

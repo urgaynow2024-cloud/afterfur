@@ -25,6 +25,14 @@ const clientCache: ClientCache = new Map();
 const refreshWanted = new Set<string>();
 // Per-account refresh mutex to prevent concurrent refresh attempts
 const refreshMutex = new Map<string, Promise<unknown>>();
+// Global refresh lock: ensures only ONE refresh operation runs across ALL accounts
+// at any time. Supabase refresh tokens are single-use and rotate on every refresh.
+// If two clients (e.g. legacy + per-account, or two tabs) refresh the same token
+// concurrently, the first to complete rotates it and the second gets "Already Used".
+let globalRefreshInFlight = false;
+// Track the last refresh_token we observed per account, to detect when a refresh
+// response is stale (another client already rotated the token before this one completed).
+const lastRefreshToken = new Map<string, string>();
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -131,6 +139,7 @@ export function removeSavedAccount(userId: string) {
   const key = target?.storageKey ?? storageKeyForUser(userId);
   const cached = clientCache.get(key);
   if (cached) { try { void (cached as any).auth?.stopAutoRefresh?.(); } catch {} clientCache.delete(key); refreshWanted.delete(key); }
+  lastRefreshToken.delete(userId);
   const wasActive = getActiveUserId() === userId;
   if (wasActive) setActiveUserId(next[0]?.userId ?? null);
   if (wasActive) activeBoundClient = null;
@@ -264,6 +273,11 @@ export function pauseInactiveClientRefresh(activeUserId?: string | null) {
     if (activeKey && key === activeKey) setAutoRefresh(client, key, true);
     else setAutoRefresh(client, key, false);
   });
+  // Also pause/unpause the legacy client: it must never auto-refresh while any
+  // account is active, since it could share a refresh token with a per-account client.
+  if (legacyClient) {
+    setAutoRefresh(legacyClient, "legacy", Boolean(activeUserId));
+  }
 }
 
 export function getClientForUser(userId: string, opts?: { autoRefreshToken?: boolean }): SupabaseClient<Database> | null {
@@ -277,8 +291,14 @@ function getLegacyDefaultClient(): SupabaseClient<Database> | null {
   const key = supabaseAnonKey();
   if (!url || !key) return null;
   if (!legacyClient) {
+    // The legacy/default client is used ONLY for session recovery (copying sessions
+    // created by older installs or OAuth callbacks into per-account isolated storage).
+    // It must NEVER auto-refresh: if it shares a refresh token with a per-account
+    // client (which happens after ensureActiveSession copies a session), both clients
+    // would independently rotate the same single-use refresh token, causing
+    // "Invalid Refresh Token: Already Used" errors on the other account.
     legacyClient = createSupabaseClient<Database>(url, key, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: true },
     });
   }
   return legacyClient;
@@ -341,12 +361,12 @@ export async function captureSessionToAccount(client: SupabaseClient<Database>, 
 export async function restoreAccountSession(userId: string): Promise<{ ok: true } | { ok: false; reason: "missing" | "expired" | "invalid_refresh_token" | "error"; message?: string }> {
   const account = getSavedAccount(userId);
   if (!account) return { ok: false, reason: "missing", message: "Saved account not found on this device." };
-  
+   
   // If session is already known to have an invalid refresh token, don't retry
   if (account.sessionStatus === "invalid_refresh_token") {
     return { ok: false, reason: "invalid_refresh_token", message: "Session invalidated. Please sign in again." };
   }
-  
+   
   // Use mutex to prevent concurrent refresh attempts for the same account
   return withRefreshMutex(userId, async () => {
     const client = getClientForUser(userId, { autoRefreshToken: true });
@@ -368,19 +388,40 @@ export async function restoreAccountSession(userId: string): Promise<{ ok: true 
     
     const { data: userData, error: userErr } = await client.auth.getUser();
     if (userErr || !userData.user) {
-      const refreshed = await client.auth.refreshSession();
-      if (refreshed.error || !refreshed.data.session) {
-        // Check if the error is specifically about invalid/missing refresh token
-        const isInvalidRefresh = refreshed.error?.message?.includes("Invalid Refresh Token") || 
-                                 refreshed.error?.message?.includes("Refresh Token Not Found") ||
-                                 refreshed.error?.code === "refresh_token_not_found";
-        markAccountSessionStatus(userId, isInvalidRefresh ? "invalid_refresh_token" : "expired");
-        if (isInvalidRefresh) {
-          // Clear the invalid session storage to prevent retry loops
-          await clearInvalidSessionStorage(userId);
+        // Coordinate globally: only one refresh across all accounts at a time,
+        // since refresh tokens are single-use and shared tokens could be rotated
+        // by another client (e.g. legacy + per-account).
+      return withGlobalRefreshLock(async () => {
+        // Record the refresh_token we are about to use, for stale-response
+        // detection after the refresh completes.
+        const currentRt = data.session.refresh_token;
+        const refreshed = await client.auth.refreshSession();
+        if (refreshed.error || !refreshed.data.session) {
+          // Check if the error is specifically about invalid/missing refresh token
+          const isInvalidRefresh = refreshed.error?.message?.includes("Invalid Refresh Token") || 
+                                   refreshed.error?.message?.includes("Refresh Token Not Found") ||
+                                   refreshed.error?.message?.includes("Already Used") ||
+                                   refreshed.error?.code === "refresh_token_not_found";
+          markAccountSessionStatus(userId, isInvalidRefresh ? "invalid_refresh_token" : "expired");
+          if (isInvalidRefresh) {
+            // Clear the invalid session storage to prevent retry loops
+            await clearInvalidSessionStorage(userId);
+          }
+          return { ok: false, reason: isInvalidRefresh ? "invalid_refresh_token" : "expired", message: isInvalidRefresh ? "Session invalidated. Please sign in again." : "Session expired or was revoked. Please sign in again." };
         }
-        return { ok: false, reason: isInvalidRefresh ? "invalid_refresh_token" : "expired", message: isInvalidRefresh ? "Session invalidated. Please sign in again." : "Session expired or was revoked. Please sign in again." };
-      }
+        // Supabase always rotates refresh_tokens on successful refresh. If the
+        // response contains the same token we started with, it's either a stale
+        // response from a race or an anomaly - reject it.
+        const newSession = refreshed.data.session;
+        if (newSession.refresh_token === currentRt) {
+          markAccountSessionStatus(userId, "expired");
+          return { ok: false, reason: "expired", message: "Session refresh did not rotate token. Please sign in again." };
+        }
+        lastRefreshToken.set(userId, newSession.refresh_token);
+        setActiveUserId(userId);
+        touchSavedAccount(userId);
+        return { ok: true };
+      });
     }
     setActiveUserId(userId);
     touchSavedAccount(userId);
@@ -410,8 +451,9 @@ export async function signOutAccount(userId: string): Promise<{ error: string | 
     activeBoundClient = null;
   }
   if (clientCache.has(storageKey)) { clientCache.delete(storageKey); refreshWanted.delete(storageKey); }
-  // Clear any pending refresh mutex for this account
+  // Clear any pending refresh mutex and token tracking for this account
   refreshMutex.delete(userId);
+  lastRefreshToken.delete(userId);
   return { error };
 }
 
@@ -421,14 +463,16 @@ export async function signOutAllAccounts(): Promise<void> {
     const client = getClientForUser(a.userId, { autoRefreshToken: false });
     if (client) { try { await (client as any).auth?.stopAutoRefresh?.(); await client.auth.signOut({ scope: "local" }); } catch {} }
     if (canUseStorage()) try { window.localStorage.removeItem(a.storageKey); } catch {}
-    // Clear refresh mutex for each account
+    // Clear refresh mutex and token tracking for each account
     refreshMutex.delete(a.userId);
+    lastRefreshToken.delete(a.userId);
   }
   writeSavedAccounts([]);
   setActiveUserId(null);
   activeBoundClient = null;
   clientCache.clear();
   refreshWanted.clear();
+  globalRefreshInFlight = false;
 }
 
 export const ACCOUNT_SWITCH_EVENT = "afterfur:account-switched";
@@ -472,6 +516,26 @@ async function withRefreshMutex<T>(
 
   refreshMutex.set(userId, promise);
   return promise;
+}
+
+/**
+ * Acquire a global refresh lock so only one refresh operation runs across all
+ * accounts at any time. If a refresh is already in-flight, the caller waits.
+ * The lock is released when `release` is called.
+ */
+async function withGlobalRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  // Wait for any in-flight refresh to complete before starting this one.
+  // This serializes all refresh operations across accounts, preventing
+  // "Invalid Refresh Token: Already Used" when two clients share a token.
+  while (globalRefreshInFlight) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  globalRefreshInFlight = true;
+  try {
+    return await fn();
+  } finally {
+    globalRefreshInFlight = false;
+  }
 }
 
 /**

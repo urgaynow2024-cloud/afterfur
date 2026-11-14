@@ -109,12 +109,12 @@ export default function Bookmarks() {
     await (supabase as any).rpc("add_bookmark_to_folder", { p_folder_id: folderId, p_post_id: postId });
   }
 
-  if (!user) return <Shell><PageHeader title="Bookmarks" /><EmptyState title="Sign in to view bookmarks" body="Saved posts appear here after you sign in." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
+  if (!user) return <Shell compact={true}><PageHeader title="Bookmarks" /><EmptyState title="Sign in to view bookmarks" body="Saved posts appear here after you sign in." action={{ label: "Sign in", href: "/signin" }} /></Shell>;
 
   const visiblePosts = posts.filter((post) => !interactions?.available || interactions.bookmarked(post.id));
 
   return (
-    <Shell>
+    <Shell compact={true}>
       <PageHeader title="Bookmarks" subtitle="Posts you saved for later." />
       {isPawPass && (
         <div className="px-4 py-4 sm:px-6">

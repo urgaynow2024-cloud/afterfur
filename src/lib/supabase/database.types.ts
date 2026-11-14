@@ -32,8 +32,19 @@ type ProfileRow = {
   created_at: string | null;
   location: string | null;
   website: string | null;
+  pronouns: string | null;
   profile_customisation: Json | null;
   is_private: boolean | null;
+};
+
+type ProfileLinkRow = {
+  id: string;
+  user_id: string;
+  url: string;
+  label: string | null;
+  display_order: number;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 type PostRow = {
@@ -147,6 +158,29 @@ type AppealRow = {
   created_at: string | null;
 };
 
+type ReportRow = {
+  id: string;
+  reporter_id: string;
+  target_type: string;
+  target_id: string;
+  reason: string;
+  description: string | null;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  assigned_to: string | null;
+  assigned_at: string | null;
+  created_at: string | null;
+};
+
+type ReportNoteRow = {
+  id: string;
+  report_id: string;
+  author_id: string;
+  body: string;
+  created_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -169,8 +203,9 @@ export type Database = {
       moderation_audit_log: Table<ModerationAuditLogRow, Pick<ModerationAuditLogRow, "actor_id" | "target_type" | "target_id" | "action" | "details" | "before_state" | "after_state"> & Partial<Omit<ModerationAuditLogRow, "id">>, Partial<Omit<ModerationAuditLogRow, "id">>>;
       user_enforcements: Table<UserEnforcementRow, Pick<UserEnforcementRow, "user_id" | "type" | "reason" | "starts_at" | "ends_at" | "created_by"> & Partial<Omit<UserEnforcementRow, "id" | "user_id" | "type" | "reason" | "starts_at" | "ends_at" | "created_by">>, Partial<Omit<UserEnforcementRow, "id">>>;
       appeals: Table<AppealRow, Pick<AppealRow, "user_id" | "reason" | "report_id" | "enforcement_type" | "enforcement_id"> & Partial<Omit<AppealRow, "id" | "user_id" | "reason">>, Partial<Omit<AppealRow, "id">>>;
-      reports: Table<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; description: string | null; status: string; reviewed_by: string | null; reviewed_at: string | null; created_at: string | null }, { reporter_id: string; target_type: string; target_id: string; reason: string; description?: string | null }, { id?: string; status?: string; reviewed_by?: string | null; reviewed_at?: string | null }>;
-      badge_registry: Table<{ id: string; category: string; display_name: string; display_order: number; is_public: boolean }, { id: string; category: string; display_name: string; display_order: number; is_public?: boolean }, Partial<{ category: string; display_name: string; display_order: number; is_public: boolean }>>;
+      reports: Table<ReportRow, Pick<ReportRow, "reporter_id" | "target_type" | "target_id" | "reason"> & Partial<Omit<ReportRow, "id" | "reporter_id" | "target_type" | "target_id" | "reason">>, Partial<Omit<ReportRow, "id">>>;
+      report_notes: Table<ReportNoteRow, Pick<ReportNoteRow, "report_id" | "author_id" | "body"> & Partial<Omit<ReportNoteRow, "id" | "report_id" | "author_id" | "body">>, Partial<Omit<ReportNoteRow, "id">>>;
+      profile_links: Table<ProfileLinkRow, Omit<ProfileLinkRow, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string }, Partial<Omit<ProfileLinkRow, "id">>>;
       staff_badge_assignments: Table<{ user_id: string; badge_id: string; assigned_by: string; assigned_at: string }, { user_id: string; badge_id: string; assigned_by: string; assigned_at?: string }, never>;
       staff_badge_audit: Table<{ id: number; actor_id: string; target_id: string; badge_id: string; action: string; occurred_at: string }, never, never>;
       user_badge_awards: Table<{ user_id: string; badge_id: string; awarded_at: string }, { user_id: string; badge_id: string; awarded_at?: string }, never>;
@@ -215,6 +250,8 @@ export type Database = {
       has_ad_badge: { Args: { p_user_id: string }; Returns: boolean };
       has_moderator_role: { Args: { p_user_id: string; p_min_role: string }; Returns: boolean };
       record_moderation_action: { Args: { p_actor_id: string; p_target_type: string; p_target_id: string; p_action: string; p_details: Json | null; p_before_state: Json | null; p_after_state: Json | null }; Returns: string };
+      get_my_profile_links: { Args: Record<PropertyKey, never>; Returns: Json };
+      upsert_profile_links: { Args: { p_links: Json }; Returns: boolean };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

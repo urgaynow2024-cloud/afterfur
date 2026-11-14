@@ -6,6 +6,8 @@ vi.mock("@/lib/profilePrivacy", () => ({
   canViewProfile: (...args: any[]) => canViewProfileMock(...args),
 }));
 
+const profileLinksOrderMock = vi.fn(() => ({ data: [], error: null }));
+
 const profileMaybeSingle = vi.fn();
 const blocksMaybeSingle = vi.fn();
 const followsMaybeSingle = vi.fn();
@@ -41,6 +43,17 @@ vi.mock("@/lib/supabase/server", () => ({
             eq: () => ({
               eq: () => ({
                 maybeSingle: followsMaybeSingle,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "profile_links") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                order: profileLinksOrderMock,
               }),
             }),
           }),

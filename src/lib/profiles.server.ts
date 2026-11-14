@@ -120,5 +120,20 @@ export async function getProfileForViewer(opts: {
     return { profile: null, error: "forbidden" };
   }
 
-  return { profile: profile as GetProfileForViewerResult["profile"], error: null };
+  // Attach the profile owner's saved external links (server-side fetch bypasses
+  // the owner-only RLS policy on the profile_links table).
+  let profileLinks: Array<{ id: string; url: string; label: string | null; display_order: number }> | null = null;
+  if (profile.id) {
+    const { data: linksRows, error: linksError } = await supabase
+      .from("profile_links")
+      .select("id, url, label, display_order")
+      .eq("user_id", profile.id)
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (!linksError && linksRows) {
+      profileLinks = (linksRows as Array<{ id: string; url: string; label: string | null; display_order: number }>);
+    }
+  }
+
+  return { profile: { ...(profile as Record<string, unknown>), profile_links: profileLinks } as unknown as ProfileForViewer, error: null };
 }

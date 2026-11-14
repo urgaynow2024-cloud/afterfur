@@ -35,6 +35,7 @@ function makeReportsQuery(result: { data?: any; error?: any; count?: number | nu
       const q: any = {};
       q.gte = vi.fn().mockReturnValue(q);
       q.eq = vi.fn().mockReturnValue(q);
+      q.in = vi.fn().mockReturnValue(q);
       q.order = vi.fn().mockReturnValue(q);
       q.limit = vi.fn().mockResolvedValue({ data: result.data ?? [], error: result.error ?? null, count: result.count ?? null });
       // first call in route awaits the select chain directly in one case? route does: await supabase.from("reports").select("status")

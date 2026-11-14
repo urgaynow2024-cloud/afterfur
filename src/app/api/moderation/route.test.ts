@@ -192,36 +192,43 @@ describe("reports PATCH route", () => {
     const { PATCH } = await import("@/app/api/moderation/reports/route");
     const res = await PATCH(new Request("http://localhost/api/moderation/reports", {
       method: "PATCH",
-      body: JSON.stringify({ reportId: "r-1", status: "dismissed" }),
+      body: JSON.stringify({ reportId: "11111111-1111-1111-1111-111111111111", status: "dismissed" }),
     }));
     expect(res!.status).toBe(401);
   });
 
-  it("resolves a report successfully", async () => {
-    // select().eq().maybeSingle() for existing report
+it("resolves a report successfully and stores the reason as an internal note", async () => {
     const chainMaybe = { maybeSingle: vi.fn().mockResolvedValueOnce({ data: { id: "r-1", status: "pending", description: null }, error: null }) };
-    const chainEqSelect = vi.fn().mockReturnValue(chainMaybe);
-    // update().eq() returns { error }
-    const chainEqUpdate = vi.fn().mockResolvedValueOnce({ error: null });
+    const updateSpy = vi.fn();
+    const updateChain: any = {};
+    updateChain.eq = () => updateChain;
+    updateChain.select = () => Promise.resolve({ data: [{ id: "r-1" }], error: null });
+    const insertSpy = vi.fn().mockResolvedValueOnce({ error: null });
 
     let fromCall = 0;
-    mockFrom.mockImplementation(() => {
+    mockFrom.mockImplementation((_table: string) => {
       fromCall++;
       if (fromCall === 1) {
-        // reports select
-        return { select: vi.fn().mockReturnValue({ eq: chainEqSelect }) };
+        return { select: vi.fn().mockReturnValue({ eq: () => chainMaybe }) };
       }
-      // reports update
-      return { update: vi.fn().mockReturnValue({ eq: chainEqUpdate }) };
+      if (fromCall === 2) {
+        // Conditional status update with optimistic concurrency check.
+        return { update: (payload: Record<string, unknown>) => { updateSpy(payload); return updateChain; } };
+      }
+      // Internal note insert.
+      return { insert: insertSpy };
     });
 
     const { PATCH } = await import("@/app/api/moderation/reports/route");
     const res = await PATCH(new Request("http://localhost/api/moderation/reports", {
       method: "PATCH",
-      body: JSON.stringify({ reportId: "r-1", status: "dismissed", moderatorNotes: "No violation found" }),
+      body: JSON.stringify({ reportId: "11111111-1111-1111-1111-111111111111", status: "dismissed", moderatorNotes: "No violation found" }),
     }));
     expect(res!.status).toBe(200);
     expect(recordModerationAction).toHaveBeenCalled();
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ report_id: "11111111-1111-1111-1111-111111111111", body: "No violation found" }));
+    // The reporter-visible description must not be modified by a moderator note.
+    expect(updateSpy.mock.calls[0]?.[0]).not.toHaveProperty("description");
   });
 });
 
@@ -257,13 +264,18 @@ describe("users GET route", () => {
         return { select: vi.fn().mockReturnValue(q) };
       }
       // user_enforcements: select().in().is().order()
+      const createThenable = (): any => {
+        const t: any = {
+          then: (res: any) => Promise.resolve({ data: [], error: null }).then(res),
+        };
+        t.order = vi.fn().mockReturnValue(t);
+        t.is = vi.fn().mockReturnValue(t);
+        return t;
+      };
+      const enforcementThenable = createThenable();
       return {
         select: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            is: vi.fn().mockReturnValue({
-              order: vi.fn().mockResolvedValue({ data: [], error: null }),
-            }),
-          }),
+          in: vi.fn().mockReturnValue(enforcementThenable),
         }),
       };
     });

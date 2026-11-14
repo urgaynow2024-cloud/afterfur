@@ -37,7 +37,7 @@ export default function DashboardPage() {
         if (res.ok) {
           setStats({
             pendingReports: data.pendingReports ?? 0,
-            reviewedReports: data.reviewedReports ?? 0,
+            reviewedReports: data.underReviewReports ?? 0,
             dismissedReports: data.dismissedReports ?? 0,
             actionedReports: data.actionedReports ?? 0,
             totalReports: data.totalReports ?? 0,

@@ -171,6 +171,12 @@ export async function PATCH(request: Request) {
 
     if (!appealId || typeof appealId !== "string") return badRequest("appealId is required.");
     if (!newStatus || !["accepted", "rejected"].includes(newStatus)) return badRequest("Invalid status. Must be 'accepted' or 'rejected'.");
+    if (!responseMessage || typeof responseMessage !== "string" || responseMessage.trim().length === 0) {
+      return badRequest("A response message (reason) is required when accepting or rejecting an appeal.");
+    }
+    if (responseMessage.trim().length > 1000) {
+      return badRequest("Response message is too long (maximum 1000 characters).");
+    }
 
     const { data: appeal, error: appealError } = await supabase
       .from("appeals")

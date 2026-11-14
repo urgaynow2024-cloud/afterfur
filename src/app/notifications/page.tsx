@@ -5,8 +5,9 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { publicPostUrl, publicProfileUrl } from "@/lib/follow";
+import { describeModerationNotification, isModerationNotificationType } from "@/lib/moderationNotifications";
 
-type NotificationRow = { id: string; user_id: string; type: string; payload: { actor_id?: string; post_id?: string; conversation_id?: string; message?: string; system?: boolean; badge_id?: string } | null; read: boolean; created_at: string };
+type NotificationRow = { id: string; user_id: string; type: string; payload: { actor_id?: string; post_id?: string; conversation_id?: string; message?: string; system?: boolean; badge_id?: string; report_id?: string; title?: string; reason?: string; reason_label?: string; summary?: string; target_type?: string; href?: string } | null; read: boolean; created_at: string };
 type ActorProfile = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 type NotificationPost = { id: string; content: string };
 
@@ -59,12 +60,12 @@ export default function Notifications() {
     if (!supabase || !user) return;
     const channel = supabase
       .channel(`notifications:${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload: any) => {
-        const n = payload.new as NotificationRow;
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload: { new: NotificationRow }) => {
+        const n = payload.new;
         setItems((prev) => [n, ...prev]);
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload: any) => {
-        const n = payload.new as NotificationRow;
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload: { new: NotificationRow }) => {
+        const n = payload.new;
         setItems((prev) => prev.map((x) => x.id === n.id ? n : x));
       })
       .subscribe();
@@ -97,6 +98,8 @@ export default function Notifications() {
   const unreadCount = items.filter((n) => !n.read).length;
 
   function describe(n: NotificationRow) {
+    const moderation = describeModerationNotification(n);
+    if (moderation) return moderation;
     if (n.type === "badge") {
       const msg = n.payload?.message;
       if (typeof msg === "string") return msg;
@@ -159,19 +162,30 @@ export default function Notifications() {
               const actorId = n.payload?.actor_id;
               const postId = n.payload?.post_id;
               const conversationId = n.payload?.conversation_id;
+              const reportId = n.payload?.report_id;
+              const isModeration = isModerationNotificationType(n.type);
               const actor = actorId ? profiles[actorId] : undefined;
               const post = postId ? posts[postId] : undefined;
-              const href = postId ? actor ? publicPostUrl(actor.username, postId) : `/posts/${encodeURIComponent(postId)}` : conversationId ? `/messages` : actor ? publicProfileUrl(actor.username) : null;
+              const href = reportId ? `/moderator/reports?report=${encodeURIComponent(reportId)}` : postId ? actor ? publicPostUrl(actor.username, postId) : `/posts/${encodeURIComponent(postId)}` : conversationId ? `/messages` : actor ? publicProfileUrl(actor.username) : null;
               return (
-                <div key={n.id} className={`flex gap-3 px-4 py-4 transition-colors sm:px-6 ${n.read ? "bg-transparent" : "bg-af-brand/8"}`}>
-                  <Link href={actor ? `/${encodeURIComponent(actor.username)}` : "/profile"} aria-label={actor ? `View ${actor.display_name || actor.username}'s profile` : "View profile"} className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">
-                    {actor?.avatar_url ? <img src={actor.avatar_url} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-af-brand-soft">{(actor?.display_name || actor?.username || "?").slice(0, 1).toUpperCase()}</span>}
-                    {!n.read && <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-af-bg bg-af-brand" aria-hidden="true" />}
-                  </Link>
+                <div key={n.id} className={`flex gap-3 px-4 py-4 transition-colors sm:px-6 ${n.read ? "bg-transparent" : isModeration ? "bg-af-brand/10" : "bg-af-brand/8"}`}>
+                  {isModeration ? (
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-af-brand/15 text-af-brand-soft ring-1 ring-af-brand/30" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" /><path d="M9.5 12l1.8 1.8L15 10" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </span>
+                  ) : (
+                    <Link href={actor ? `/${encodeURIComponent(actor.username)}` : "/profile"} aria-label={actor ? `View ${actor.display_name || actor.username}'s profile` : "View profile"} className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-af-surface-2 ring-1 ring-af-border">
+                      {actor?.avatar_url ? <img src={actor.avatar_url} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-af-brand-soft">{(actor?.display_name || actor?.username || "?").slice(0, 1).toUpperCase()}</span>}
+                      {!n.read && <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-af-bg bg-af-brand" aria-hidden="true" />}
+                    </Link>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm leading-relaxed text-af-text">{href ? <Link href={href} onClick={() => { if (!n.read) void markRead(n.id); }} className="hover:underline">{describe(n)}</Link> : describe(n)}</p>
                     {post?.content && <p className="mt-1 truncate text-sm text-af-muted">{href ? <Link href={href} onClick={() => { if (!n.read) void markRead(n.id); }} className="hover:underline">{post.content}</Link> : post.content}</p>}
-                    <p className="mt-1.5 text-xs text-af-muted"><time dateTime={n.created_at}>{new Date(n.created_at).toLocaleString()}</time></p>
+                    <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-af-muted">
+                      {isModeration && <span className="rounded-full bg-af-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-af-brand-soft">Moderation</span>}
+                      <time dateTime={n.created_at}>{new Date(n.created_at).toLocaleString()}</time>
+                    </p>
                   </div>
                   {!n.read && <button type="button" disabled={Boolean(marking)} onClick={() => markRead(n.id)} className="min-h-9 shrink-0 self-start rounded-xl px-3 text-xs font-medium text-af-brand-soft transition-colors hover:bg-af-surface-2 disabled:opacity-50">{marking === n.id ? "Saving…" : "Mark read"}</button>}
                 </div>

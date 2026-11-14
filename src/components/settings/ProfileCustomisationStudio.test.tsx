@@ -148,3 +148,38 @@ describe("gradient colours", () => {
     }));
   });
 });
+
+describe("responsive effect grid and display-name wrapping", () => {
+  it("renders effect grids with auto-fit minimum column widths and natural word wrapping on preview names", () => {
+    const { container } = render(
+      <ProfileCustomisationStudio
+        {...baseProps}
+        isPrime={true}
+        displayName="Alex McFurry"
+        username="alexmcfurry"
+      />,
+    );
+
+    const effectGrids = container.querySelectorAll(".af-effects-grid");
+    expect(effectGrids.length).toBeGreaterThanOrEqual(2);
+
+    const fontGrid = container.querySelector(".af-fonts-grid");
+    expect(fontGrid).toBeInTheDocument();
+
+    const effectCards = container.querySelectorAll(".af-effect-card");
+    expect(effectCards.length).toBe(28);
+
+    for (const card of Array.from(effectCards)) {
+      expect(card).toHaveClass("min-w-0");
+      const preview = card.querySelector(".af-effect-preview-text");
+      expect(preview).toBeInTheDocument();
+      expect(preview?.textContent?.trim()).toBeTruthy();
+    }
+
+    const solidDisplayNameRadio = screen.getAllByRole("radio", { name: "Alex McFurrySolid" })[0];
+    const previewSpan = solidDisplayNameRadio?.querySelector(".af-effect-preview-text");
+    expect(previewSpan).toHaveTextContent("Alex McFurry");
+    expect(previewSpan?.className).not.toContain("break-all");
+    expect(previewSpan?.className).not.toContain("leading-none");
+  });
+});
