@@ -20,9 +20,10 @@ import {
   setActiveBoundClient,
   setActiveUserId,
   signOutAccount,
+  storageKeyForUser,
   upsertSavedAccount,
-  // markAccountSessionStatus,
 } from "@/lib/accountSessions";
+import { authDiag, attachAuthDiagHelpers, startAuthDiagFetchInterceptor } from "@/lib/authDiag";
 
 type SignOutOpts = { redirectTo?: string; allAccounts?: boolean; userId?: string };
 type Ctx = {
@@ -64,24 +65,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Track the userId we're currently bound to
   const boundUserIdRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    attachAuthDiagHelpers();
+    startAuthDiagFetchInterceptor();
+  }, []);
+
   const applySession = useCallback(async (next: Session | null, sourceClient?: ReturnType<typeof createClient>, opts?: { event?: string }) => {
     const nextUser = next?.user ?? null;
-    try {
-      console.info("[auth-diag] applySession", {
-        event: opts?.event ?? null,
-        hasSession: Boolean(next),
-        hasUserId: Boolean(nextUser?.id),
-        userId: nextUser?.id ?? null,
-        activeUserId: getActiveUserId(),
-        willIgnoreNull: !nextUser && !!opts?.event && opts.event !== "SIGNED_OUT" && opts.event !== "USER_DELETED",
-        willClear: !nextUser && (!opts?.event || opts.event === "SIGNED_OUT" || opts.event === "USER_DELETED"),
-      });
-    } catch {}
+    authDiag("applySession", "applySession", {
+      event: opts?.event ?? null,
+      hasSession: Boolean(next),
+      hasUserId: Boolean(nextUser?.id),
+      userId: nextUser?.id ?? null,
+      activeUserId: getActiveUserId(),
+      willIgnoreNull: !nextUser && !!opts?.event && opts.event !== "SIGNED_OUT" && opts.event !== "USER_DELETED",
+      willClear: !nextUser && (!opts?.event || opts.event === "SIGNED_OUT" || opts.event === "USER_DELETED"),
+    });
     // Ignore null-session updates for non-sign-out events to avoid transient auth
     // callbacks (e.g. during token refresh/navigation races) from clearing an
     // otherwise valid local session.
     if (!nextUser && opts?.event && opts.event !== "SIGNED_OUT" && opts.event !== "USER_DELETED") {
-      try { console.info("[auth-diag] applySession_ignored_transient_null", { event: opts.event, activeUserId: getActiveUserId() }); } catch {}
+      authDiag("applySession", "applySession_ignored_transient_null", { event: opts.event, activeUserId: getActiveUserId() });
       return;
     }
     // A SIGNED_OUT/USER_DELETED event can arrive from a stale client, another
@@ -93,17 +97,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Explicit local sign-out removes persisted session state first, so it still
     // clears correctly.
     if (!nextUser && next === null && (opts?.event === "SIGNED_OUT" || opts?.event === "USER_DELETED")) {
-      let hasSession = false;
       const activeId = getActiveUserId();
+      const activeKey = activeId ? storageKeyForUser(activeId) : null;
+      const persisted = activeKey && activeId ? peekSessionForUser(activeId) : null;
+      authDiag("applySession", "SIGNED_OUT/USER_DELETED received", {
+        event: opts?.event ?? null,
+        activeUserId: activeId,
+        storageKey: activeKey,
+        persistedSession: persisted ? { hasAccessToken: Boolean(persisted.access_token), hasRefreshToken: Boolean(persisted.refresh_token), sessionUserId: persisted.user?.id ?? null } : null,
+        sourceClientStorageKey: (sourceClient as any)?.storageKey ?? null,
+      });
+      // If a persisted session exists in localStorage for the active account, do not
+      // clear on this SIGNED_OUT/USER_DELETED event. Supabase can clear its in-memory
+      // session state (causing getSession() to return null) while the per-account
+      // storage key still holds a valid session — e.g. a stale SIGNED_OUT from a
+      // previous client instance or a refresh race. Restoring from localStorage would
+      // risk re-instating revoked tokens, so we simply preserve the current React
+      // state instead. Genuine sign-out/revocation clears localStorage too, so
+      // peekSessionForUser() returns null there and the clear proceeds normally.
+      const hasPersisted = Boolean(persisted?.access_token && persisted.refresh_token && persisted.user?.id === activeId);
+      let hasSession = false;
       try {
         const checkClient = sourceClient ?? getActiveClient();
         if (checkClient) {
           const { data } = await checkClient.auth.getSession();
           hasSession = Boolean(data.session?.user?.id && (!activeId || data.session.user.id === activeId));
+          authDiag("applySession", "SIGNED_OUT getSession_check", {
+            event: opts?.event ?? null,
+            checkClientStorageKey: (checkClient as any)?.storageKey ?? null,
+            getSessionResult: data.session ? { hasSession: true, sessionUserId: data.session.user?.id ?? null } : null,
+            activeId,
+          });
         }
       } catch {}
-      if (hasSession) {
-        try { console.info("[auth-diag] applySession_ignored_stale_signout", { event: opts?.event ?? null, activeId }); } catch {}
+      if (hasSession || hasPersisted) {
+        authDiag("applySession", "applySession_ignored_stale_signout", { event: opts?.event ?? null, activeId, hasPersisted });
         return;
       }
     }
@@ -121,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const target = getClientForUser(nextUser.id);
         if (target && sourceClient !== target) {
           const copied = await ensureActiveSession(nextUser.id, next).catch(() => false);
-          try { console.info("[auth-diag] applySession_ensure_active_session", { userId: nextUser.id, copied }); } catch {}
+          authDiag("applySession", "applySession_ensure_active_session", { userId: nextUser.id, copied });
         }
       }
       const profile = await fetchProfileMeta(sourceClient ?? getClientForUser(nextUser.id), nextUser.id).catch(() => null);
@@ -136,17 +164,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (next === null) {
       // Session explicitly cleared by sign-out/deletion event. Preserve saved
       // accounts for multi-account support; do not force-expire other state here.
-      try { console.info("[auth-diag] session_cleared_explicit", { event: opts?.event ?? null, reason: "explicit_sign_out_or_deletion_or_initial_null", activeUserIdAfter: getActiveUserId() }); } catch {}
+      authDiag("applySession", "session_cleared_explicit", { event: opts?.event ?? null, reason: "explicit_sign_out_or_deletion_or_initial_null", activeUserIdAfter: getActiveUserId() });
       setActive(getActiveUserId());
     }
   }, []);
 
   const bindClient = useCallback(async (client: ReturnType<typeof createClient>, userIdHint?: string | null) => {
-    try { console.info("[auth-diag] bindClient_start", { userIdHint: userIdHint ?? null, hasClient: Boolean(client), activeUserId: getActiveUserId() }); } catch {}
+    authDiag("bindClient", "bindClient_start", { userIdHint: userIdHint ?? null, hasClient: Boolean(client), activeUserId: getActiveUserId() });
     // Avoid re-binding the same client for the same user
     if (boundClientRef.current === client && boundUserIdRef.current === userIdHint) {
       setActiveBoundClient(client);
-      try { console.info("[auth-diag] bindClient_skip_same", { userIdHint: userIdHint ?? null }); } catch {}
+      authDiag("bindClient", "bindClient_skip_same", { userIdHint: userIdHint ?? null });
       return;
     }
 
@@ -157,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearActiveBoundClient();
       boundClientRef.current = null;
       boundUserIdRef.current = null;
-      try { console.info("[auth-diag] bindClient_no_client_clearing", { activeUserId: getActiveUserId() }); } catch {}
+      authDiag("bindClient", "bindClient_no_client_clearing", { activeUserId: getActiveUserId() });
       setSession(null); setUser(null); setLoading(false);
       pauseInactiveClientRefresh(null);
       return;
@@ -178,7 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!initialSession && userIdHint) {
       const stored = peekSessionForUser(userIdHint);
       if (stored?.access_token && (!stored.user?.id || stored.user.id === userIdHint)) {
-        try { console.info("[auth-diag] bindClient_stored_session_recovered_early", { userId: userIdHint }); } catch {}
+        authDiag("bindClient", "bindClient_stored_session_recovered_early", { userId: userIdHint });
         initialSession = stored;
       }
     }
@@ -187,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (legacy && legacy !== client) {
         const { data: legacyData } = await legacy.auth.getSession().catch(() => ({ data: { session: null } as { session: Session | null } }));
         if (legacyData.session && legacyData.session.user?.id === userIdHint) {
-          try { console.info("[auth-diag] bindClient_legacy_session_recovered", { userId: userIdHint }); } catch {}
+          authDiag("bindClient", "bindClient_legacy_session_recovered", { userId: userIdHint });
           await applySession(legacyData.session, legacy, { event: "LEGACY_SESSION_RECOVERED" });
           const { data: targetData } = await client.auth.getSession().catch(() => ({ data: { session: null } as { session: Session | null } }));
           if (targetData.session) {
@@ -206,7 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!initialSession) {
         const stored = peekSessionForUser(userIdHint);
         if (stored?.access_token && (!stored.user?.id || stored.user.id === userIdHint)) {
-          try { console.info("[auth-diag] bindClient_stored_session_recovered", { userId: userIdHint }); } catch {}
+          authDiag("bindClient", "bindClient_stored_session_recovered", { userId: userIdHint });
           initialSession = stored;
         }
       }
@@ -215,7 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     boundClientRef.current = effectiveClient;
     boundUserIdRef.current = userIdHint ?? initialSession?.user?.id ?? null;
     setActiveBoundClient(effectiveClient);
-    try { console.info("[auth-diag] bindClient_getSession", { userIdHint: userIdHint ?? null, hasSession: Boolean(initialSession), sessionUserId: initialSession?.user?.id ?? null, usingLegacy: effectiveClient !== client }); } catch {}
+    authDiag("bindClient", "bindClient_getSession", { userIdHint: userIdHint ?? null, hasSession: Boolean(initialSession), sessionUserId: initialSession?.user?.id ?? null, usingLegacy: effectiveClient !== client, clientStorageKey: (effectiveClient as any)?.storageKey ?? null, activeUserId: getActiveUserId() });
     await applySession(initialSession, effectiveClient, { event: "INITIAL_SESSION_SNAPSHOT" });
     const activeId = userIdHint ?? initialSession?.user?.id ?? getActiveUserId();
     pauseInactiveClientRefresh(activeId ?? null);
@@ -227,6 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initPromise = new Promise<void>((resolve) => {
       const { data: sub } = effectiveClient.auth.onAuthStateChange((event, nextSession) => {
         if (effectiveClient !== boundClientRef.current) return;
+        authDiag("onAuthStateChange", `event=${event}`, { event, hasSession: Boolean(nextSession), sessionUserId: nextSession?.user?.id ?? null, clientStorageKey: (effectiveClient as any)?.storageKey ?? null, activeUserId: getActiveUserId() });
         void applySession(nextSession ?? null, effectiveClient, { event });
         pauseInactiveClientRefresh(nextSession?.user?.id ?? getActiveUserId());
         if (!resolved) {
@@ -291,11 +320,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async (opts?: SignOutOpts) => {
-    try { console.info("[auth-diag] signOut_called", { requestedUserId: opts?.userId ?? null, activeUserId: getActiveUserId(), allAccounts: Boolean(opts?.allAccounts) }); } catch {}
+    authDiag("signOut", "signOut_called", { requestedUserId: opts?.userId ?? null, activeUserId: getActiveUserId(), allAccounts: Boolean(opts?.allAccounts), stack: new Error().stack?.split("\n").slice(1, 6).join(" | ") });
     const targetId = opts?.userId ?? user?.id ?? getActiveUserId();
     if (!targetId) return { error: null };
     if (opts?.allAccounts) {
       const { signOutAllAccounts } = await import("@/lib/accountSessions");
+      authDiag("signOut", "signOutAllAccounts_delegated", { targetId });
       await signOutAllAccounts();
       clearTransientAccountState();
       clearActiveBoundClient();
@@ -306,7 +336,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.refresh();
       return { error: null };
     }
+    authDiag("signOut", "signOutAccount_delegated", { targetId });
     const r = await signOutAccount(targetId);
+    authDiag("signOut", "signOutAccount_result", { targetId, error: r.error ?? null, activeUserIdAfter: getActiveUserId() });
     clearTransientAccountState();
     const nextId = getActiveUserId();
     pauseInactiveClientRefresh(nextId);

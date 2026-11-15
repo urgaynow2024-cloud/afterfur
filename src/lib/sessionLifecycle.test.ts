@@ -239,6 +239,55 @@ describe("Session lifecycle regression tests", () => {
     expect(mod.readSavedAccounts()).toHaveLength(0);
   });
 
+  it("signOutAccount clears legacy storage key to prevent session restoration on reinit", async () => {
+    const mod = await import("./accountSessions");
+    const key = mod.storageKeyForUser("uA");
+    clients.set(key, makeMockClient(key, { session: { access_token: "at.A", refresh_token: "rt.A", user: { id: "uA", email: "a@example.com" } } }));
+    mod.upsertSavedAccount({ userId: "uA", email: "a@example.com" });
+    expect((await mod.restoreAccountSession("uA")).ok).toBe(true);
+    
+    // Simulate a legacy session existing in localStorage (as would happen with older installs)
+    const legacyKey = `sb-example-auth-token`;
+    const legacySession = { access_token: "at.legacy", refresh_token: "rt.legacy", user: { id: "uA", email: "a@example.com" } };
+    (globalThis as any).localStorage.setItem(legacyKey, JSON.stringify({ currentSession: legacySession }));
+    
+    await mod.signOutAccount("uA");
+    
+    // Legacy storage key should be cleared
+    expect((globalThis as any).localStorage.getItem(legacyKey)).toBeNull();
+    // Per-account storage key should be cleared
+    expect((globalThis as any).localStorage.getItem(key)).toBeNull();
+    // Active user should be cleared
+    expect(mod.getActiveUserId()).toBeNull();
+  });
+
+  it("signOutAllAccounts clears legacy storage key", async () => {
+    const mod = await import("./accountSessions");
+    const keyA = mod.storageKeyForUser("uA");
+    const keyB = mod.storageKeyForUser("uB");
+    clients.set(keyA, makeMockClient(keyA, { session: { access_token: "at.A", refresh_token: "rt.A", user: { id: "uA", email: "a@example.com" } } }));
+    clients.set(keyB, makeMockClient(keyB, { session: { access_token: "at.B", refresh_token: "rt.B", user: { id: "uB", email: "b@example.com" } } }));
+    mod.upsertSavedAccount({ userId: "uA", email: "a@example.com" });
+    mod.upsertSavedAccount({ userId: "uB", email: "b@example.com" });
+    expect((await mod.restoreAccountSession("uA")).ok).toBe(true);
+    expect((await mod.restoreAccountSession("uB")).ok).toBe(true);
+    
+    // Simulate a legacy session existing in localStorage
+    const legacyKey = `sb-example-auth-token`;
+    const legacySession = { access_token: "at.legacy", refresh_token: "rt.legacy", user: { id: "uA", email: "a@example.com" } };
+    (globalThis as any).localStorage.setItem(legacyKey, JSON.stringify({ currentSession: legacySession }));
+    
+    await mod.signOutAllAccounts();
+    
+    // Legacy storage key should be cleared
+    expect((globalThis as any).localStorage.getItem(legacyKey)).toBeNull();
+    // All per-account storage keys should be cleared
+    expect((globalThis as any).localStorage.getItem(keyA)).toBeNull();
+    expect((globalThis as any).localStorage.getItem(keyB)).toBeNull();
+    // Active user should be cleared
+    expect(mod.getActiveUserId()).toBeNull();
+  });
+
   it("profile GET success after successful authentication", async () => {
     // This tests the API route, not the client component
     const mod = await import("@/app/api/profile/[username]/route");

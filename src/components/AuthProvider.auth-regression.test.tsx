@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   session: null as unknown,
   legacySession: null as unknown,
+  persistedSession: null as unknown,
   callback: null as null | ((event: string, session: unknown) => void),
 }));
 
@@ -56,8 +57,9 @@ vi.mock("@/lib/accountSessions", () => {
     setActiveUserId: vi.fn(),
     signOutAccount: vi.fn(async () => ({ error: null })),
     signOutAllAccounts: vi.fn(async () => {}),
+    storageKeyForUser: vi.fn((id: string) => `afterfur.auth.session.${id}`),
     upsertSavedAccount: vi.fn(),
-    peekSessionForUser: vi.fn(() => null),
+    peekSessionForUser: vi.fn(() => state.persistedSession),
   };
 });
 
@@ -102,5 +104,59 @@ describe("AuthProvider session guards", () => {
     state.legacySession = makeSession("uA");
     const { getByTestId } = render(<AuthProvider><Probe /></AuthProvider>);
     await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-in:uA"));
+  });
+
+  it("stale SIGNED_OUT does not clear user when getSession is null but a valid persisted session exists", async () => {
+    // Start with a valid session so the user is signed in after INITIAL_SESSION.
+    state.session = makeSession("uA");
+    const { getByTestId } = render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-in:uA"));
+
+    // Now simulate Supabase clearing in-memory state (getSession returns null)
+    // while localStorage still holds a valid session for the active account.
+    state.session = null;
+    state.persistedSession = makeSession("uA");
+
+    act(() => state.callback?.("SIGNED_OUT", null));
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-in:uA"));
+  });
+
+  it("genuine sign-out clears user when both getSession and localStorage are empty", async () => {
+    state.session = makeSession("uA");
+    const { getByTestId } = render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-in:uA"));
+
+    state.session = null;
+    state.persistedSession = null;
+
+    act(() => state.callback?.("SIGNED_OUT", null));
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-out"));
+  });
+
+  it("revoked/invalid refresh token clears user when localStorage is cleared", async () => {
+    // Token revocation: Supabase clears both in-memory state and localStorage.
+    state.session = makeSession("uA");
+    const { getByTestId } = render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-in:uA"));
+
+    state.session = null;
+    state.persistedSession = null;
+
+    act(() => state.callback?.("SIGNED_OUT", null));
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-out"));
+  });
+
+  it("persisted session belonging to a different user does not prevent clearing", async () => {
+    // peekSessionForUser must validate ownership: a persisted session for another
+    // account must not stop the active user from being cleared on SIGNED_OUT.
+    state.session = makeSession("uA");
+    const { getByTestId } = render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-in:uA"));
+
+    state.session = null;
+    state.persistedSession = makeSession("uB"); // different user
+
+    act(() => state.callback?.("SIGNED_OUT", null));
+    await waitFor(() => expect(getByTestId("state")).toHaveTextContent("signed-out"));
   });
 });

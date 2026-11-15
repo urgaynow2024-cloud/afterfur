@@ -19,6 +19,14 @@ const stagingCspHosts = stagingSupabaseHost
   ? [`https://${stagingSupabaseHost}`, `wss://${stagingSupabaseHost}`]
   : [];
 
+// Local development only: allow the diagnostic receiver origin in connect-src.
+// Gated on NODE_ENV=development AND an explicit opt-in env var so production
+// builds can never include this origin. No wildcards; the exact origin string.
+const authDiagReceiverOrigin =
+  process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_AUTH_DIAG_RECEIVER
+    ? process.env.NEXT_PUBLIC_AUTH_DIAG_RECEIVER
+    : "";
+
 const securityHeaders = [
   {
     key: "X-DNS-Prefetch-Control",
@@ -52,7 +60,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       `img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in${stagingCspHosts.length ? ` https://${stagingCspHosts[0].replace('https://', '')}` : ''}`,
       "font-src 'self' data:",
-      `connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co wss://*.supabase.in${stagingCspHosts.length ? ` ${stagingCspHosts.join(' ')}` : ''}`,
+      `connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co wss://*.supabase.in${stagingCspHosts.length ? ` ${stagingCspHosts.join(' ')}` : ''}${authDiagReceiverOrigin ? ` ${authDiagReceiverOrigin}` : ''}`,
       "media-src 'self' https://*.supabase.co https://*.supabase.in blob:",
       "object-src 'none'",
       "base-uri 'self'",

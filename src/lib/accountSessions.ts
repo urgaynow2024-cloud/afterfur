@@ -1,6 +1,7 @@
 ﻿import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./supabase/database.types";
+import { authDiag } from "./authDiag";
 
 export type SavedAccountMeta = {
   userId: string;
@@ -248,11 +249,17 @@ export function getClientForStorageKey(storageKey: string, opts?: { autoRefreshT
       },
     });
     clientCache.set(storageKey, client);
+    clientDiag("client_created", { storageKey, autoRefreshToken: wantsRefresh, totalCached: clientCache.size });
   } else if (typeof opts?.autoRefreshToken === "boolean") {
     // Adjust refresh behavior on the existing singleton client instead of creating another.
     setAutoRefresh(client, storageKey, opts.autoRefreshToken);
+    clientDiag("client_reused", { storageKey, autoRefreshToken: opts.autoRefreshToken, totalCached: clientCache.size });
   }
   return client;
+}
+
+function clientDiag(msg: string, data?: Record<string, unknown>) {
+  authDiag("client_lifecycle", msg, data);
 }
 
 export function getActiveClient(): SupabaseClient<Database> | null {
@@ -304,6 +311,7 @@ function getLegacyDefaultClient(): SupabaseClient<Database> | null {
     legacyClient = createSupabaseClient<Database>(url, key, {
       auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
     });
+    clientDiag("legacy_client_created", { storageKey: "default", autoRefreshToken: false });
   }
   return legacyClient;
 }
@@ -317,6 +325,7 @@ export function createTemporaryAuthClient(): SupabaseClient<Database> | null {
   // Unique storage key per temp client avoids GoTrue "multiple instances" warning and
   // prevents contaminating saved account sessions. Cleaned up in captureSessionToAccount/cleanup.
   const tempKey = `afterfur.auth.pending.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+  clientDiag("temp_client_created", { storageKey: tempKey, autoRefreshToken: false });
   return createSupabaseClient<Database>(url, key, {
     auth: { storageKey: tempKey, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
   });
@@ -328,21 +337,36 @@ export function cleanupTempStorageKey(storageKey: string) {
   // Temp clients are never cached in clientCache by design (unique key, short-lived), but be defensive.
   const cached = clientCache.get(storageKey);
   if (cached) { try { void (cached as any).auth?.stopAutoRefresh?.(); } catch {} clientCache.delete(storageKey); refreshWanted.delete(storageKey); }
+  clientDiag("temp_storage_cleaned", { storageKey });
+}
+
+function captureDiag(msg: string, data?: Record<string, unknown>) {
+  authDiag("captureSessionToAccount", msg, data);
 }
 
 export async function captureSessionToAccount(client: SupabaseClient<Database>, meta?: Partial<SavedAccountMeta>): Promise<{ userId: string; session: Session } | { error: string }> {
+  captureDiag("capture_enter", { hasClient: Boolean(client), storageKey: (client as any)?.auth?.storageKey ?? (client as any)?.storageKey });
   const { data, error } = await client.auth.getSession();
+  captureDiag("getSession_result", { error: error?.message ?? null, hasSession: Boolean(data.session), sessionUserId: data.session?.user?.id ?? null });
   if (error || !data.session?.user?.id) return { error: error?.message || "No authenticated session found." };
   const session = data.session;
   const userId = session.user.id;
   setActiveUserId(userId);
+  captureDiag("active_user_id_set", { userId });
   const targetClient = getClientForUser(userId, { autoRefreshToken: true });
+  captureDiag("target_client_resolved", { userId, hasTargetClient: Boolean(targetClient), targetStorageKey: (targetClient as any)?.storageKey ?? null });
   if (!targetClient) return { error: "Supabase is not configured." };
   const { error: setErr } = await targetClient.auth.setSession({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
   });
+  captureDiag("setSession_result", { userId, error: setErr?.message ?? null });
   if (setErr) return { error: setErr.message };
+  // Verify the session was persisted to localStorage under the per-account key.
+  // If setSession did not persist (e.g. persistSession misconfigured), a subsequent
+  // bindClient/getSession would find no session and the user would appear logged out.
+  const persistedAfterSet = peekSessionForUser(userId);
+  captureDiag("setSession_persistence_check", { userId, persisted: Boolean(persistedAfterSet?.access_token && persistedAfterSet.refresh_token), persistedUserId: persistedAfterSet?.user?.id ?? null });
   upsertSavedAccount({
     userId,
     email: session.user.email ?? meta?.email ?? null,
@@ -351,14 +375,16 @@ export async function captureSessionToAccount(client: SupabaseClient<Database>, 
     avatarUrl: meta?.avatarUrl ?? null,
     sessionStatus: "active",
   });
+  captureDiag("saved_account_upserted", { userId });
   try {
     const pendingKey = (client as any).auth?.storageKey ?? (client as any).storageKey;
     if (typeof pendingKey === "string" && pendingKey.startsWith("afterfur.auth.pending.")) {
-      try { await (client as any).auth?.signOut?.({ scope: "local" }); } catch {}
       try { await (client as any).auth?.stopAutoRefresh?.(); } catch {}
       cleanupTempStorageKey(pendingKey);
+      captureDiag("temp_client_cleaned", { userId, pendingKey });
     }
   } catch {}
+  captureDiag("capture_exit", { userId, hasSession: Boolean(session) });
   return { userId, session };
 }
 
@@ -433,50 +459,66 @@ export async function restoreAccountSession(userId: string): Promise<{ ok: true 
   });
 }
 
+function signOutDiag(msg: string, data?: Record<string, unknown>) {
+  authDiag("signOutAccount", msg, { stack: new Error().stack?.split("\n").slice(1, 6).join(" | "), ...data });
+}
+
+function clearLegacyStorageKey() {
+  if (!canUseStorage()) return;
+  try {
+    const legacyKey = `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split("//")[1]?.split(".")[0]}-auth-token`;
+    window.localStorage.removeItem(legacyKey);
+  } catch {}
+}
+
 export async function signOutAccount(userId: string): Promise<{ error: string | null }> {
+  signOutDiag("signOutAccount_enter", { userId, activeUserId: getActiveUserId(), storageKey: getSavedAccount(userId)?.storageKey ?? storageKeyForUser(userId) });
   const storageKey = getSavedAccount(userId)?.storageKey ?? storageKeyForUser(userId);
   const client = getClientForUser(userId, { autoRefreshToken: false });
   let error: string | null = null;
   if (client) {
     try { await (client as any).auth?.stopAutoRefresh?.(); } catch {}
+    signOutDiag("signOut_call", { userId, storageKey, scope: "local" });
     const res = await client.auth.signOut({ scope: "local" });
+    signOutDiag("signOut_result", { userId, storageKey, error: res.error?.message ?? null });
     if (res.error) error = res.error.message;
   }
   const remaining = readSavedAccounts().filter((a) => a.userId !== userId);
   if (canUseStorage()) {
     try { window.localStorage.removeItem(storageKey); } catch {}
+    clearLegacyStorageKey();
   }
   const wasActive = getActiveUserId() === userId;
   writeSavedAccounts(remaining);
   if (wasActive) {
     setActiveUserId(remaining[0]?.userId ?? null);
-    // The bound client has just been signed out; do not let components keep
-    // using it until AuthProvider binds the next active account.
     activeBoundClient = null;
   }
   if (clientCache.has(storageKey)) { clientCache.delete(storageKey); refreshWanted.delete(storageKey); }
-  // Clear any pending refresh mutex and token tracking for this account
   refreshMutex.delete(userId);
   lastRefreshToken.delete(userId);
+  signOutDiag("signOutAccount_exit", { userId, wasActive, activeUserId: getActiveUserId(), remainingAccounts: remaining.length, storageKey, error });
   return { error };
 }
 
 export async function signOutAllAccounts(): Promise<void> {
+  signOutDiag("signOutAllAccounts_enter", { activeUserId: getActiveUserId(), accountCount: readSavedAccounts().length });
   const accounts = readSavedAccounts();
   for (const a of accounts) {
     const client = getClientForUser(a.userId, { autoRefreshToken: false });
-    if (client) { try { await (client as any).auth?.stopAutoRefresh?.(); await client.auth.signOut({ scope: "local" }); } catch {} }
+    if (client) { try { await (client as any).auth?.stopAutoRefresh?.(); signOutDiag("signOutAll_account_call", { userId: a.userId, storageKey: a.storageKey, scope: "local" }); await client.auth.signOut({ scope: "local" }); } catch {} }
     if (canUseStorage()) try { window.localStorage.removeItem(a.storageKey); } catch {}
-    // Clear refresh mutex and token tracking for each account
     refreshMutex.delete(a.userId);
     lastRefreshToken.delete(a.userId);
   }
+  if (canUseStorage()) clearLegacyStorageKey();
   writeSavedAccounts([]);
   setActiveUserId(null);
   activeBoundClient = null;
   clientCache.clear();
   refreshWanted.clear();
   globalRefreshInFlight = false;
+  signOutDiag("signOutAllAccounts_exit", {});
 }
 
 export const ACCOUNT_SWITCH_EVENT = "afterfur:account-switched";

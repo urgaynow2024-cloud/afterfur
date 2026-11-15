@@ -143,4 +143,48 @@ it("logging out one account does not remove other saved sessions", async () => {
     mod.setActiveUserId("uA");
     expect(mod.getActiveClient()).toBe(client);
   });
+
+  it("captureSessionToAccount does not server-sign-out the temp client after copying tokens", async () => {
+    const mod = await import("./accountSessions");
+    const pendingKey = "afterfur.auth.pending.temp-capture-1";
+    const targetKey = mod.storageKeyForUser("uA");
+    const tempClient = makeMockClient(pendingKey, {
+      session: { access_token: "at.A", refresh_token: "rt.A", user: { id: "uA", email: "a@example.com", user_metadata: { username: "uA" } } },
+    });
+    clients.set(pendingKey, tempClient);
+    // The per-account target client must exist so setSession has somewhere to copy.
+    const targetClient = makeMockClient(targetKey);
+    clients.set(targetKey, targetClient);
+    mod.upsertSavedAccount({ userId: "uA", email: "a@example.com" });
+
+    const captured = await mod.captureSessionToAccount(tempClient as any);
+    if ("error" in captured) throw new Error(captured.error);
+
+    // The temp client's server-side signOut must NOT have been called.
+    expect(tempClient.auth.signOut).not.toHaveBeenCalled();
+    // Its local storage must still be cleaned up.
+    expect((globalThis as any).localStorage.getItem(pendingKey)).toBeNull();
+    // The target client must still hold the copied session (not invalidated).
+    expect((await targetClient.auth.getSession()).data.session?.access_token).toBe("at.A");
+    expect((await targetClient.auth.getSession()).data.session?.refresh_token).toBe("rt.A");
+  });
+
+  it("captureSessionToAccount stops temp client auto-refresh and cleans its storage", async () => {
+    const mod = await import("./accountSessions");
+    const pendingKey = "afterfur.auth.pending.temp-capture-2";
+    const tempClient = makeMockClient(pendingKey, {
+      session: { access_token: "at.B", refresh_token: "rt.B", user: { id: "uB", email: "b@example.com", user_metadata: { username: "uB" } } },
+    });
+    clients.set(pendingKey, tempClient);
+    const targetClient = makeMockClient(mod.storageKeyForUser("uB"));
+    clients.set(mod.storageKeyForUser("uB"), targetClient);
+    mod.upsertSavedAccount({ userId: "uB", email: "b@example.com" });
+
+    const captured = await mod.captureSessionToAccount(tempClient as any);
+    if ("error" in captured) throw new Error(captured.error);
+
+    expect(tempClient.auth.stopAutoRefresh).toHaveBeenCalled();
+    expect((globalThis as any).localStorage.getItem(pendingKey)).toBeNull();
+    expect((globalThis as any).localStorage.getItem(mod.storageKeyForUser("uB"))).not.toBeNull();
+  });
 });
