@@ -36,7 +36,13 @@ export default function Profile() {
         setLoading(false);
         return;
       }
-      const { data: ps } = await supabase.from("posts").select("*").eq("author_id", user.id).or("moderation_status.is.null,moderation_status.eq.visible").order("created_at", { ascending: false });
+      const { data: ps } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("author_id", user.id)
+        .or("moderation_status.is.null,moderation_status.eq.visible")
+        .order("is_pinned", { ascending: false })
+        .order("created_at", { ascending: false });
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
       let profileData = prof;
       if (!profileData) {

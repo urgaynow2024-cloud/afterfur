@@ -16,6 +16,7 @@
  */
 
 import { isStoragePath, storagePathFromUrl } from "@/lib/media";
+import { createClient } from "@/lib/supabase/client";
 
 const CACHE_TTL_MS = 45_000; // refresh 15 s before a 60 s signed URL expires
 const cache = new Map<string, string>();
@@ -56,11 +57,21 @@ export async function resolveMediaUrl(url: string | null | undefined): Promise<s
 
   if (!isAvailableFetch()) return null;
 
+  const supabase = createClient();
+  let accessToken: string | null = null;
+  if (supabase) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    accessToken = sessionData?.session?.access_token ?? null;
+  }
+
   const promise = (async () => {
     try {
       const response = await fetch("/api/media/signed-url", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ path }),
         credentials: "same-origin",
       });

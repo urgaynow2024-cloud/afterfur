@@ -3,6 +3,14 @@ import { createServerClient } from "@/lib/supabase/server";
 import { getVerifiedUser } from "@/lib/serverAuth";
 import { rateLimit, getClientIp, getRateLimitKey } from "@/lib/rateLimit";
 
+function mediaTypeForPath(path: string): string | null {
+  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  if (ext === "gif") return "gif";
+  if (["png", "jpg", "jpeg", "webp"].includes(ext)) return "image";
+  if (["mp4", "webm", "mov"].includes(ext)) return "video";
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getVerifiedUser(request);
@@ -67,6 +75,35 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    // Register private media rows so the signed-URL endpoint can authorize and
+    // mint URLs for the uploaded attachments. Only bare storage paths (private
+    // media) are registered; legacy public URLs are left untouched. This is
+    // best-effort: the post is already published, so a registration failure does
+    // not roll back the post. Errors are logged so a missing media record is
+    // observable rather than silently causing "Media unavailable".
+    try {
+      const privatePaths = (media_urls ?? []).filter(
+        (u: unknown): u is string => typeof u === "string" && u.length > 0 && !/^[a-z][a-z0-9+.-]*:/i.test(u) && !u.startsWith("//"),
+      );
+      if (privatePaths.length > 0) {
+        const mediaRows = privatePaths.map((p: string) => ({
+          owner_id: viewerId,
+          post_id: (data as any).id,
+          storage_path: p,
+          bucket_id: "media_private",
+          media_type: mediaTypeForPath(p),
+          created_at: new Date().toISOString(),
+        }));
+        const { error: mediaError } = await supabase.from("media").insert(mediaRows);
+        if (mediaError) {
+          console.error("[api/posts] media registration failed:", mediaError);
+        }
+      }
+    } catch (err) {
+      console.error("[api/posts] media registration threw:", err);
+    }
+
     try {
       const { createMentionNotifications } = await import("@/lib/mentions.server");
       await createMentionNotifications({ authorId: viewerId, postId: (data as any).id, content: content.trim() });

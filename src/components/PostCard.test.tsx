@@ -128,3 +128,39 @@ describe("shared post content rendering", () => {
     expect(hashtag).toHaveAttribute("href", "/search?q=%23VRChat");
   });
 });
+
+describe("post pinning", () => {
+  function openOptionsMenu(container: HTMLElement) {
+    const menuButton = within(container).getByRole("button", { name: /Post options for Artist's post/ });
+    fireEvent.click(menuButton);
+  }
+
+  it("does not show the pin option on another author's post", () => {
+    const { container } = render(<PostCard post={post} />); // author_id "author-1" !== interactions userId "user-1"
+    openOptionsMenu(container);
+    expect(screen.queryByRole("menuitem", { name: /Pin to profile/ })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /Unpin from profile/ })).toBeNull();
+  });
+
+  it("shows the pin option on the author's own post", () => {
+    const { container } = render(<PostCard post={{ ...post, author_id: "user-1", is_pinned: false }} />);
+    openOptionsMenu(container);
+    expect(screen.getByRole("menuitem", { name: /Pin to profile/ })).toBeInTheDocument();
+  });
+
+  it("shows the unpin option when the author's post is already pinned", () => {
+    const { container } = render(<PostCard post={{ ...post, author_id: "user-1", is_pinned: true }} />);
+    openOptionsMenu(container);
+    expect(screen.getByRole("menuitem", { name: /Unpin from profile/ })).toBeInTheDocument();
+  });
+
+  it("renders a subtle pinned indicator on a pinned post", () => {
+    render(<PostCard post={{ ...post, author_id: "user-1", is_pinned: true }} />);
+    expect(screen.getByText("Pinned")).toBeInTheDocument();
+  });
+
+  it("does not render a pinned indicator on an unpinned post", () => {
+    render(<PostCard post={{ ...post, author_id: "user-1", is_pinned: false }} />);
+    expect(screen.queryByText("Pinned")).toBeNull();
+  });
+});

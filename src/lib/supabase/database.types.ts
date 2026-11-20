@@ -59,6 +59,8 @@ type PostRow = {
   created_at: string | null;
   edited_at: string | null;
   media_urls: string[] | null;
+  is_pinned: boolean;
+  pinned_at: string | null;
   moderation_status?: string | null;
   moderated_at?: string | null;
   moderated_by?: string | null;

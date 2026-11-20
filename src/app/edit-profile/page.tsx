@@ -150,10 +150,16 @@ export default function EditProfile() {
     if (processed.size >= (isPrime ? 10 * 1024 * 1024 : 5 * 1024 * 1024)) throw new Error("Image must be under " + (isPrime ? "10MB" : "5MB"));
     const ext = processed.name.split(".").pop();
     const path = `${user.id}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(bucket).upload(path, processed, { upsert: true });
-    if (error) throw error;
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-    return data.publicUrl;
+    const { error, data } = await supabase.storage.from(bucket).upload(path, processed, { upsert: true });
+    if (error) {
+      const msg = typeof error === "object" && error !== null && "message" in error ? String((error as unknown as Record<string, unknown>).message) : String(error);
+      throw new Error(msg);
+    }
+    if (!data?.path) {
+      throw new Error("Upload succeeded but no path returned.");
+    }
+    const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    return publicUrlData.publicUrl;
   }
 
   async function onAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {

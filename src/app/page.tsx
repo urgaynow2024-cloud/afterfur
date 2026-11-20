@@ -478,11 +478,66 @@ export default function Home() {
       try {
         const ext = mediaFile.name.split(".").pop();
         const path = `${user.id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("media_private").upload(path, mediaFile, { upsert: true });
-        if (upErr) throw upErr;
+        const upsertEnabled = false; // controlled diagnostic test
+        const supabaseUser = await supabase.auth.getUser();
+        const authUserId = supabaseUser.data?.user?.id ?? null;
+        const pathSegments = path.split("/");
+        const firstSegment = pathSegments[0] ?? null;
+        const segmentMatchesUser = firstSegment === authUserId;
+        const authError = supabaseUser.error?.message ?? null;
+        const userFromAuthContext = user.id;
+
+        // Check session for JWT role claim
+        const sessionData = await supabase.auth.getSession();
+        const session = sessionData.data?.session;
+        const accessToken = session?.access_token ?? null;
+        let jwtRole: string | null = null;
+        if (accessToken) {
+          try {
+            const parts = accessToken.split(".");
+            if (parts.length === 3) {
+              const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+              jwtRole = payload?.role ?? null;
+            }
+          } catch { /* ignore */ }
+        }
+
+        console.warn("[MEDIA_UPLOAD_DEBUG]", {
+          bucketId: "media_private",
+          uploadPath: path,
+          authUserId,
+          firstSegment,
+          segmentMatchesUser,
+          authError,
+          userFromAuthContext,
+          upsertEnabled,
+          hasSession: !!session,
+          hasAccessToken: !!accessToken,
+          jwtRole,
+          supabaseUrl: (supabase as unknown as Record<string, unknown>).supabaseUrl ?? null,
+          storageKey: (supabase as unknown as { auth?: { storageKey?: string } }).auth?.storageKey ?? null,
+        });
+
+        const { error: upErr, data } = await supabase.storage.from("media_private").upload(path, mediaFile, { upsert: upsertEnabled });
+        if (upErr) {
+          console.warn("[MEDIA_UPLOAD_ERROR]", {
+            status: (upErr as unknown as Record<string, unknown>).statusCode ?? (upErr as unknown as Record<string, unknown>).status ?? null,
+            code: (upErr as unknown as Record<string, unknown>).code ?? null,
+            message: upErr.message,
+            name: upErr.name,
+            details: (upErr as unknown as Record<string, unknown>).details ?? null,
+            hint: (upErr as unknown as Record<string, unknown>).hint ?? null,
+          });
+          const msg = typeof upErr === "object" && upErr !== null && "message" in upErr ? String((upErr as unknown as Record<string, unknown>).message) : String(upErr);
+          throw new Error(msg);
+        }
+        if (!data?.path) {
+          throw new Error("Upload succeeded but no path returned.");
+        }
         mediaUrls = [path];
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Could not upload media.");
+        const msg = e instanceof Error ? e.message : typeof e === "object" && e !== null && "message" in e ? String((e as Record<string, unknown>).message) : "Could not upload media.";
+        setError(msg);
         submittingRef.current = false;
         setSubmitting(false);
         return;
@@ -490,9 +545,14 @@ export default function Home() {
     }
     const result = await submitAndPublishPost(
       async () => {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token ?? null;
         const res = await fetch("/api/posts", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
           body: JSON.stringify({
             content: text || "",
             media_urls: mediaUrls,

@@ -160,4 +160,55 @@ describe("/api/posts POST — authentication and authorization", () => {
     expect(res!.status).toBe(429);
     expect(mockInsert).not.toHaveBeenCalled();
   });
+
+  it("registers a private media row when a post includes a bare storage path", async () => {
+    const { POST } = await import("@/app/api/posts/route");
+    const res = await POST(
+      new Request("http://localhost/api/posts", {
+        method: "POST",
+        body: JSON.stringify({ content: "With image", media_urls: ["viewer-1/1700000000000.png"], classification: "SFW" }),
+      }),
+    );
+    expect(res!.status).toBe(201);
+    // Two insert calls: the post, then the media registration.
+    expect(mockInsert).toHaveBeenCalledTimes(2);
+    const mediaCall = mockInsert.mock.calls[1][0];
+    expect(Array.isArray(mediaCall)).toBe(true);
+    expect(mediaCall[0]).toMatchObject({
+      owner_id: "viewer-1",
+      post_id: "post-1",
+      storage_path: "viewer-1/1700000000000.png",
+      bucket_id: "media_private",
+      media_type: "image",
+    });
+  });
+
+  it("does not register legacy public URLs as media rows", async () => {
+    const { POST } = await import("@/app/api/posts/route");
+    const res = await POST(
+      new Request("http://localhost/api/posts", {
+        method: "POST",
+        body: JSON.stringify({ content: "Legacy image", media_urls: ["https://example.com/legacy.png"], classification: "SFW" }),
+      }),
+    );
+    expect(res!.status).toBe(201);
+    expect(mockInsert).toHaveBeenCalledTimes(1); // only the post insert
+    const mediaLike = mockInsert.mock.calls.flat().some((arg: any) => Array.isArray(arg) && arg.some((m: any) => m && m.bucket_id === "media_private"));
+    expect(mediaLike).toBe(false);
+  });
+
+  it("survives media registration failure without failing post creation", async () => {
+    mockInsert.mockImplementationOnce((row: any) => {
+      if (row && row.author_id) return { select: () => ({ single: () => Promise.resolve({ data: { id: "post-1", author_id: "viewer-1", content: "x", classification: "SFW" } }) }) };
+      throw new Error("media table unavailable");
+    });
+    const { POST } = await import("@/app/api/posts/route");
+    const res = await POST(
+      new Request("http://localhost/api/posts", {
+        method: "POST",
+        body: JSON.stringify({ content: "Still publishes", media_urls: ["viewer-1/x.png"], classification: "SFW" }),
+      }),
+    );
+    expect(res!.status).toBe(201);
+  });
 });

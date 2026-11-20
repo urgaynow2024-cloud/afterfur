@@ -94,7 +94,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("allows signed URL for SFW post media (authenticated)", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: "SFW" }],
       _blocksRows: [],
@@ -106,7 +106,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("allows authenticated user to view permitted NSFW media (no ad_creator required for viewing)", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: "NSFW" }],
       _blocksRows: [],
@@ -117,7 +117,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("denies unclassified (NULL) media classification safely", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: null }],
       _blocksRows: [],
@@ -128,7 +128,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("denies when no associated post classification is found (safe default for private signed URL)", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [],
       _blocksRows: [],
@@ -139,7 +139,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("denies banned user even for SFW media", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: "SFW" }],
       _blocksRows: [],
@@ -173,7 +173,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("enforces private profile: non-follower denied, accepted follower allowed, owner allowed", async () => {
     const base = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: true },
       _postRows: [{ id: "post-1", classification: "SFW" }],
       _blocksRows: [],
@@ -185,7 +185,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("rejects when requester is blocked by owner (direction 1)", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: "SFW" }],
       _blocksRows: [{ blocker_id: "user-1", blocked_id: "user-2" }],
@@ -196,7 +196,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("rejects when requester has blocked owner (direction 2)", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: "SFW" }],
       _blocksRows: [{ blocker_id: "user-2", blocked_id: "user-1" }],
@@ -208,7 +208,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
   it("does not block unrelated users when scoped block query returns no pair match", async () => {
     // The route queries only the (requester,owner) pair; returning empty means no block between them.
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: "SFW" }],
       _blocksRows: [], // unrelated blocks exist elsewhere in reality, but scoped query returns none
@@ -219,7 +219,7 @@ describe("POST /api/media/signed-url — authorization (Phase 5.3)", () => {
 
   it("clamps expiresInSeconds to 60-3600 range", async () => {
     const db = {
-      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image" },
+      media: { id: "media-1", storage_path: TEST_PATH, bucket_id: "media_private", owner_id: "user-1", media_type: "image", post_id: "post-1" },
       profiles: { id: "user-1", is_private: false },
       _postRows: [{ id: "post-1", classification: "SFW" }],
       _blocksRows: [],

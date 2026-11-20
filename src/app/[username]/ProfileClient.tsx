@@ -265,7 +265,12 @@ export default function ProfileClient() {
           setIsBlocked(false);
         }
 
-        let pq = supabase.from("posts").select("*").eq("author_id", prof.id).order("created_at", { ascending: false });
+        let pq = supabase
+          .from("posts")
+          .select("*")
+          .eq("author_id", prof.id)
+          .order("is_pinned", { ascending: false })
+          .order("created_at", { ascending: false });
         if (user?.id !== prof.id) pq = pq.or("moderation_status.is.null,moderation_status.eq.visible");
         const { data: ps, error: postsError } = await pq;
         if (controller.signal.aborted) return { ok: false };

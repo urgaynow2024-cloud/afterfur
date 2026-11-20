@@ -23,6 +23,8 @@ export type PostData = {
   classification?: string | null;
   media_urls?: string[] | null;
   edited_at?: string | null;
+  is_pinned?: boolean;
+  pinned_at?: string | null;
   profiles?: { username: string; display_name: string | null; avatar_url: string | null; profile_customisation?: Record<string, unknown> | null } | null;
 };
 
@@ -77,6 +79,7 @@ function PostOptionsMenu({
   onDelete,
   onReport,
   onCopyLink,
+  onPin,
 }: {
   post: PostData;
   displayName: string;
@@ -84,6 +87,7 @@ function PostOptionsMenu({
   onDelete?: (id: string) => void;
   onReport: () => void;
   onCopyLink: () => void;
+  onPin?: (id: string, pinned: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -151,6 +155,20 @@ function PostOptionsMenu({
               Edit post
             </button>
           )}
+          {onPin && (
+            <button
+              type="button"
+              role="menuitem"
+              className={itemClass}
+              onClick={() => {
+                setOpen(false);
+                onPin(post.id, !post.is_pinned);
+              }}
+            >
+              <ActionIcon name={post.is_pinned ? "close" : "pin"} className="h-4 w-4" />
+              {post.is_pinned ? "Unpin from profile" : "Pin to profile"}
+            </button>
+          )}
           {onDelete && (
             <button
               type="button"
@@ -188,11 +206,13 @@ export default function PostCard({
   repostedBy,
   onEdit,
   onDelete,
+  onPin,
 }: {
   post: PostData;
   repostedBy?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onPin?: (id: string, pinned: boolean) => void;
 }) {
   const interactions = usePostInteractions();
   const [activating, setActivating] = useState(false);
@@ -255,6 +275,39 @@ export default function PostCard({
   const requestLikeCount = interactions?.requestLikeCount;
   const requestRepostCount = interactions?.requestRepostCount;
   const requestReplyCount = interactions?.requestReplyCount;
+
+  const viewerId = interactions?.userId ?? null;
+  const isAuthor = viewerId === post.author_id;
+  const [localPinned, setLocalPinned] = useState(Boolean(post.is_pinned));
+  useEffect(() => setLocalPinned(Boolean(post.is_pinned)), [post.is_pinned]);
+
+  async function handlePin(id: string, pinned: boolean) {
+    if (!isAuthor || id !== post.id) return;
+    const target = !localPinned;
+    setLocalPinned(target);
+    try {
+      const supabase = createClient();
+      let accessToken: string | null = null;
+      if (supabase) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        accessToken = sessionData?.session?.access_token ?? null;
+      }
+      const res = await fetch(`/api/posts/${encodeURIComponent(id)}/pin`, {
+        method: target ? "POST" : "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        setLocalPinned(!target);
+        return;
+      }
+    } catch {
+      setLocalPinned(!target);
+    }
+  }
 
   useEffect(() => {
     requestLikeCount?.(post.id);
@@ -335,6 +388,12 @@ export default function PostCard({
                   <Link href={postHref} className="hover:text-af-text">{timeAgo(post.created_at)}</Link>
                 </time>
                 {post.edited_at && <span className="text-[11px] text-af-muted">(edited)</span>}
+                {localPinned && isAuthor && (
+                  <span className="ml-1.5 inline-flex items-center gap-1 rounded-md border border-af-brand/40 bg-af-brand/10 px-2 py-0.5 text-[11px] font-semibold text-af-brand">
+                    <ActionIcon name="pin" className="h-3 w-3" aria-hidden="true" />
+                    Pinned
+                  </span>
+                )}
               </div>
               <PostOptionsMenu
                 post={post}
@@ -343,6 +402,7 @@ export default function PostCard({
                 onDelete={onDelete}
                 onReport={() => setReportOpen(true)}
                 onCopyLink={copyPostLink}
+                {...(isAuthor ? { onPin: handlePin } : {})}
               />
             </div>
 

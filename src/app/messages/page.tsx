@@ -393,8 +393,18 @@ export default function Messages() {
 
     try {
       const path = storagePathFor({ id: user.id }, file);
-      const { error: uploadError } = await supabase.storage.from("message_attachments").upload(path, file);
-      if (uploadError) { setMessageError(uploadError.message); setAttachmentUploading(false); return; }
+      const { error: uploadError, data } = await supabase.storage.from("message_attachments").upload(path, file);
+      if (uploadError) {
+        const msg = typeof uploadError === "object" && uploadError !== null && "message" in uploadError ? String((uploadError as unknown as Record<string, unknown>).message) : String(uploadError);
+        setMessageError(msg);
+        setAttachmentUploading(false);
+        return;
+      }
+      if (!data?.path) {
+        setMessageError("Upload succeeded but no path returned.");
+        setAttachmentUploading(false);
+        return;
+      }
 
       // Create a placeholder message first to attach the file to, or register after message send.
       // For now, register as an attachment reference. The actual message content will reference it.
