@@ -12,7 +12,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "emoji-picker-react": "^5.1.4",
-    "next": "16.4.3",
+    "next": "16.4.5",
+    "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "^10.1.0"
@@ -27,7 +28,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.5",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.31",
     "tailwindcss": "^4.3.3",

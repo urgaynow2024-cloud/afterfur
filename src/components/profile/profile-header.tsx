@@ -12,7 +12,28 @@ import { StyledDisplayName, StyledUsername } from "@/components/profile/styled-n
 import type { ProfileHeaderProps } from "./profile-types";
 import { LinkChip } from "@/components/profile/profile-links";
 import { ProfileOverflowMenu } from "./profile-overflow-menu";
-import { followActionFor, type FollowStatus } from "@/lib/follow";
+
+const COLLAPSE_THRESHOLD = 120;
+
+function useScrollCollapsed(threshold: number): boolean {
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let rafId: number | null = null;
+    const onScroll = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        setCollapsed(window.scrollY > threshold);
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [threshold]);
+  return collapsed;
+}
 
 export function ProfileHeader({
   profile,
@@ -34,11 +55,22 @@ export function ProfileHeader({
   const [blocked, setBlocked] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [followsViewer, setFollowsViewer] = useState(false);
+  const collapsed = useScrollCollapsed(COLLAPSE_THRESHOLD);
   useEffect(() => {
     if (!user || isSelf) return;
     const supabase = createClient();
     if (!supabase) return;
     supabase.from("blocks" as any).select("blocker_id").eq("blocker_id", user.id).eq("blocked_id", profile.id).maybeSingle().then(({ data }) => setBlocked(!!data));
+  }, [user, profile.id, isSelf]);
+  useEffect(() => {
+    if (!user || isSelf) return;
+    const viewerId = user.id;
+    const supabase = createClient();
+    if (!supabase) return;
+    // RLS on follows: accepted rows are readable by all; pending rows only by
+    // the recipient (following_id = auth.uid()), which is exactly this query.
+    supabase.from("follows" as any).select("follower_id").eq("follower_id", profile.id).eq("following_id", viewerId).maybeSingle().then(({ data }) => setFollowsViewer(!!data));
   }, [user, profile.id, isSelf]);
   async function doBlock() {
     const supabase = createClient();
@@ -109,6 +141,11 @@ export function ProfileHeader({
         </div>
         <BadgeList userId={profile.id} className="mt-1" />
         <StyledUsername profile={profile} />
+        {followsViewer && !isSelf && !blocked && (
+          <span className="ml-1 inline-flex items-center gap-1 rounded-md border border-af-border/60 bg-af-surface-2 px-2 py-0.5 text-xs text-af-text">
+            Follows you
+          </span>
+        )}
         {profile.pronouns && (
           <span className="ml-1 text-xs text-af-text-2">{profile.pronouns}</span>
         )}
@@ -145,14 +182,14 @@ export function ProfileHeader({
           <span className="flex items-center gap-1.5">📅 Joined {new Date(profile.created_at).toLocaleDateString()}</span>
         </div>
         <div className="mt-4 sm:mt-5 flex gap-8 sm:gap-10 text-sm">
-          <span className="flex flex-col items-center gap-0.5">
+          <Link href={`/${profile.username}/following`} className="flex flex-col items-center gap-0.5 hover:underline">
             <strong className="text-af-text">{followingCount}</strong>
             <span className="text-af-muted text-xs">Following</span>
-          </span>
-          <span className="flex flex-col items-center gap-0.5">
+          </Link>
+          <Link href={`/${profile.username}/followers`} className="flex flex-col items-center gap-0.5 hover:underline">
             <strong className="text-af-text">{followerCount}</strong>
             <span className="text-af-muted text-xs">Followers</span>
-          </span>
+          </Link>
         </div>
         <div className="mt-4 sm:mt-5 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -207,6 +244,56 @@ export function ProfileHeader({
           />
         </div>
       </div>
+      {collapsed && (
+        <div
+          className="fixed z-50 top-14 md:top-0 left-0 right-0 border-b border-af-border bg-af-bg/90 backdrop-blur-md px-4 sm:px-6"
+          role="banner"
+          aria-label={`${profile.display_name || profile.username}'s profile header`}
+        >
+          <div className="flex h-12 items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href={`/${profile.username}`}>
+                <Avatar
+                  src={profile.avatar_url ?? undefined}
+                  size={32}
+                  fallback={(profile.display_name || profile.username).slice(0, 1).toUpperCase()}
+                  className="ring-1 ring-af-border rounded-full bg-af-surface object-cover"
+                />
+              </Link>
+              <div className="min-w-0">
+                <Link href={`/${profile.username}`} className="block truncate text-sm font-semibold text-af-text hover:underline">
+                  {profile.display_name || profile.username}
+                </Link>
+                <StyledUsername profile={profile} className="truncate" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isSelf && (
+                <Button
+                  variant={followStatus === "accepted" ? "secondary" : "primary"}
+                  onClick={onFollow}
+                  disabled={followBusy || blocked}
+                  className="text-xs px-2 py-1"
+                >
+                  {followBusy ? "…" : followStatus === "accepted" ? "Following" : followStatus === "pending" ? "Requested" : profile.is_private ? "Request Follow" : "Follow"}
+                </Button>
+              )}
+              <ProfileOverflowMenu
+                profile={{
+                  id: profile.id,
+                  username: profile.username,
+                  display_name: profile.display_name,
+                }}
+                profileUrl={profileUrl}
+                onCopyLink={handleCopyLink}
+                onShare={handleShare}
+                onReport={() => setReportOpen(true)}
+                copied={copied}
+              />
+            </div>
+          </div>
+        </div>
+      )}
       <ShareDialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}

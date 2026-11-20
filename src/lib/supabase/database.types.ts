@@ -35,6 +35,10 @@ type ProfileRow = {
   pronouns: string | null;
   profile_customisation: Json | null;
   is_private: boolean | null;
+  age_verified: boolean | null;
+  age_verified_at: string | null;
+  age_assurance_approved: boolean | null;
+  age_assurance_approved_at: string | null;
 };
 
 type ProfileLinkRow = {
@@ -181,6 +185,28 @@ type ReportNoteRow = {
   created_at: string | null;
 };
 
+type AgeVerificationRequestRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  requested_at: string | null;
+  reviewed_at: string | null;
+  reviewer_id: string | null;
+  review_note: string | null;
+  evidence: Json | null;
+};
+
+type AgeAssuranceRequestRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  requested_at: string | null;
+  reviewed_at: string | null;
+  reviewer_id: string | null;
+  review_note: string | null;
+  evidence: Json | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -208,6 +234,8 @@ export type Database = {
       profile_links: Table<ProfileLinkRow, Omit<ProfileLinkRow, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string }, Partial<Omit<ProfileLinkRow, "id">>>;
       staff_badge_assignments: Table<{ user_id: string; badge_id: string; assigned_by: string; assigned_at: string }, { user_id: string; badge_id: string; assigned_by: string; assigned_at?: string }, never>;
       staff_badge_audit: Table<{ id: number; actor_id: string; target_id: string; badge_id: string; action: string; occurred_at: string }, never, never>;
+      age_verification_requests: Table<AgeVerificationRequestRow, Pick<AgeVerificationRequestRow, "user_id"> & Partial<Omit<AgeVerificationRequestRow, "id" | "user_id">>, Partial<Omit<AgeVerificationRequestRow, "id">>>;
+      age_assurance_requests: Table<AgeAssuranceRequestRow, Pick<AgeAssuranceRequestRow, "user_id"> & Partial<Omit<AgeAssuranceRequestRow, "id" | "user_id">>, Partial<Omit<AgeAssuranceRequestRow, "id">>>;
       user_badge_awards: Table<{ user_id: string; badge_id: string; awarded_at: string }, { user_id: string; badge_id: string; awarded_at?: string }, never>;
       badge_account_origins: Table<{ user_id: string; account_created_at: string }, { user_id: string; account_created_at: string }, never>;
       pawpass_entitlements: Table<{ user_id: string; provider: string; provider_customer_id: string; provider_subscription_id: string; status: string; eligible_since: string; current_period_end: string | null; status_changed_at: string; updated_at: string }, never, never>;
@@ -250,6 +278,7 @@ export type Database = {
       has_ad_badge: { Args: { p_user_id: string }; Returns: boolean };
       has_moderator_role: { Args: { p_user_id: string; p_min_role: string }; Returns: boolean };
       record_moderation_action: { Args: { p_actor_id: string; p_target_type: string; p_target_id: string; p_action: string; p_details: Json | null; p_before_state: Json | null; p_after_state: Json | null }; Returns: string };
+      reconcile_age_verified_badges: { Args: { p_actor_id: string }; Returns: { user_id: string; action: string }[] };
       get_my_profile_links: { Args: Record<PropertyKey, never>; Returns: Json };
       upsert_profile_links: { Args: { p_links: Json }; Returns: boolean };
     };

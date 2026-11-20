@@ -30,7 +30,6 @@ export default function SignUp() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [ageOk, setAgeOk] = useState(false);
   const [termsOk, setTermsOk] = useState(false);
   const [error, setError] = useState("");
   const [state, setState] = useState<SignUpState>("idle");
@@ -53,8 +52,8 @@ export default function SignUp() {
       setState("error");
       return;
     }
-    if (!ageOk || !termsOk) {
-      setError("Please confirm age eligibility and accept the terms.");
+    if (!termsOk) {
+      setError("Please accept the terms.");
       setState("error");
       return;
     }
@@ -237,13 +236,12 @@ export default function SignUp() {
               <input id="signup-confirm" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} type="password" required className="af-field w-full px-3 text-sm" />
             </div>
             <label className="flex min-h-10 items-start gap-3 text-sm leading-relaxed text-af-text-2">
-              <input type="checkbox" checked={ageOk} onChange={(e) => setAgeOk(e.target.checked)} className="mt-1 h-4 w-4 accent-af-brand" />
-              I confirm I am 18 years of age or older.
-            </label>
-            <label className="flex min-h-10 items-start gap-3 text-sm leading-relaxed text-af-text-2">
               <input type="checkbox" checked={termsOk} onChange={(e) => setTermsOk(e.target.checked)} className="mt-1 h-4 w-4 accent-af-brand" />
               I accept the <Link href="/terms" className="text-af-accent hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-af-accent hover:underline">Privacy Policy</Link>.
             </label>
+            <p className="text-xs leading-relaxed text-af-muted">
+              Age verification is a separate, staff-reviewed process. You can submit a request from your profile after signing up. Adult-content (After Dark) access requires both age verification and age-assurance approval.
+            </p>
             {error && <p role="alert" className="rounded-md border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">{error}</p>}
             {info && state === "confirm-email" && (
               <div role="status" className="rounded-md border border-af-border-strong bg-af-surface-2 p-3 text-sm leading-relaxed text-af-text">

@@ -7,6 +7,184 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import { MANAGEABLE_BADGES, badgeImageFor } from "@/lib/badges";
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = parts[1];
+    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4);
+    const decoded = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+type DiagnosticsResult = {
+  authenticatedUserId: string | null;
+  sessionUserId: string | null;
+  jwtRole: string | null;
+  jwtAppMetadata: Record<string, unknown> | null;
+  jwtAfterfurStaffAdmin: unknown;
+  sessionExpiry: string | null;
+  isAuthenticated: boolean;
+  jwtAppMetadataMatch: { pass: boolean; details: string };
+  supabaseUserAppMetadataMatch: { pass: boolean; details: string };
+  expectedAdminPermission: { pass: boolean; details: string };
+  permissionFunctionCheck: { pass: boolean; details: string };
+  overallPass: boolean;
+};
+
+async function runDiagnostics(supabase: ReturnType<typeof createClient>, user: { id: string; app_metadata?: Record<string, unknown> } | null): Promise<DiagnosticsResult> {
+  if (!supabase) {
+    return {
+      authenticatedUserId: null,
+      sessionUserId: null,
+      jwtRole: null,
+      jwtAppMetadata: null,
+      jwtAfterfurStaffAdmin: null,
+      sessionExpiry: null,
+      isAuthenticated: false,
+      jwtAppMetadataMatch: { pass: false, details: "Supabase client not available" },
+      supabaseUserAppMetadataMatch: { pass: false, details: "Supabase client not available" },
+      expectedAdminPermission: { pass: false, details: "Supabase client not available" },
+      permissionFunctionCheck: { pass: false, details: "Supabase client not available" },
+      overallPass: false,
+    };
+  }
+
+  const { data } = await supabase.auth.getSession();
+  const sessionData = data?.session;
+  const sessionUserId = sessionData?.user?.id ?? null;
+  const authenticatedUserId = user?.id ?? null;
+  const isAuthenticated = Boolean(sessionData?.user);
+  const sessionExpiry = sessionData?.expires_at ? new Date(sessionData.expires_at * 1000).toISOString() : null;
+
+  const jwtPayload = sessionData?.access_token ? decodeJwtPayload(sessionData.access_token) : null;
+  const jwtRole = (jwtPayload?.role as string) ?? null;
+  const jwtAppMetadata = (jwtPayload?.app_metadata as Record<string, unknown>) ?? null;
+  const jwtAfterfurStaffAdmin = jwtAppMetadata?.afterfur_staff_admin ?? null;
+
+  const supabaseUserAppMetadata = user?.app_metadata ?? null;
+  const supabaseUserAfterfurStaffAdmin = supabaseUserAppMetadata?.afterfur_staff_admin ?? null;
+
+  const jwtAppMetadataMatch = {
+    pass: jwtAfterfurStaffAdmin === true,
+    details: `JWT app_metadata.afterfur_staff_admin = ${JSON.stringify(jwtAfterfurStaffAdmin)}`,
+  };
+
+  const supabaseUserAppMetadataMatch = {
+    pass: supabaseUserAfterfurStaffAdmin === true,
+    details: `Supabase user app_metadata.afterfur_staff_admin = ${JSON.stringify(supabaseUserAfterfurStaffAdmin)}`,
+  };
+
+  const expectedAdminPermission = {
+    pass: jwtAfterfurStaffAdmin === true && supabaseUserAfterfurStaffAdmin === true,
+    details: `Expected: both JWT and Supabase user have afterfur_staff_admin = true`,
+  };
+
+  const permissionFunctionCheck = {
+    pass: Boolean(authenticatedUserId && jwtAfterfurStaffAdmin === true),
+    details: authenticatedUserId && jwtAfterfurStaffAdmin === true
+      ? "require_afterfur_staff_admin() would PASS (authenticated user with JWT claim)"
+      : "require_afterfur_staff_admin() would FAIL: " + (!authenticatedUserId ? "not authenticated" : "JWT claim missing/false"),
+  };
+
+  const overallPass = jwtAppMetadataMatch.pass && supabaseUserAppMetadataMatch.pass && expectedAdminPermission.pass && permissionFunctionCheck.pass;
+
+  return {
+    authenticatedUserId,
+    sessionUserId,
+    jwtRole,
+    jwtAppMetadata,
+    jwtAfterfurStaffAdmin,
+    sessionExpiry,
+    isAuthenticated,
+    jwtAppMetadataMatch,
+    supabaseUserAppMetadataMatch,
+    expectedAdminPermission,
+    permissionFunctionCheck,
+    overallPass,
+  };
+}
+
+function DiagnosticsPanel({ supabase, user }: { supabase: ReturnType<typeof createClient>; user: { id: string; app_metadata?: Record<string, unknown> } | null }) {
+  const [result, setResult] = useState<DiagnosticsResult | null>(null);
+  const [running, setRunning] = useState(false);
+
+  const handleRun = async () => {
+    setRunning(true);
+    try {
+      const res = await runDiagnostics(supabase, user);
+      setResult(res);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  if (!result) {
+    return (
+      <button
+        type="button"
+        onClick={handleRun}
+        disabled={running}
+        className="min-h-9 rounded-md border border-af-border-strong px-3 text-xs font-medium text-af-text-2 disabled:opacity-50"
+      >
+        {running ? "Running…" : "Run Admin Permission Diagnostics"}
+      </button>
+    );
+  }
+
+  const checks = [
+    { label: "Authenticated User ID", value: result.authenticatedUserId ?? "—", pass: result.isAuthenticated, details: result.isAuthenticated ? "Session has authenticated user" : "No authenticated user in session" },
+    { label: "Session User ID", value: result.sessionUserId ?? "—", pass: result.sessionUserId === result.authenticatedUserId, details: result.sessionUserId === result.authenticatedUserId ? "Matches authenticated user ID" : "Mismatch or missing" },
+    { label: "JWT Role", value: result.jwtRole ?? "—", pass: result.jwtRole === "authenticated", details: result.jwtRole === "authenticated" ? "Role is 'authenticated'" : `Role is '${result.jwtRole}'` },
+    { label: "JWT app_metadata", value: result.jwtAppMetadata ? JSON.stringify(result.jwtAppMetadata, null, 2) : "—", pass: Boolean(result.jwtAppMetadata), details: result.jwtAppMetadata ? "Present" : "Missing" },
+    { label: "JWT afterfur_staff_admin", value: String(result.jwtAfterfurStaffAdmin), pass: result.jwtAfterfurStaffAdmin === true, details: result.jwtAppMetadataMatch.details },
+    { label: "Session Expiry", value: result.sessionExpiry ?? "—", pass: Boolean(result.sessionExpiry), details: result.sessionExpiry ? "Valid expiry timestamp" : "No expiry" },
+    { label: "Session Authenticated", value: String(result.isAuthenticated), pass: result.isAuthenticated, details: result.isAuthenticated ? "Authenticated" : "Not authenticated" },
+    { label: "JWT app_metadata match", value: result.jwtAppMetadataMatch.pass ? "PASS" : "FAIL", pass: result.jwtAppMetadataMatch.pass, details: result.jwtAppMetadataMatch.details },
+    { label: "Supabase user app_metadata match", value: result.supabaseUserAppMetadataMatch.pass ? "PASS" : "FAIL", pass: result.supabaseUserAppMetadataMatch.pass, details: result.supabaseUserAppMetadataMatch.details },
+    { label: "Expected admin permission", value: result.expectedAdminPermission.pass ? "PASS" : "FAIL", pass: result.expectedAdminPermission.pass, details: result.expectedAdminPermission.details },
+    { label: "Permission function check", value: result.permissionFunctionCheck.pass ? "PASS" : "FAIL", pass: result.permissionFunctionCheck.pass, details: result.permissionFunctionCheck.details },
+  ];
+
+  return (
+    <section className="rounded-xl border border-af-border bg-af-surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-af-text">Admin Permission Diagnostics</h3>
+        <button
+          type="button"
+          onClick={() => setResult(null)}
+          className="min-h-8 rounded-md border border-af-border-strong px-3 text-xs font-medium text-af-text-2"
+        >
+          Clear
+        </button>
+      </div>
+      <div className="space-y-2 text-xs">
+        {checks.map((check, idx) => (
+          <div
+            key={idx}
+            className={`flex flex-col gap-1 rounded-lg border p-3 ${check.pass ? "border-emerald-500/30 bg-emerald-500/5" : "border-af-danger/30 bg-af-danger/5"}`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-af-text">{check.label}</span>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${check.pass ? "bg-emerald-500/20 text-emerald-300" : "bg-af-danger/20 text-af-danger-soft"}`}>
+                {check.pass ? "PASS" : "FAIL"}
+              </span>
+            </div>
+            <div className="font-mono text-af-muted break-all">{check.value}</div>
+            <div className="text-af-text-2">{check.details}</div>
+          </div>
+        ))}
+        <div className={`rounded-lg border p-3 text-center font-semibold ${result.overallPass ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-300" : "border-af-danger/30 bg-af-danger/5 text-af-danger-soft"}`}>
+          Overall: {result.overallPass ? "PASS" : "FAIL"}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 type Target = { user_id: string; username: string; display_name: string | null; avatar_url?: string | null };
 type AuditRow = { id: number; action: string; badge_id: string; occurred_at: string; actor_id: string | null };
 
@@ -34,10 +212,10 @@ export default function StaffBadgesPage() {
   const [pendingBadge, setPendingBadge] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const requestId = useRef(0);
+  const supabase = createClient();
 
   async function search(event: React.FormEvent) {
     event.preventDefault();
-    const supabase = createClient();
     if (!supabase || query.trim().length < 2) return;
     setLoading(true); setError(""); setMessage(""); setSelected(null); setBadges([]); setAudit([]);
     try {
@@ -53,7 +231,6 @@ export default function StaffBadgesPage() {
   async function selectTarget(target: Target) {
     const rid = ++requestId.current;
     setSelected(target); setBadges([]); setAudit([]); setError(""); setMessage("");
-    const supabase = createClient();
     if (!supabase) { setError("Supabase not configured."); return; }
     setLoading(true);
     try {
@@ -67,12 +244,16 @@ export default function StaffBadgesPage() {
 
   async function manage(badgeId: string, action: "grant" | "revoke") {
     if (!selected || pendingBadge) return;
-    const supabase = createClient();
     if (!supabase) return;
     setPendingBadge(badgeId); setError(""); setMessage("");
     try {
       const { data, error: manageError } = await supabase.rpc("manage_staff_badge", { p_target_id: selected.user_id, p_badge_id: badgeId, p_action: action });
-      if (manageError) { setError(manageError.message); return; }
+      console.log("RPC response:", { data, error: manageError });
+      if (manageError) {
+        console.error("RPC error details:", JSON.stringify(manageError, null, 2));
+        setError(manageError.message);
+        return;
+      }
       if (data === false) {
         setMessage(action === "grant" ? "Badge is already active for this user." : "Badge is not currently active for this user.");
       } else {
@@ -89,6 +270,7 @@ export default function StaffBadgesPage() {
   }, {});
 
   const isOwn = user?.id === selected?.user_id;
+  const canSelfAssign = isOwn && user?.app_metadata?.afterfur_staff_admin === true;
 
   return (
     <Shell>
@@ -123,6 +305,7 @@ export default function StaffBadgesPage() {
           </div>
 
           <div className="space-y-4">
+            <DiagnosticsPanel supabase={supabase} user={user} />
             {!selected ? (
               <div className="rounded-xl border border-af-border bg-af-surface p-6 text-sm text-af-muted">Select a user to manage badges.</div>
             ) : (
@@ -166,7 +349,7 @@ export default function StaffBadgesPage() {
                             </div>
                             <div className="mt-3 flex gap-2">
                               {!active ? (
-                                <button type="button" disabled={busy || isOwn} onClick={() => { void manage(badge.id, "grant"); }} className="min-h-9 rounded-md bg-af-brand px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "…" : "Grant"}</button>
+                                <button type="button" disabled={busy || (isOwn && !canSelfAssign)} onClick={() => { void manage(badge.id, "grant"); }} className="min-h-9 rounded-md bg-af-brand px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "…" : "Grant"}</button>
                               ) : confirmRevoke === badge.id ? (
                                 <>
                                   <button type="button" disabled={busy} onClick={() => { void manage(badge.id, "revoke"); }} className="min-h-9 rounded-md bg-af-danger px-3 text-xs font-semibold text-white disabled:opacity-50">Confirm revoke</button>

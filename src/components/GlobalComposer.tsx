@@ -25,6 +25,7 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [audience, setAudience] = useState<"everyone" | "after_dark">("everyone");
   const submittingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -137,7 +138,7 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
           body: JSON.stringify({
             content: text.trim(),
             media_urls: mediaUrls,
-            classification: "SFW",
+            classification: audience === "after_dark" ? "AFTER_DARK" : "SFW",
           }),
         });
         if (!res.ok) {
@@ -258,6 +259,10 @@ export default function GlobalComposer({ open, onClose }: { open: boolean; onClo
             )}
             <span aria-live="polite" className={`px-2 text-xs ${text.length > 270 ? "text-af-brand-soft" : "text-af-muted"}`}>{text.length}/300</span>
           </div>
+          <select value={audience} onChange={(e) => setAudience(e.target.value as "everyone" | "after_dark")} className="min-h-9 rounded-full border border-af-border bg-af-surface px-3 text-sm">
+            <option value="everyone">Everyone</option>
+            <option value="after_dark">🔒 After Dark</option>
+          </select>
           <button
             type="button"
             onClick={submit}

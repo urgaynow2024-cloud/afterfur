@@ -7,6 +7,7 @@ import { canFollow } from "@/lib/follow";
 import { addPostToFeed, filterVisibleFeedPosts, mergeFeedPosts, submitAndPublishPost } from "@/lib/feed";
 import { loadMyMembershipStatus } from "@/lib/pawpass";
 import PostCard from "@/components/PostCard";
+import { NewPostsIndicator } from "@/components/NewPostsIndicator";
 import EmojiPicker from "@/components/EmojiPicker";
 import Link from "next/link";
 
@@ -23,6 +24,7 @@ type Post = {
 
 const PAGE_SIZE = 40;
 const VISIBLE_MODERATION = "moderation_status.is.null,moderation_status.eq.visible";
+const NEW_POLL_INTERVAL = 30 * 1000;
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
@@ -30,13 +32,25 @@ export default function Home() {
   const submittingRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const feedListRef = useRef<HTMLDivElement>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checkingRef = useRef(false);
+  const loadingLatestRef = useRef(false);
+  const topRef = useRef<Post | null>(null);
+  const checkRef = useRef<(() => Promise<void>) | null>(null);
+  /** High-water mark of the newest post seen (loaded or detected), so repeated
+   *  checks never recount the same new posts. */
+  const newestSeenRef = useRef<{ created_at: string; id: string } | null>(null);
+  const pendingScrollRestore = useRef<{ scrollY: number; listHeight: number } | null>(null);
   const [tab, setTab] = useState<"foryou" | "following">("foryou");
   const [draft, setDraft] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [newPostsCount, setNewPostsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoadingLatest, setIsLoadingLatest] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -76,6 +90,10 @@ export default function Home() {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [draft]);
+
+  useEffect(() => {
+    topRef.current = posts[0] ?? null;
+  }, [posts]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -143,6 +161,10 @@ export default function Home() {
       }
       const fetchedPosts = await attachProfiles((data ?? []) as Post[]);
       setPosts((current) => (options?.replace ? fetchedPosts : mergeFeedPosts(current, fetchedPosts)));
+      if (options?.replace) {
+        setNewPostsCount(0);
+        newestSeenRef.current = fetchedPosts[0] ? { created_at: fetchedPosts[0].created_at, id: fetchedPosts[0].id } : null;
+      }
       setHasMore((data ?? []).length === PAGE_SIZE);
       setLoading(false);
       setRefreshing(false);
@@ -180,10 +202,168 @@ export default function Home() {
     }
   }, [attachProfiles, loadingMore, posts]);
 
+  /**
+   * Checks whether any posts newer than the current top post are available.
+   * Reuses the same moderation filter as the normal feed and applies the same
+   * client-side privacy filter (private accounts, blocked authors, tabs), so it
+   * never surfaces posts the viewer is not permitted to see.
+   */
+  const checkNewPosts = useCallback(async () => {
+    if (checkingRef.current) return;
+    const supabase = createClient();
+    if (!supabase || !user || posts.length === 0) return;
+    const baseline = newestSeenRef.current ?? topRef.current;
+    if (!baseline) return;
+    checkingRef.current = true;
+    try {
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*")
+        .or(VISIBLE_MODERATION)
+        .or(`created_at.gt.${baseline.created_at},and(created_at.eq.${baseline.created_at},id.gt.${baseline.id})`)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(PAGE_SIZE);
+      if (error) throw new Error(error.message);
+      const fetched = await attachProfiles((data ?? []) as Post[]);
+      const visibleNewer = filterVisibleFeedPosts(fetched, {
+        userId: user.id,
+        followingIds,
+        blockedIds: blockedSet,
+        tab,
+      });
+      const trulyNew = visibleNewer.filter((p) => !posts.some((existing) => existing.id === p.id));
+      if (trulyNew.length > 0) {
+        setNewPostsCount((current) => current + trulyNew.length);
+        const newest = trulyNew.reduce((latest, p) => {
+          const pTime = new Date(p.created_at).getTime();
+          const lTime = new Date(latest.created_at).getTime();
+          if (pTime > lTime) return p;
+          if (pTime === lTime && p.id > latest.id) return p;
+          return latest;
+        }, trulyNew[0]);
+        newestSeenRef.current = { created_at: newest.created_at, id: newest.id };
+      }
+    } catch {
+      // A failed new-posts check must never break the feed.
+    } finally {
+      checkingRef.current = false;
+    }
+  }, [attachProfiles, user, posts, followingIds, blockedSet, tab]);
+
+  /**
+   * Keeps the latest checkNewPosts in a ref so the polling interval never needs
+   * to be recreated when posts change, yet always calls the current version.
+   */
+  useEffect(() => {
+    checkRef.current = checkNewPosts;
+  });
+
+  /**
+   * Loads the latest eligible posts and prepends them to the feed without
+   * resetting the page. The user's reading position is preserved: when they are
+   * at the top the newest posts appear first; when they are reading older posts
+   * the view shifts down by the height of the inserted content so the same post
+   * stays at the same place on screen.
+   */
+  const loadLatestPosts = useCallback(async () => {
+    if (refreshing || loading || loadingLatestRef.current) return;
+    const supabase = createClient();
+    if (!supabase || !user || posts.length === 0) return;
+    const top = topRef.current;
+    if (!top) return;
+    const list = feedListRef.current;
+    const scrollY = window.scrollY;
+    const listHeight = list?.scrollHeight ?? 0;
+    loadingLatestRef.current = true;
+    setIsLoadingLatest(true);
+    try {
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*")
+        .or(VISIBLE_MODERATION)
+        .or(`created_at.gt.${top.created_at},and(created_at.eq.${top.created_at},id.gt.${top.id})`)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(PAGE_SIZE);
+      if (error) throw new Error(error.message);
+      const fetched = await attachProfiles((data ?? []) as Post[]);
+      const visibleNewer = filterVisibleFeedPosts(fetched, {
+        userId: user.id,
+        followingIds,
+        blockedIds: blockedSet,
+        tab,
+      });
+      const trulyNew = visibleNewer.filter((p) => !posts.some((existing) => existing.id === p.id));
+      if (trulyNew.length > 0) {
+        setPosts((current) => mergeFeedPosts(current, trulyNew));
+        newestSeenRef.current = { created_at: trulyNew[0].created_at, id: trulyNew[0].id };
+        pendingScrollRestore.current = { scrollY, listHeight };
+      }
+      setNewPostsCount(0);
+    } catch (err) {
+      setFeedError(err instanceof Error ? err.message : "Could not load the latest posts.");
+    } finally {
+      loadingLatestRef.current = false;
+      setIsLoadingLatest(false);
+    }
+  }, [attachProfiles, user, posts, followingIds, blockedSet, tab, refreshing, loading]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => { void load({ replace: true }); }, 0);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, user]);
+
+  /**
+   * Polls for new posts while the feed is visible, pauses when the tab is
+   * hidden, never overlaps requests, and is torn down on unmount or account
+   * switch.
+   */
+  useEffect(() => {
+    const runCheck = async () => {
+      if (document.visibilityState !== "visible") return;
+      await checkRef.current?.();
+    };
+    if (!user) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      return;
+    }
+    pollingRef.current = setInterval(runCheck, NEW_POLL_INTERVAL);
+    const onFocus = () => void runCheck();
+    window.addEventListener("visibilitychange", runCheck);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      window.removeEventListener("visibilitychange", runCheck);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [user]);
+
+  /**
+   * Restores the reading position after `loadLatestPosts` prepends newer posts
+   * above the reader. Measures after the insert commits so dynamically sized
+   * cards/media are accounted for as best-effort.
+   */
+  useEffect(() => {
+    const restore = pendingScrollRestore.current;
+    if (!restore) return;
+    pendingScrollRestore.current = null;
+    const list = feedListRef.current;
+    if (!list) return;
+    const added = list.scrollHeight - restore.listHeight;
+    let target = restore.scrollY === 0 ? 0 : restore.scrollY + added;
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    target = Math.min(target, maxScroll);
+    const reducedMotion = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: target, behavior: reducedMotion ? "auto" : "smooth" });
+  });
+
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -496,6 +676,16 @@ export default function Home() {
         </div>
       </header>
 
+      {newPostsCount > 0 && (
+        <div className="mx-4 mt-2 flex justify-center sm:mx-5">
+          <NewPostsIndicator
+            count={newPostsCount}
+            onRefresh={loadLatestPosts}
+            refreshing={isLoadingLatest || refreshing || loading}
+          />
+        </div>
+      )}
+
       {tab === "following" && followingError && <div role="alert" className="m-4 rounded-xl border border-af-danger/40 bg-af-danger/10 p-3 text-sm text-af-danger">Could not load the following feed: {followingError}<button type="button" onClick={() => { const supabase = createClient(); if (!supabase || !user) return; void supabase.from("follows").select("following_id").eq("follower_id", user.id).then(({ data, error: queryError }) => { if (queryError) setFollowingError(queryError.message); else { setFollowingIds(new Set((data ?? []).flatMap((row) => row.following_id ? [row.following_id] : []))); setFollowingError(""); } }); }} className="ml-2 underline">Retry</button></div>}
       {spotlightActionError && <div role="alert" className="mx-4 mt-2 text-sm text-af-danger">Follow update failed: {spotlightActionError}</div>}
 
@@ -616,7 +806,7 @@ export default function Home() {
           action={{ label: !user ? "Sign in" : "Explore creators", href: !user ? "/signin" : "/explore" }}
         />
       ) : (
-        <div>
+        <div ref={feedListRef}>
           {visiblePosts.map((p: Post) => (
             <PostCard
               key={p.id}

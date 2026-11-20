@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { ProfileHeader } from "@/components/profile/profile-header";
 
 const profile = {
@@ -31,6 +31,11 @@ const renderHeader = (user = { id: "u2" }) =>
       user={user}
     />,
   );
+
+function setScrollY(y: number) {
+  Object.defineProperty(window, "scrollY", { value: y, writable: true, configurable: true });
+  fireEvent.scroll(window);
+}
 
 describe("ProfileHeader layout", () => {
   afterEach(() => {
@@ -89,5 +94,51 @@ describe("ProfileHeader layout", () => {
     const { getByRole, queryByRole } = renderHeader({ id: "u1" });
     expect(queryByRole("button", { name: "Follow" })).toBeNull();
     expect(getByRole("link", { name: "Edit profile" })).toBeInTheDocument();
+  });
+});
+
+describe("ProfileHeader collapsible minimal header", () => {
+  afterEach(() => {
+    cleanup();
+    Object.defineProperty(window, "scrollY", { value: 0, writable: true, configurable: true });
+  });
+
+  it("does not render the minimal header when not scrolled", () => {
+    const { container } = renderHeader();
+    expect(container.querySelector('[role="banner"][aria-label*="profile header"]')).toBeNull();
+  });
+
+  it("renders the minimal header when scrolled past threshold", async () => {
+    const { container } = renderHeader();
+    setScrollY(200);
+    await waitFor(() => {
+      expect(container.querySelector('[role="banner"][aria-label*="profile header"]')).not.toBeNull();
+    });
+    const minimal = container.querySelector('[role="banner"][aria-label*="profile header"]');
+    expect(minimal).toHaveClass("fixed");
+    expect(minimal).toHaveClass("z-50");
+  });
+
+  it("renders minimal header avatar, name and follow button", async () => {
+    const { container } = renderHeader();
+    setScrollY(200);
+    await waitFor(() => {
+      expect(container.querySelector('[role="banner"][aria-label*="profile header"]')).not.toBeNull();
+    });
+    const minimal = container.querySelector('[role="banner"][aria-label*="profile header"]');
+    expect(minimal).not.toBeNull();
+    expect(minimal?.querySelector('img[src="https://example.com/avatar.png"]')).not.toBeNull();
+    expect(minimal?.textContent).toContain("Bluey Barks");
+    expect(minimal?.querySelector("button")).not.toBeNull();
+  });
+
+  it("renders clickable counts linking to dedicated pages", () => {
+    const { container } = renderHeader();
+    const followingLink = container.querySelector('a[href="/blueybarks/following"]');
+    const followersLink = container.querySelector('a[href="/blueybarks/followers"]');
+    expect(followingLink).not.toBeNull();
+    expect(followersLink).not.toBeNull();
+    expect(followingLink?.textContent).toContain("Following");
+    expect(followersLink?.textContent).toContain("Followers");
   });
 });

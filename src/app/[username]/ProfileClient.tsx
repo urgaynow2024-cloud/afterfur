@@ -15,6 +15,7 @@ import { PrivateMediaGrid } from "@/components/post/private-media-grid";
 import { BadgeCollection } from "@/components/BadgeCollection";
 import { StyledDisplayName, StyledUsername } from "@/components/profile/styled-name";
 import { LinkChip } from "@/components/profile/profile-links";
+import { ProfileHeader } from "@/components/profile/profile-header";
 
 type Profile = {
   id: string;
@@ -25,8 +26,9 @@ type Profile = {
   banner_url: string | null;
   website: string | null;
   location: string | null;
+  pronouns: string | null;
   profile_customisation?: Record<string, unknown> | null;
-  created_at: string | null;
+  created_at: string;
   is_private?: boolean | null;
   [key: string]: unknown;
 };
@@ -536,93 +538,20 @@ export default function ProfileClient() {
     return true;
   });
   const isOwn = user?.id === profile.id;
-  const followLabel = followStatus === "accepted" ? "Following" : followStatus === "pending" ? "Requested" : profile.is_private ? "Request follow" : "Follow";
-  const profileForNames = { display_name: profile.display_name, username: profile.username, profile_customisation: profile.profile_customisation };
   return (
     <Shell>
-      <div className="relative">
-        {profile.banner_url ? (
-          <img src={profile.banner_url} alt={`${profile.display_name || profile.username}'s banner`} className="h-40 w-full object-cover sm:h-52" />
-        ) : (
-          <div aria-hidden="true" className="h-40 w-full border-b border-af-border bg-gradient-to-br from-af-surface via-af-surface-2 to-af-surface sm:h-52" />
-        )}
-        <div className="absolute -bottom-10 left-4 sm:-bottom-12 sm:left-5">
-          {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt={`${profile.display_name || profile.username}'s avatar`} className="h-24 w-24 rounded-full border-4 border-af-bg bg-af-surface object-cover shadow-xl sm:h-28 sm:w-28" />
-          ) : (
-            <div aria-hidden="true" className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-af-bg bg-af-surface-raised text-2xl font-bold text-af-brand-soft shadow-xl sm:h-28 sm:w-28">
-              {(profile.display_name || profile.username).slice(0, 1).toUpperCase()}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="px-4 pb-5 pt-12 sm:px-5 sm:pt-14">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <StyledDisplayName profile={profileForNames} size="lg" />
-            <div className="mt-0.5"><StyledUsername profile={profileForNames} /></div>
-            {(profile as any).pronouns && (
-              <span className="ml-1 text-xs text-af-text-2">{(profile as any).pronouns}</span>
-            )}
-            <BadgeList userId={profile.id} className="mt-2" />
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {isOwn ? (
-              <Link href="/edit-profile" className="af-action-secondary">Edit profile</Link>
-            ) : (
-              <button
-                onClick={toggleFollow}
-                aria-pressed={isFollowing}
-                aria-label={`${isFollowing ? "Unfollow" : followLabel} ${profile.display_name || profile.username}`}
-                disabled={followBusy}
-                className={`min-h-9 rounded-full px-4 text-sm font-bold transition-colors disabled:opacity-50 ${isFollowing ? "border border-af-border-strong text-af-text hover:bg-af-surface-2" : "bg-af-text text-af-bg hover:opacity-90"}`}
-              >
-                {followBusy ? "…" : followLabel}
-              </button>
-            )}
-            {user && !isOwn && (
-              <>
-                <button type="button" onClick={() => setReportUserOpen(true)} aria-label="Report this account" className="af-post-action" title="Report">
-                  <span aria-hidden="true" className="h-[18px] w-[18px] bg-current" style={{ maskImage: "url(/icons/afterfur/flag.svg)", WebkitMaskImage: "url(/icons/afterfur/flag.svg)", maskPosition: "center", WebkitMaskPosition: "center", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskSize: "contain", WebkitMaskSize: "contain" }} />
-                </button>
-                {!isBlocked ? (
-                  <button type="button" onClick={doBlock} disabled={blockBusy} aria-label="Block this account" title="Block" className="af-post-action">
-                    <span aria-hidden="true" className="h-[18px] w-[18px] bg-current" style={{ maskImage: "url(/icons/afterfur/ban.svg)", WebkitMaskImage: "url(/icons/afterfur/ban.svg)", maskPosition: "center", WebkitMaskPosition: "center", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskSize: "contain", WebkitMaskSize: "contain" }} />
-                  </button>
-                ) : (
-                  <button type="button" onClick={doUnblock} disabled={blockBusy} className="min-h-9 rounded-full border border-af-border px-3 text-xs font-medium text-af-text-2 hover:bg-af-surface-2 hover:text-af-text">{blockBusy ? "Unblocking…" : "Unblock"}</button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-        {followError && <p role="alert" className="mt-3 text-sm text-af-danger">Follow update failed: {followError}</p>}
-        {profile.bio && (
-          <div className="mt-3 max-w-prose">
-            <PostText content={profile.bio} />
-          </div>
-        )}
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-af-muted">
-          {profile.website && <a href={profile.website} className="text-af-brand-soft hover:underline">{profile.website.replace(/^https?:\/\//, "")}</a>}
-          {profile.location && <span>{profile.location}</span>}
-          {Array.isArray((profile as any).profile_links) && (profile as any).profile_links.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {(profile as any).profile_links
-                .slice()
-                .sort((a: { display_order?: number }, b: { display_order?: number }) => (a.display_order ?? 0) - (b.display_order ?? 0))
-                .map((link: { id: string; url: string; label: string | null; display_order: number }) => (
-                  <LinkChip key={link.id} link={link} />
-                ))}
-            </div>
-          )}
-          {profile.created_at ? <span>Joined {new Date(profile.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span> : null}
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-          <button type="button" onClick={() => openList("following")} className="hover:underline"><strong className="text-af-text">{counts.following}</strong> <span className="text-af-muted">Following</span></button>
-          <button type="button" onClick={() => openList("followers")} className="hover:underline"><strong className="text-af-text">{counts.followers}</strong> <span className="text-af-muted">Followers</span></button>
-          <BadgeCollection userId={profile.id} username={profile.username} />
-        </div>
-      </div>
+      <ProfileHeader
+        profile={profile}
+        isSelf={isOwn}
+        isFollowing={isFollowing}
+        followerCount={counts.followers}
+        followingCount={counts.following}
+        onFollow={toggleFollow}
+        user={user}
+        followStatus={followStatus}
+        followBusy={followBusy}
+      />
+      {followError && <p role="alert" className="mt-3 text-sm text-af-danger px-4 sm:px-5">Follow update failed: {followError}</p>}
 
       <div role="tablist" aria-label="Profile posts" className="sticky top-14 z-20 flex border-b border-af-border bg-af-bg/95 px-2 backdrop-blur-md md:top-0 sm:px-4">
         {(isOwn ? ["posts", "replies", "media", "likes"] as const : ["posts", "replies", "media"] as const).map((t) => (

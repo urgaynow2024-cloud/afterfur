@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       typeof body.classification === "string" && body.classification.length > 0
         ? body.classification
         : "SFW";
-    if (classification !== "SFW" && classification !== "NSFW") {
+    if (classification !== "SFW" && classification !== "NSFW" && classification !== "AFTER_DARK") {
       return NextResponse.json({ error: "invalid_classification" }, { status: 400 });
     }
     if (content.trim().length === 0 && media_urls.length === 0) {
@@ -52,6 +52,13 @@ export async function POST(request: Request) {
       }
     }
 
+    if (classification === "AFTER_DARK") {
+      const { getAfterDarkEligibility } = await import("@/lib/afterDark");
+      const elig = await getAfterDarkEligibility(supabase, viewerId);
+      if (!elig.eligible) {
+        return NextResponse.json({ error: "after_dark_not_eligible" }, { status: 403 });
+      }
+    }
     const { data, error } = await supabase
       .from("posts")
       .insert({ author_id: viewerId, content: content.trim(), media_urls, classification })
